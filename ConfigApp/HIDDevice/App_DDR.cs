@@ -418,6 +418,7 @@ namespace ConfigAppNS
         private float layoutScale = 1f;
         private bool layoutBusy = false;
         private bool layoutReady = false;
+        private bool padKeyVectorWired = false;
         private Button btnFirmwareUpgrade;
         private Button btnLangToggle;
 
@@ -466,6 +467,7 @@ namespace ConfigAppNS
 
             EnsureFirmwareUpgradeButton();
             EnsureLanguageToggleButton();
+            EnsurePadKeyVectorPaint();
             if (btnFirmwareUpgrade.Parent != groupBox_Mode)
             {
                 this.Controls.Remove(btnFirmwareUpgrade);
@@ -517,12 +519,12 @@ namespace ConfigAppNS
         /// </summary>
         private void RebuildScaledLayout()
         {
-            // Color: Red / Blue / White only
+            // Color: Red / White / Blue (white centered)
             Btn_Col_R.Visible = Btn_Col_B.Visible = Btn_Col_W.Visible = true;
             Btn_Col_R.Enabled = Btn_Col_B.Enabled = Btn_Col_W.Enabled = true;
             Btn_Col_R.Location = new Point(S(40), S(28));
-            Btn_Col_B.Location = new Point(S(120), S(28));
-            Btn_Col_W.Location = new Point(S(200), S(28));
+            Btn_Col_W.Location = new Point(S(120), S(28));
+            Btn_Col_B.Location = new Point(S(200), S(28));
             Btn_Col_R.Size = Btn_Col_B.Size = Btn_Col_W.Size = new Size(S(60), S(60));
             groupBox_Color.Location = new Point(S(16), S(30));
             groupBox_Color.Size = new Size(S(300), S(100));
@@ -560,13 +562,7 @@ namespace ConfigAppNS
             Btn_K1.Size = Btn_K2.Size = Btn_K3.Size = Btn_K4.Size = Btn_K5.Size = cellSize;
             Btn_K1.Enabled = Btn_K2.Enabled = Btn_K3.Enabled = Btn_K4.Enabled = Btn_K5.Enabled = true;
             Btn_K1.Visible = Btn_K2.Visible = Btn_K3.Visible = Btn_K4.Visible = Btn_K5.Visible = true;
-            Btn_K1.BackgroundImageLayout = Btn_K2.BackgroundImageLayout = Btn_K3.BackgroundImageLayout =
-                Btn_K4.BackgroundImageLayout = Btn_K5.BackgroundImageLayout = ImageLayout.Zoom;
-            Btn_K1.BackgroundImage = global::ConfigAppNS.Properties.Resources.AR_UL_L;
-            Btn_K2.BackgroundImage = global::ConfigAppNS.Properties.Resources.AR_UR_L;
-            Btn_K3.BackgroundImage = global::ConfigAppNS.Properties.Resources.AR_C_L;
-            Btn_K4.BackgroundImage = global::ConfigAppNS.Properties.Resources.AR_DL_L;
-            Btn_K5.BackgroundImage = global::ConfigAppNS.Properties.Resources.AR_DR_L;
+            InvalidatePadKeyButtons();
 
             Point[] fillerPos = new Point[] {
                 new Point(x1, y0), new Point(x0, y1), new Point(x2, y1), new Point(x1, y2)
@@ -704,6 +700,33 @@ namespace ConfigAppNS
             this.Controls.Add(btnLangToggle);
         }
 
+        private void EnsurePadKeyVectorPaint()
+        {
+            if (padKeyVectorWired)
+                return;
+            PadKeyPainter.WireButton(Btn_K1, PadKeyPainter.PadKeyKind.UpperLeft);
+            PadKeyPainter.WireButton(Btn_K2, PadKeyPainter.PadKeyKind.UpperRight);
+            PadKeyPainter.WireButton(Btn_K3, PadKeyPainter.PadKeyKind.Center);
+            PadKeyPainter.WireButton(Btn_K4, PadKeyPainter.PadKeyKind.DownLeft);
+            PadKeyPainter.WireButton(Btn_K5, PadKeyPainter.PadKeyKind.DownRight);
+            padKeyVectorWired = true;
+        }
+
+        internal bool IsPadKeyHighlighted(PadKeyPainter.PadKeyKind kind)
+        {
+            int key = SensorIndex / SENSORS_PER_KEY;
+            return (int)kind == key;
+        }
+
+        private void InvalidatePadKeyButtons()
+        {
+            Btn_K1.Invalidate();
+            Btn_K2.Invalidate();
+            Btn_K3.Invalidate();
+            Btn_K4.Invalidate();
+            Btn_K5.Invalidate();
+        }
+
         private void Btn_LangToggle_Click(object sender, EventArgs e)
         {
             bLanguageEN = !bLanguageEN;
@@ -731,6 +754,9 @@ namespace ConfigAppNS
                 tabPage_Sensi.Text = "Sensitivity";
                 tabPage_Color.Text = "Color";
                 tabPage_DTick.Text = "Debounce";
+                groupBox_USBMode.Text = "USB";
+                radioButton_KBS.Text = "KeyBoard";
+                radioButton_HID.Text = "HID Mode";
             }
             else
             {
@@ -738,20 +764,91 @@ namespace ConfigAppNS
                 btn_default.Text = "默认设置";
                 btn_Read.Text = "读取设置";
                 btn_Save.Text = "保存设置";
-                Btn_ADJ.Text = "调试模式";
                 Btn_ReadMode.Text = "读取模式";
                 Btn_SaveMode.Text = "保存模式";
                 if (btnFirmwareUpgrade != null) btnFirmwareUpgrade.Text = "固件升级";
                 groupBox_Button.Text = "Edit";
-                groupBox_Mode.Text = "Mode";
-                groupBox_Sensi.Text = "Sensitivity";
-                groupBox_Color.Text = "Color";
-                groupBox_DTick.Text = "Debounce 消抖 (0~1000 ms)";
+                groupBox_Mode.Text = "模式";
+                groupBox_Sensi.Text = "灵敏度";
+                groupBox_Color.Text = "调色";
+                groupBox_DTick.Text = "延迟释放 (0~1000 ms)";
                 label_DTick.Text = "松开保持(ms) =";
-                tabPage_Sensi.Text = "Sensitivity";
-                tabPage_Color.Text = "Color";
-                tabPage_DTick.Text = "Debounce";
+                tabPage_Sensi.Text = "灵敏度";
+                tabPage_Color.Text = "调色";
+                tabPage_DTick.Text = "延迟释放";
+                groupBox_USBMode.Text = "USB";
+                radioButton_KBS.Text = "键盘";
+                radioButton_HID.Text = "手柄";
             }
+            UpdateDebugButtonText();
+        }
+
+        private void UpdateDebugButtonText()
+        {
+            if (bLanguageEN)
+                Btn_ADJ.Text = bDebugModesFG ? "Stop" : "Debug";
+            else
+                Btn_ADJ.Text = bDebugModesFG ? "停止" : "调试模式";
+        }
+
+        private void SendRawModeCommand(byte b0, byte b1, byte b2, byte b3, byte b4)
+        {
+            byte ReportSize = 64;
+            byte ReportID = 0;
+            byte index = 0;
+            byte[] SendByteBuf = new byte[64];
+            SendByteBuf[index++] = (byte)UserCommand.SET_MRAW;
+            SendByteBuf[index++] = b0;
+            SendByteBuf[index++] = b1;
+            SendByteBuf[index++] = b2;
+            SendByteBuf[index++] = b3;
+            SendByteBuf[index++] = b4;
+            USBCtrl.USBLib_DeviceCtrlOutput(mDeviceIndex, ReportID, ReportSize, SendByteBuf);
+        }
+
+        private void SetDeviceRawDebugMode(bool enable)
+        {
+            if (enable)
+                SendRawModeCommand(0x52, 0x41, 0x57, 0x4D, 0x44); // RAWMD
+            else
+                SendRawModeCommand(0x4E, 0x4F, 0x4C, 0x4D, 0x44); // NOLMD
+            bDebugModesFG = enable;
+            UpdateDebugButtonText();
+        }
+
+        /// <summary>FW rejects config R/W while RAW debug is active — pause and restore.</summary>
+        private byte Read_Config_PausingDebug(byte configType, int[] configOut, int len)
+        {
+            bool wasDebug = bDebugModesFG;
+            if (wasDebug)
+            {
+                SetDeviceRawDebugMode(false);
+                Thread.Sleep(80);
+            }
+            byte result = Read_Config_Value(configType, configOut, len);
+            if (wasDebug)
+            {
+                Thread.Sleep(80);
+                SetDeviceRawDebugMode(true);
+            }
+            return result;
+        }
+
+        private byte Write_Config_PausingDebug(byte configType, int[] configOut, int len)
+        {
+            bool wasDebug = bDebugModesFG;
+            if (wasDebug)
+            {
+                SetDeviceRawDebugMode(false);
+                Thread.Sleep(80);
+            }
+            byte result = Write_Config_Value(configType, configOut, len);
+            if (wasDebug)
+            {
+                Thread.Sleep(80);
+                SetDeviceRawDebugMode(true);
+            }
+            return result;
         }
 
         /// =============================================================================================
@@ -1351,19 +1448,7 @@ namespace ConfigAppNS
             Btn_K3.BackColor = System.Drawing.SystemColors.ButtonFace;
             Btn_K4.BackColor = System.Drawing.SystemColors.ButtonFace;
             Btn_K5.BackColor = System.Drawing.SystemColors.ButtonFace;
-
-            Btn_K1.BackgroundImage = global::ConfigAppNS.Properties.Resources.AR_UL_L;
-            Btn_K2.BackgroundImage = global::ConfigAppNS.Properties.Resources.AR_UR_L;
-            Btn_K3.BackgroundImage = global::ConfigAppNS.Properties.Resources.AR_C_L;
-            Btn_K4.BackgroundImage = global::ConfigAppNS.Properties.Resources.AR_DL_L;
-            Btn_K5.BackgroundImage = global::ConfigAppNS.Properties.Resources.AR_DR_L;
-            //-------------------------------------------------------------------------------------------
-            int key = SensorIndex / SENSORS_PER_KEY;
-            if (key == 0) { Btn_K1.BackColor = System.Drawing.Color.IndianRed; Btn_K1.BackgroundImage = global::ConfigAppNS.Properties.Resources.AR_UL_H; }
-            else if (key == 1) { Btn_K2.BackColor = System.Drawing.Color.IndianRed; Btn_K2.BackgroundImage = global::ConfigAppNS.Properties.Resources.AR_UR_H; }
-            else if (key == 2) { Btn_K3.BackColor = System.Drawing.Color.IndianRed; Btn_K3.BackgroundImage = global::ConfigAppNS.Properties.Resources.AR_C_H; }
-            else if (key == 3) { Btn_K4.BackColor = System.Drawing.Color.IndianRed; Btn_K4.BackgroundImage = global::ConfigAppNS.Properties.Resources.AR_DL_H; }
-            else if (key == 4) { Btn_K5.BackColor = System.Drawing.Color.IndianRed; Btn_K5.BackgroundImage = global::ConfigAppNS.Properties.Resources.AR_DR_H; }
+            InvalidatePadKeyButtons();
             //-------------------------------------------------------------------------------------------
             groupBox_Button.Enabled = true;
             groupBox_Sensi.Enabled = true;
@@ -1759,19 +1844,19 @@ namespace ConfigAppNS
             if (tabControl1.SelectedIndex == 0)
             {
                 ConfigType |= 0x00;
-                result = Read_Config_Value(ConfigType, SensiBuffer, CONFIG_VALUE_COUNT);
+                result = Read_Config_PausingDebug(ConfigType, SensiBuffer, CONFIG_VALUE_COUNT);
             }
             //-------------------------------------------------------------------------------------------
             else if (tabControl1.SelectedIndex == 1)
             {
                 ConfigType |= 0x01;
-                result = Read_Config_Value(ConfigType, ColorBuffer, CONFIG_VALUE_COUNT);
+                result = Read_Config_PausingDebug(ConfigType, ColorBuffer, CONFIG_VALUE_COUNT);
             }
             //-------------------------------------------------------------------------------------------
             else if (tabControl1.SelectedIndex == 2)
             {
                 ConfigType |= 0x02;
-                result = Read_Config_Value(ConfigType, DTickBuffer, CONFIG_VALUE_COUNT);
+                result = Read_Config_PausingDebug(ConfigType, DTickBuffer, CONFIG_VALUE_COUNT);
             }
             //-------------------------------------------------------------------------------------------
             if (result != 0)
@@ -1795,19 +1880,19 @@ namespace ConfigAppNS
             if (tabControl1.SelectedIndex == 0)
             {
                 ConfigType |= 0x00;
-                result = Write_Config_Value(ConfigType, SensiBuffer, CONFIG_VALUE_COUNT);
+                result = Write_Config_PausingDebug(ConfigType, SensiBuffer, CONFIG_VALUE_COUNT);
             }
             //-------------------------------------------------------------------------------------------
             else if (tabControl1.SelectedIndex == 1)
             {
                 ConfigType |= 0x01;
-                result = Write_Config_Value(ConfigType, ColorBuffer, CONFIG_VALUE_COUNT);
+                result = Write_Config_PausingDebug(ConfigType, ColorBuffer, CONFIG_VALUE_COUNT);
             }
             //-------------------------------------------------------------------------------------------
             else if (tabControl1.SelectedIndex == 2)
             {
                 ConfigType |= 0x02;
-                result = Write_Config_Value(ConfigType, DTickBuffer, CONFIG_VALUE_COUNT);
+                result = Write_Config_PausingDebug(ConfigType, DTickBuffer, CONFIG_VALUE_COUNT);
             }
             //-------------------------------------------------------------------------------------------
             if (result != 0)
@@ -1837,54 +1922,7 @@ namespace ConfigAppNS
         ///
         private void Btn_Debug_Click(object sender, EventArgs e)
         {
-            //-------------------------------------------------------------------------------------------
-            byte ReportSize = 64;
-            byte ReportID = 0;
-            byte[] SendByteBuf = new byte[64];
-            //-------------------------------------------------------------------------------------------
-            byte index = 0;
-            if (bDebugModesFG == false)
-            {
-                SendByteBuf[index++] = (byte)UserCommand.SET_MRAW;
-                SendByteBuf[index++] = (byte)(0x52);    //R
-                SendByteBuf[index++] = (byte)(0x41);    //A
-                SendByteBuf[index++] = (byte)(0x57);    //W
-                SendByteBuf[index++] = (byte)(0x4D);    //M
-                SendByteBuf[index++] = (byte)(0x44);    //D
-                //USBCtrl.DDR_USBDeviceCtrlOutput(mDeviceIndex, SendByteBuf, ReportSize);
-                USBCtrl.USBLib_DeviceCtrlOutput(mDeviceIndex, ReportID, ReportSize, SendByteBuf);
-
-                bDebugModesFG = true;
-                if (bLanguageEN == true)
-                {
-                    Btn_ADJ.Text = "Stop";
-                }
-                else
-                {
-                    Btn_ADJ.Text = "停止";
-                }
-            }
-            else
-            {
-                SendByteBuf[index++] = (byte)UserCommand.SET_MRAW;
-                SendByteBuf[index++] = (byte)(0x4E);    //N
-                SendByteBuf[index++] = (byte)(0x4F);    //O
-                SendByteBuf[index++] = (byte)(0x4C);    //L
-                SendByteBuf[index++] = (byte)(0x4D);    //M
-                SendByteBuf[index++] = (byte)(0x44);    //D
-                //USBCtrl.DDR_USBDeviceCtrlOutput(mDeviceIndex, SendByteBuf, ReportSize);
-                USBCtrl.USBLib_DeviceCtrlOutput(mDeviceIndex, ReportID, ReportSize, SendByteBuf);
-
-                bDebugModesFG = false;
-                if (bLanguageEN == true)
-                {
-                    Btn_ADJ.Text = "DebugMode";
-                }
-                else
-                {
-                    Btn_ADJ.Text = "调试模式";
-                }
-            }
+            SetDeviceRawDebugMode(!bDebugModesFG);
         }
         private void button1_Click(object sender, EventArgs e)
         {
