@@ -882,9 +882,12 @@
             // 
             // App_DDR
             // 
+            // Layout is rebuilt at runtime for current DPI (see ApplyFiveKeyLayoutOnly).
             this.AutoScaleDimensions = new System.Drawing.SizeF(96F, 96F);
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Dpi;
-            this.ClientSize = new System.Drawing.Size(1509, 894);
+            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.None;
+            this.ClientSize = new System.Drawing.Size(1120, 780);
+            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
+            this.MinimumSize = new System.Drawing.Size(900, 640);
             this.Controls.Add(this.label_Ver);
             this.Controls.Add(this.groupBox_Mode);
             this.Controls.Add(this.button1);

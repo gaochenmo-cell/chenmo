@@ -371,8 +371,7 @@ namespace ConfigAppNS
             groupBox_DTick.Enabled = false;
 
             ///------------------------------------------------------------------------------------------
-            ApplyFiveKeyLayoutOnly();  // Yuanpad 5Key only — real PIU corner+center layout
-            EnsureFirmwareUpgradeButton();
+            ApplyFiveKeyLayoutOnly();  // Yuanpad 5Key only — real PIU corner+center layout + DPI
             ///------------------------------------------------------------------------------------------
             tabControl1.SelectedIndexChanged += TabControl_SelectedIndexChanged;
             progressBar1.Direction = ProgressBarDirection.Vertical;
@@ -413,15 +412,39 @@ namespace ConfigAppNS
         private const int SENSORS_PER_KEY = 4;
         private const int CONFIG_VALUE_COUNT = KEY_COUNT_5KEY * SENSORS_PER_KEY; // 20 — FW DATA_LEN/2
         private Panel[] fiveKeyFillers = null;
+        private float uiDpiScale = 1f;
+        private bool uiDpiApplied = false;
 
         private void ApplyFiveKeyLayoutOnly()
         {
             this.Text = "PADUEX5";
+            this.AutoScaleMode = AutoScaleMode.None;
 
-            int cell = 165;
+            // Remove right-side "传感器" diagrams (Sensitivity + Color tabs)
+            pictureBox1.Visible = false;
+            pictureBox1.Enabled = false;
+            if (groupBox_Sensi.Controls.Contains(pictureBox1))
+                groupBox_Sensi.Controls.Remove(pictureBox1);
+            pictureBox_sens.Visible = false;
+            pictureBox_sens.Enabled = false;
+            if (tabPage_Color.Controls.Contains(pictureBox_sens))
+                tabPage_Color.Controls.Remove(pictureBox_sens);
+
+            // Debounce label matches firmware meaning (release hold / 消抖, unit ms)
+            groupBox_DTick.Text = "Debounce 消抖 (0~1000 ms)";
+            label_DTick.Text = "松开保持(ms) =";
+
+            // Compact Sensitivity group after removing diagram
+            groupBox_Sensi.Size = new System.Drawing.Size(560, 620);
+            groupBox_Color.Size = new System.Drawing.Size(540, 90);
+            if (groupBox_Color.Location.X > 40)
+                groupBox_Color.Location = new System.Drawing.Point(20, groupBox_Color.Location.Y);
+            Btn_LED.Location = new System.Drawing.Point(240, 120);
+
+            int cell = 150;
             int gap = 6;
-            int ox = 15;
-            int oy = 15;
+            int ox = 12;
+            int oy = 12;
             int step = cell + gap;
             int x0 = ox;
             int x1 = ox + step;
@@ -429,6 +452,8 @@ namespace ConfigAppNS
             int y0 = oy;
             int y1 = oy + step;
             int y2 = oy + step * 2;
+            int padW = step * 3 - gap;
+            int padH = step * 3 - gap;
 
             // Active keys — real 5Key positions
             Btn_K1.Location = new System.Drawing.Point(x0, y0); // ↖
@@ -437,11 +462,9 @@ namespace ConfigAppNS
             Btn_K4.Location = new System.Drawing.Point(x0, y2); // ↙
             Btn_K5.Location = new System.Drawing.Point(x2, y2); // ↘
 
-            Btn_K1.Size = new System.Drawing.Size(cell, cell);
-            Btn_K2.Size = new System.Drawing.Size(cell, cell);
-            Btn_K3.Size = new System.Drawing.Size(cell, cell);
-            Btn_K4.Size = new System.Drawing.Size(cell, cell);
-            Btn_K5.Size = new System.Drawing.Size(cell, cell);
+            Size cellSize = new System.Drawing.Size(cell, cell);
+            Btn_K1.Size = cellSize; Btn_K2.Size = cellSize; Btn_K3.Size = cellSize;
+            Btn_K4.Size = cellSize; Btn_K5.Size = cellSize;
             Btn_K1.Enabled = true; Btn_K2.Enabled = true; Btn_K3.Enabled = true; Btn_K4.Enabled = true; Btn_K5.Enabled = true;
             Btn_K1.Visible = true; Btn_K2.Visible = true; Btn_K3.Visible = true; Btn_K4.Visible = true; Btn_K5.Visible = true;
             Btn_K1.BackgroundImageLayout = ImageLayout.Zoom;
@@ -452,7 +475,7 @@ namespace ConfigAppNS
 
             Btn_K1.BackgroundImage = global::ConfigAppNS.Properties.Resources.AR_UL_L;
             Btn_K2.BackgroundImage = global::ConfigAppNS.Properties.Resources.AR_UR_L;
-            Btn_K3.BackgroundImage = global::ConfigAppNS.Properties.Resources.AR_C_L;
+            Btn_K3.BackgroundImage = global::ConfigAppNS.Properties.Resources.AR_C_L; // yellow hollow circle
             Btn_K4.BackgroundImage = global::ConfigAppNS.Properties.Resources.AR_DL_L;
             Btn_K5.BackgroundImage = global::ConfigAppNS.Properties.Resources.AR_DR_L;
 
@@ -461,20 +484,18 @@ namespace ConfigAppNS
             Btn_K6.Enabled = false; Btn_K7.Enabled = false; Btn_K8.Enabled = false; Btn_K9.Enabled = false;
 
             // Filler cells so the 3×3 pad silhouette matches hardware
+            System.Drawing.Point[] fillerPos = new System.Drawing.Point[] {
+                new System.Drawing.Point(x1, y0),
+                new System.Drawing.Point(x0, y1),
+                new System.Drawing.Point(x2, y1),
+                new System.Drawing.Point(x1, y2),
+            };
             if (fiveKeyFillers == null)
             {
-                System.Drawing.Point[] fillerPos = new System.Drawing.Point[] {
-                    new System.Drawing.Point(x1, y0), // top mid
-                    new System.Drawing.Point(x0, y1), // mid left
-                    new System.Drawing.Point(x2, y1), // mid right
-                    new System.Drawing.Point(x1, y2), // bottom mid
-                };
                 fiveKeyFillers = new Panel[fillerPos.Length];
                 for (int i = 0; i < fillerPos.Length; i++)
                 {
                     Panel p = new Panel();
-                    p.Location = fillerPos[i];
-                    p.Size = new System.Drawing.Size(cell, cell);
                     p.BackColor = System.Drawing.Color.FromArgb(245, 245, 245);
                     p.BorderStyle = BorderStyle.FixedSingle;
                     p.Enabled = false;
@@ -483,9 +504,67 @@ namespace ConfigAppNS
                     fiveKeyFillers[i] = p;
                 }
             }
+            for (int i = 0; i < fiveKeyFillers.Length; i++)
+            {
+                fiveKeyFillers[i].Location = fillerPos[i];
+                fiveKeyFillers[i].Size = cellSize;
+            }
 
-            SensorIndex = 0; // start on key 1
-            // Keep edit panels disabled until a pad is selected after device connect
+            // Edit under pad
+            groupBox_Button.Location = new System.Drawing.Point(ox, y2 + cell + 10);
+            groupBox_Button.Size = new System.Drawing.Size(padW, 150);
+
+            // Settings tabs to the right of pad (no sensor diagram → narrower)
+            int tabX = ox + padW + 16;
+            int tabW = 580;
+            int tabH = padH + 10 + groupBox_Button.Height;
+            tabControl1.Location = new System.Drawing.Point(tabX, oy);
+            tabControl1.Size = new System.Drawing.Size(tabW, tabH);
+
+            // Mode row under everything
+            int modeY = Math.Max(groupBox_Button.Bottom, tabControl1.Bottom) + 12;
+            groupBox_Mode.Location = new System.Drawing.Point(ox, modeY);
+            groupBox_Mode.Size = new System.Drawing.Size(tabX + tabW - ox - 170, 100);
+
+            // Fit client to content (96-dpi baseline), place OTA btn, then scale for system DPI
+            int contentW = tabX + tabW + 16;
+            int contentH = groupBox_Mode.Bottom + 16;
+            this.ClientSize = new System.Drawing.Size(contentW, contentH);
+            label_Ver.Location = new System.Drawing.Point(contentW - 80, contentH - 24);
+
+            EnsureFirmwareUpgradeButton();
+            ApplySystemDpiScale();
+            SensorIndex = 0;
+        }
+
+        /// <summary>
+        /// Scale the whole form from the 96-DPI layout using current system DPI.
+        /// .NET 4.0 + System DPI aware; avoids the empty large client area from PerMonitor.
+        /// </summary>
+        private void ApplySystemDpiScale()
+        {
+            if (uiDpiApplied)
+                return;
+            float dpi = 96f;
+            try
+            {
+                using (Graphics g = this.CreateGraphics())
+                    dpi = g.DpiX;
+            }
+            catch { }
+            uiDpiScale = dpi / 96f;
+            if (uiDpiScale < 0.5f) uiDpiScale = 0.5f;
+            if (uiDpiScale > 3.0f) uiDpiScale = 3.0f;
+
+            if (Math.Abs(uiDpiScale - 1f) > 0.02f)
+            {
+                this.Scale(new SizeF(uiDpiScale, uiDpiScale));
+            }
+            this.MinimumSize = new System.Drawing.Size(
+                (int)(900 * uiDpiScale),
+                (int)(640 * uiDpiScale));
+            this.StartPosition = FormStartPosition.CenterScreen;
+            uiDpiApplied = true;
         }
 
         private Button btnFirmwareUpgrade;
@@ -493,13 +572,21 @@ namespace ConfigAppNS
         private void EnsureFirmwareUpgradeButton()
         {
             if (btnFirmwareUpgrade != null)
+            {
+                // Keep beside Mode after layout/DPI scale
+                btnFirmwareUpgrade.Location = new System.Drawing.Point(
+                    groupBox_Mode.Right + 12,
+                    groupBox_Mode.Location.Y + 28);
+                btnFirmwareUpgrade.BringToFront();
                 return;
+            }
             btnFirmwareUpgrade = new Button();
             btnFirmwareUpgrade.Name = "btnFirmwareUpgrade";
             btnFirmwareUpgrade.Text = "固件升级";
             btnFirmwareUpgrade.Size = new System.Drawing.Size(147, 48);
-            // Place near mode controls
-            btnFirmwareUpgrade.Location = new System.Drawing.Point(groupBox_Mode.Location.X + groupBox_Mode.Width + 16, groupBox_Mode.Location.Y + 30);
+            btnFirmwareUpgrade.Location = new System.Drawing.Point(
+                groupBox_Mode.Right + 12,
+                groupBox_Mode.Location.Y + 28);
             btnFirmwareUpgrade.BackColor = System.Drawing.SystemColors.Control;
             btnFirmwareUpgrade.Click += new System.EventHandler(this.Btn_OTA_Click);
             this.Controls.Add(btnFirmwareUpgrade);

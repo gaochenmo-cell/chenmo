@@ -10,79 +10,37 @@ namespace ConfigAppNS
 		[DllImport("user32.dll")]
 		private static extern bool SetProcessDPIAware();
 
-		[DllImport("shcore.dll")]
-		private static extern int SetProcessDpiAwareness(int value);
-
-		private const int PROCESS_PER_MONITOR_DPI_AWARE = 2;
-
 		/// <summary>
-		/// The main entry point for the application.
-		/// Directly opens Yuanpad 5Key (App_DDR). ADX / Laverita / Yuangeki removed.
+		/// Entry: Yuanpad 5Key only.
+		/// Use System DPI awareness (.NET 4.0 WinForms). Per-Monitor V2 is unreliable
+		/// on FX 4.0 and left the UI unscaled in a large client area.
 		/// </summary>
 		[STAThread]
 		static void Main()
 		{
-			EnableDpiAwareness();
+			try { SetProcessDPIAware(); } catch { }
+
 			Application.EnableVisualStyles();
 			Application.SetCompatibleTextRenderingDefault(false);
 
-			string AppName = CheckAppConfig();
-			if (AppName != "")
+			string AppName = "PADUEX5";
+			bool gotOwnership = false;
+			Mutex mutex = null;
+			try
 			{
-				bool pblnGotOwnership = false;
-				Mutex pobjMyMutex = null;
-				try
+				mutex = new Mutex(true, AppName, out gotOwnership);
+				if (!gotOwnership)
 				{
-					pobjMyMutex = new Mutex(true, AppName, out pblnGotOwnership);
-					if (pblnGotOwnership)
-					{
-						Application.Run(new App_DDR());
-					}
-					else
-					{
-						MessageBox.Show(AppName + " is already running !!!", "System Message", MessageBoxButtons.OK, MessageBoxIcon.Error);
-					}
+					MessageBox.Show(AppName + " is already running !!!", "System Message", MessageBoxButtons.OK, MessageBoxIcon.Error);
+					return;
 				}
-				finally
-				{
-					if (pobjMyMutex != null)
-						pobjMyMutex.Close();
-				}
-			}
-			else
-			{
 				Application.Run(new App_DDR());
 			}
-		}
-
-		/// <summary>
-		/// Prefer Per-Monitor DPI (Win8.1+); fall back to System DPI aware.
-		/// Manifest also declares dpiAwareness for Windows 10+.
-		/// </summary>
-		static void EnableDpiAwareness()
-		{
-			try
+			finally
 			{
-				// PROCESS_PER_MONITOR_DPI_AWARE = 2 (Windows 8.1+)
-				if (SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE) == 0)
-					return;
+				if (mutex != null)
+					mutex.Close();
 			}
-			catch
-			{
-				// shcore.dll missing on older Windows ¡ª fall through
-			}
-			try
-			{
-				SetProcessDPIAware();
-			}
-			catch
-			{
-			}
-		}
-
-		static string CheckAppConfig()
-		{
-			return "PADUEX5";
 		}
 	}
 }

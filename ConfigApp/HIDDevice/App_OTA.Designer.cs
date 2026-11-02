@@ -143,7 +143,7 @@ namespace ConfigAppNS
             // App_OTA
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(96F, 96F);
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Dpi;
+            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(720, 592);
             this.Controls.Add(this.btnClose);
             this.Controls.Add(this.btnStart);
