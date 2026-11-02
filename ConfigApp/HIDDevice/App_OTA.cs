@@ -59,14 +59,78 @@ namespace ConfigAppNS
                 }
             }
             catch { }
-            this.Text = "PADUEX5 Firmware Upgrade";
+
+            // Fixed pixel layout — avoid Font autoscaling which garbles this dialog on high DPI
+            this.AutoScaleMode = AutoScaleMode.None;
+            this.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
+            this.Text = "PADUEX5 固件升级";
             labelTitle.Text = "PADUEX5 固件升级";
+            labelTips.Text =
+                "操作提示：\r\n" +
+                "1. 选择 firmware\\grok1.1.bin（或官方 5KEY_*.bin）\r\n" +
+                "2. 保持 USB 连接，升级中勿拔线、勿关机、勿关闭本窗口\r\n" +
+                "3. 失败会留在 Bootloader，可再次升级，一般不会变砖";
             labelAddr.Text = "APP 地址: 0x" + FLASH_APP_ADDR.ToString("X8");
             labelLimit.Text = "最大允许: " + MAX_APP_SIZE + " 字节（保护配置区）";
+            labelWarn.Text = "升级中，请勿关机！";
             progressBar.Minimum = 0;
             progressBar.Maximum = 100;
             progressBar.Value = 0;
+            panelBanner.Visible = false;
+            ApplyIdleLayout();
             SetStatus("请选择固件 .bin，然后开始升级。");
+        }
+
+        /// <summary>Idle layout: title + tips visible; banner hidden.</summary>
+        private void ApplyIdleLayout()
+        {
+            panelBanner.Visible = false;
+            labelTitle.Visible = true;
+            labelTips.Visible = true;
+            labelTitle.Location = new Point(20, 16);
+            labelTips.Location = new Point(20, 56);
+            int y = 156;
+            labelAddr.Location = new Point(20, y);
+            labelLimit.Location = new Point(280, y);
+            y = 188;
+            textFile.Location = new Point(20, y);
+            btnBrowse.Location = new Point(430, y - 2);
+            labelFileInfo.Location = new Point(20, 224);
+            progressBar.Location = new Point(20, 258);
+            labelPercent.Location = new Point(480, 258);
+            labelStatus.Location = new Point(20, 296);
+            textLog.Location = new Point(20, 328);
+            textLog.Size = new Size(520, 140);
+            btnStart.Location = new Point(20, 484);
+            btnClose.Location = new Point(430, 484);
+            this.ClientSize = new Size(560, 540);
+            this.BackColor = Color.FromArgb(250, 250, 250);
+        }
+
+        /// <summary>Busy layout: Laverita-style red banner on top; tips tucked away.</summary>
+        private void ApplyBusyLayout()
+        {
+            panelBanner.Visible = true;
+            panelBanner.Location = new Point(0, 0);
+            panelBanner.Size = new Size(this.ClientSize.Width, 56);
+            labelTitle.Visible = false;
+            labelTips.Visible = false;
+            int y = 68;
+            labelAddr.Location = new Point(20, y);
+            labelLimit.Location = new Point(280, y);
+            y = 100;
+            textFile.Location = new Point(20, y);
+            btnBrowse.Location = new Point(430, y - 2);
+            labelFileInfo.Location = new Point(20, 136);
+            progressBar.Location = new Point(20, 170);
+            labelPercent.Location = new Point(480, 170);
+            labelStatus.Location = new Point(20, 208);
+            textLog.Location = new Point(20, 240);
+            textLog.Size = new Size(520, 180);
+            btnStart.Location = new Point(20, 440);
+            btnClose.Location = new Point(430, 440);
+            this.ClientSize = new Size(560, 496);
+            this.BackColor = Color.FromArgb(255, 248, 240);
         }
 
         private void SetStatus(string msg)
@@ -107,6 +171,10 @@ namespace ConfigAppNS
             btnStart.Enabled = !busy && binData != null && binData.Length > 0;
             btnClose.Enabled = !busy;
             this.ControlBox = !busy;
+            if (busy)
+                ApplyBusyLayout();
+            else
+                ApplyIdleLayout();
         }
 
         private void btnBrowse_Click(object sender, EventArgs e)
@@ -190,8 +258,10 @@ namespace ConfigAppNS
                 "文件: " + Path.GetFileName(binPath) + "\r\n" +
                 "大小: " + binData.Length + " 字节\r\n" +
                 "地址: 0x" + FLASH_APP_ADDR.ToString("X8") + "\r\n\r\n" +
-                "防砖措施：校验向量表 / 限制不覆盖配置区 / 写完并 CRC 通过后才跳转；\r\n" +
-                "若中途失败，设备会留在 Bootloader，可再次升级，不会锁死。\r\n\r\n" +
+                "请注意：\r\n" +
+                "· 升级中请勿拔 USB、勿关机、勿关闭本窗口\r\n" +
+                "· 写完并 CRC 通过后才会跳转；失败则留在 Bootloader，可重试\r\n" +
+                "· 推荐刷入 grok1.1.bin（含按键映射）\r\n\r\n" +
                 "确认开始？",
                 "PADUEX5 升级确认",
                 MessageBoxButtons.YesNo,
