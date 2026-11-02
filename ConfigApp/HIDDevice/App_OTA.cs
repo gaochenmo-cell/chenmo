@@ -2,32 +2,24 @@ using System;
 using System.ComponentModel;
 using System.Drawing;
 using System.IO;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 using HIDLibraryNS;
+using Microsoft.Win32.SafeHandles;
 
 namespace ConfigAppNS
 {
     /// <summary>
-    /// PADUEX5 firmware upgrade — AT32 USB HID IAP (AN0007) with progress + anti-brick guards.
+    /// PADUEX5 firmware upgrade — AT32 USB HID IAP (AN0007).
+    /// Artery bootloader only accepts interrupt IN/OUT (WriteFile/ReadFile).
+    /// HidD_SetOutputReport / GetInputReport (USBLib_DeviceCtrl*) will time out — same fix as LaveritaConfig.
     /// </summary>
     public partial class App_OTA : Form
     {
-        // AT32 HID IAP commands (MSB, LSB) — AN0007
-        private const ushort IAP_CMD_ENTER = 0x5AA0;
-        private const ushort IAP_CMD_START = 0x5AA1;
-        private const ushort IAP_CMD_ADDR = 0x5AA2;
-        private const ushort IAP_CMD_DATA = 0x5AA3;
-        private const ushort IAP_CMD_FINISH = 0x5AA4;
-        private const ushort IAP_CMD_CRC = 0x5AA5;
-        private const ushort IAP_CMD_JMP = 0x5AA6;
-        private const ushort IAP_CMD_GETADDR = 0x5AA7;
-        private const ushort IAP_ACK = 0xFF00;
-        private const ushort IAP_NACK = 0x00FF;
-
-        // Match Yuanpad / uandancedance layout
         private const uint FLASH_APP_ADDR = 0x08004000;
-        private const uint FLASH_CONFIG_ADDR = 0x0800F800; // do not overwrite app config pages
+        private const uint FLASH_CONFIG_ADDR = 0x0800F800;
         private const int MAX_APP_SIZE = (int)(FLASH_CONFIG_ADDR - FLASH_APP_ADDR); // 0xB800
         private const int MIN_APP_SIZE = 1024;
         private const int CHUNK_1K = 1024;
@@ -36,12 +28,13 @@ namespace ConfigAppNS
         private readonly HidLibrary usb = new HidLibrary();
         private readonly byte reportId = 0;
         private readonly byte reportSize = 64;
-        private byte ioOffset = 0; // OTA bootloader usually has no Report ID
 
         private string binPath = "";
         private byte[] binData = null;
         private bool upgrading = false;
         private BackgroundWorker worker;
+        private string lastRxHex = "";
+        private string lastIapError = "";
 
         public App_OTA()
         {
@@ -69,7 +62,7 @@ namespace ConfigAppNS
                 "操作提示：\r\n" +
                 "1. 选择 firmware\\grok1.1.bin（或官方 5KEY_*.bin）\r\n" +
                 "2. 保持 USB 连接，升级中勿拔线、勿关机、勿关闭本窗口\r\n" +
-                "3. 失败会留在 Bootloader，可再次升级，一般不会变砖";
+                "3. 若已停在 Bootloader，直接再点「开始升级」即可（一般不会变砖）";
             labelAddr.Text = "APP 地址: 0x" + FLASH_APP_ADDR.ToString("X8");
             labelLimit.Text = "最大允许: " + MAX_APP_SIZE + " 字节（保护配置区）";
             labelWarn.Text = "升级中，请勿关机！";
@@ -296,7 +289,9 @@ namespace ConfigAppNS
             {
                 SetStatus("升级失败: " + e.Error.Message);
                 MessageBox.Show(
-                    "升级失败: " + e.Error.Message + "\r\n\r\n设备应仍在 Bootloader（OTA）模式，可重新连接后再次升级，一般不会变砖。",
+                    "升级失败: " + e.Error.Message + "\r\n\r\n" +
+                    "设备应仍在 Bootloader（OTA）模式。\r\n" +
+                    "请保持 USB 连接，关闭本提示后再次点「开始升级」。一般不会变砖。",
                     "PADUEX5",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
@@ -315,82 +310,117 @@ namespace ConfigAppNS
             byte[] image = (byte[])e.Argument;
             BackgroundWorker bw = (BackgroundWorker)sender;
             e.Result = false;
+            OtaHidPort port = null;
 
-            // 1) Enter bootloader from APP if needed
-            bw.ReportProgress(2, "检测设备…");
-            EnsureOtaDevice(bw);
-
-            // 2) Verify IAP app address
-            bw.ReportProgress(8, "读取 Bootloader APP 地址…");
-            uint iapAddr = IapGetAppAddress();
-            if (iapAddr != FLASH_APP_ADDR)
-                throw new Exception("Bootloader APP 地址为 0x" + iapAddr.ToString("X8") +
-                    "，与预期 0x" + FLASH_APP_ADDR.ToString("X8") + " 不一致，已中止以防写错分区。");
-
-            // 3) Start download
-            bw.ReportProgress(12, "开始下载…");
-            IapExpectAck(IAP_CMD_START, IapSendCmd(IAP_CMD_START), "START");
-
-            int total = image.Length;
-            int done = 0;
-            uint addr = FLASH_APP_ADDR;
-
-            while (done < total)
+            try
             {
-                // Set address every 1KB
-                IapExpectAck(IAP_CMD_ADDR, IapSendAddr(IAP_CMD_ADDR, addr), "ADDR 0x" + addr.ToString("X8"));
+                bw.ReportProgress(2, "检测设备…");
+                EnsureBootloaderReady(bw);
 
-                int block = Math.Min(CHUNK_1K, total - done);
-                int sentInBlock = 0;
-                while (sentInBlock < block)
+                // Release HIDLibrary so interrupt port can open exclusively
+                try { usb.USBLib_Disconnect(); } catch { }
+                Thread.Sleep(200);
+
+                bw.ReportProgress(8, "打开 Bootloader HID 中断口…");
+                port = OtaHidPort.Open((ushort)DeviceType.HID_OTA_VID, (ushort)DeviceType.HID_OTA_PID);
+                bw.ReportProgress(10, "IAP 端口就绪 (IN=" + port.InputReportLen + ", OUT=" + port.OutputReportLen + ")");
+                Thread.Sleep(150);
+
+                byte[] pkt = new byte[64];
+
+                // START 0x5AA1
+                bw.ReportProgress(12, "开始 IAP 下载…");
+                Array.Clear(pkt, 0, pkt.Length);
+                pkt[0] = 0x5A; pkt[1] = 0xA1;
+                if (!SendCmdReliable(ref port, pkt, 0x5A, 0xA1, true, 2500))
                 {
-                    int n = Math.Min(HID_PAYLOAD, block - sentInBlock);
-                    byte[] slice = new byte[n];
-                    Buffer.BlockCopy(image, done + sentInBlock, slice, 0, n);
-                    // Data packets: only ACK after full 1KB accumulated on device
-                    IapSendData(slice);
-                    sentInBlock += n;
+                    bool currentPrefix = port.ForceReportIdPrefix ?? (port.OutputReportLen >= 65);
+                    bw.ReportProgress(12, "无 ACK，切换 HID 帧格式重试…");
+                    try { port.Dispose(); } catch { }
+                    port = OtaHidPort.Open((ushort)DeviceType.HID_OTA_VID, (ushort)DeviceType.HID_OTA_PID);
+                    port.ForceReportIdPrefix = !currentPrefix;
+                    Thread.Sleep(100);
+                    Array.Clear(pkt, 0, pkt.Length);
+                    pkt[0] = 0x5A; pkt[1] = 0xA1;
+                    if (!SendCmdReliable(ref port, pkt, 0x5A, 0xA1, true, 3000))
+                        throw new Exception("IAP 启动失败" + FailDetail());
                 }
-                // Wait ACK for this 1KB
-                IapExpectAck(IAP_CMD_DATA, IapReadResponse(), "DATA @0x" + addr.ToString("X8"));
 
-                done += block;
-                addr += (uint)block;
-                int pct = 12 + (int)(78.0 * done / total);
-                bw.ReportProgress(pct, "写入 " + done + " / " + total + " 字节");
+                // Optional GETADDR 0x5AA7 (non-fatal if device skips)
+                Array.Clear(pkt, 0, pkt.Length);
+                pkt[0] = 0x5A; pkt[1] = 0xA7;
+                if (SendCmdReliable(ref port, pkt, 0x5A, 0xA7, true, 1000))
+                    bw.ReportProgress(14, "Bootloader APP 地址确认 OK");
+                else
+                    bw.ReportProgress(14, "跳过 GETADDR（部分 Bootloader 不回），继续写入…");
+
+                int total = image.Length;
+                for (int offset = 0; offset < total; offset += CHUNK_1K)
+                {
+                    int blockIndex = offset / CHUNK_1K;
+                    int totalBlocks = Math.Max(1, total / CHUNK_1K);
+                    int pct = 15 + (blockIndex * 77) / totalBlocks;
+                    uint addr = FLASH_APP_ADDR + (uint)offset;
+                    bw.ReportProgress(pct, "写入 0x" + addr.ToString("X8") + " (" + (blockIndex + 1) + "/" + totalBlocks + ")");
+
+                    Array.Clear(pkt, 0, pkt.Length);
+                    pkt[0] = 0x5A; pkt[1] = 0xA2;
+                    PutBe32(pkt, 2, addr);
+                    if (!SendCmdReliable(ref port, pkt, 0x5A, 0xA2, true, 5000))
+                        throw new Exception("设置地址失败" + FailDetail());
+
+                    int blockSent = 0;
+                    while (blockSent < CHUNK_1K)
+                    {
+                        int n = Math.Min(HID_PAYLOAD, CHUNK_1K - blockSent);
+                        Array.Clear(pkt, 0, pkt.Length);
+                        pkt[0] = 0x5A; pkt[1] = 0xA3;
+                        PutBe16(pkt, 2, n);
+                        Buffer.BlockCopy(image, offset + blockSent, pkt, 4, n);
+                        blockSent += n;
+                        bool lastOfBlock = (blockSent >= CHUNK_1K);
+                        if (!SendCmdReliable(ref port, pkt, 0x5A, 0xA3, lastOfBlock, lastOfBlock ? 8000 : 0))
+                        {
+                            if (lastOfBlock)
+                                throw new Exception("数据块 ACK 失败" + FailDetail());
+                        }
+                        else if (!lastOfBlock)
+                        {
+                            Thread.Sleep(1);
+                        }
+                    }
+                }
+
+                bw.ReportProgress(94, "完成下载…");
+                Array.Clear(pkt, 0, pkt.Length);
+                pkt[0] = 0x5A; pkt[1] = 0xA4;
+                if (!SendCmdReliable(ref port, pkt, 0x5A, 0xA4, true, 3000))
+                    throw new Exception("完成命令失败" + FailDetail());
+
+                bw.ReportProgress(98, "跳转应用…");
+                Array.Clear(pkt, 0, pkt.Length);
+                pkt[0] = 0x5A; pkt[1] = 0xA6;
+                PutBe32(pkt, 2, FLASH_APP_ADDR);
+                SendCmdReliable(ref port, pkt, 0x5A, 0xA6, true, 2000);
+
+                Thread.Sleep(800);
+                bw.ReportProgress(100, "升级成功");
+                e.Result = true;
             }
-
-            // 4) Finish
-            bw.ReportProgress(92, "发送下载结束…");
-            IapExpectAck(IAP_CMD_FINISH, IapSendCmd(IAP_CMD_FINISH), "FINISH");
-
-            // 5) CRC verify — anti-brick: no jump if mismatch
-            bw.ReportProgress(95, "CRC 校验…");
-            uint localCrc = CalcCrcAt32(image);
-            uint remoteCrc = IapCrc(FLASH_APP_ADDR, (ushort)(image.Length / CHUNK_1K));
-            if (localCrc != remoteCrc)
-                throw new Exception("CRC 不一致（本地 0x" + localCrc.ToString("X8") +
-                    " / 设备 0x" + remoteCrc.ToString("X8") + "）。未跳转，可重新升级。");
-
-            // 6) Jump only after verified write
-            bw.ReportProgress(98, "跳转 APP…");
-            IapExpectAck(IAP_CMD_JMP, IapSendAddr(IAP_CMD_JMP, FLASH_APP_ADDR), "JMP");
-
-            Thread.Sleep(800);
-            bw.ReportProgress(100, "升级成功");
-            e.Result = true;
+            finally
+            {
+                try { if (port != null) port.Dispose(); } catch { }
+            }
         }
 
-        private void EnsureOtaDevice(BackgroundWorker bw)
+        private void EnsureBootloaderReady(BackgroundWorker bw)
         {
-            // Already in OTA?
-            if (TryConnectOta())
+            if (ProbeOtaEnumerated())
             {
-                bw.ReportProgress(5, "已连接 OTA Bootloader");
+                bw.ReportProgress(5, "已检测到 OTA Bootloader");
                 return;
             }
 
-            // Try ask APP to enter OTA (SET_OTA)
             bw.ReportProgress(3, "尝试让 APP 进入 OTA…");
             bool sent = false;
             int[] vids = new int[] {
@@ -415,6 +445,7 @@ namespace ConfigAppNS
                         pkt[1] = (byte)'O';
                         pkt[2] = (byte)'T';
                         pkt[3] = (byte)'A';
+                        // APP config channel still uses control transfer — OK here
                         usb.USBLib_DeviceCtrlOutput(0, reportId, reportSize, pkt);
                         sent = true;
                         usb.USBLib_Disconnect();
@@ -426,13 +457,12 @@ namespace ConfigAppNS
             }
 
             if (!sent)
-                bw.ReportProgress(4, "未找到运行中的 APP，等待手动进入 / 已在 Bootloader…");
+                bw.ReportProgress(4, "未找到运行中的 APP，等待 Bootloader…");
 
-            // Wait for OTA device
             for (int i = 0; i < 40; i++)
             {
                 Thread.Sleep(250);
-                if (TryConnectOta())
+                if (ProbeOtaEnumerated())
                 {
                     bw.ReportProgress(6, "OTA Bootloader 已连接");
                     return;
@@ -442,17 +472,16 @@ namespace ConfigAppNS
             throw new Exception("超时未检测到 OTA 设备 (VID 0x0E8F / PID 0x8901)。请确认设备已进入升级模式。");
         }
 
-        private bool TryConnectOta()
+        private bool ProbeOtaEnumerated()
         {
-            try
-            {
-                usb.USBLib_Disconnect();
-            }
-            catch { }
+            try { usb.USBLib_Disconnect(); } catch { }
             try
             {
                 int t = usb.USBLib_Connect((int)DeviceType.HID_OTA_VID, (int)DeviceType.HID_OTA_PID, (int)DeviceType.None);
-                return t != (int)DeviceType.None;
+                if (t == (int)DeviceType.None) return false;
+                // Disconnect immediately — exclusive interrupt port needs the handle free
+                try { usb.USBLib_Disconnect(); } catch { }
+                return true;
             }
             catch
             {
@@ -460,134 +489,378 @@ namespace ConfigAppNS
             }
         }
 
-        private byte[] IapSendCmd(ushort cmd)
+        private static void PutBe16(byte[] buf, int index, int value)
         {
-            byte[] pkt = new byte[64];
-            pkt[0] = (byte)((cmd >> 8) & 0xFF);
-            pkt[1] = (byte)(cmd & 0xFF);
-            usb.USBLib_DeviceCtrlOutput(0, reportId, reportSize, pkt);
-            Thread.Sleep(20);
-            return IapReadResponse();
+            buf[index] = (byte)((value >> 8) & 0xFF);
+            buf[index + 1] = (byte)(value & 0xFF);
         }
 
-        private byte[] IapSendAddr(ushort cmd, uint addr)
+        private static void PutBe32(byte[] buf, int index, uint value)
         {
-            byte[] pkt = new byte[64];
-            pkt[0] = (byte)((cmd >> 8) & 0xFF);
-            pkt[1] = (byte)(cmd & 0xFF);
-            pkt[2] = (byte)((addr >> 24) & 0xFF);
-            pkt[3] = (byte)((addr >> 16) & 0xFF);
-            pkt[4] = (byte)((addr >> 8) & 0xFF);
-            pkt[5] = (byte)(addr & 0xFF);
-            usb.USBLib_DeviceCtrlOutput(0, reportId, reportSize, pkt);
-            Thread.Sleep(30);
-            return IapReadResponse();
+            buf[index] = (byte)((value >> 24) & 0xFF);
+            buf[index + 1] = (byte)((value >> 16) & 0xFF);
+            buf[index + 2] = (byte)((value >> 8) & 0xFF);
+            buf[index + 3] = (byte)(value & 0xFF);
         }
 
-        private void IapSendData(byte[] data)
+        private string FailDetail()
         {
-            byte[] pkt = new byte[64];
-            pkt[0] = (byte)((IAP_CMD_DATA >> 8) & 0xFF);
-            pkt[1] = (byte)(IAP_CMD_DATA & 0xFF);
-            pkt[2] = (byte)((data.Length >> 8) & 0xFF);
-            pkt[3] = (byte)(data.Length & 0xFF);
-            Buffer.BlockCopy(data, 0, pkt, 4, data.Length);
-            usb.USBLib_DeviceCtrlOutput(0, reportId, reportSize, pkt);
-            Thread.Sleep(2);
+            string detail = "";
+            if (!string.IsNullOrEmpty(lastIapError))
+                detail += " (" + lastIapError + ")";
+            else
+                detail += "（无 ACK）";
+            if (!string.IsNullOrEmpty(lastRxHex))
+                detail += " RX=" + lastRxHex;
+            return detail;
         }
 
-        private byte[] IapReadResponse()
+        private static string BytesToHex(byte[] buf, int count)
         {
-            byte[] rsp = new byte[64];
-            // Try offset 0 then 1 (some stacks insert Report ID)
-            bool ok = false;
-            for (int attempt = 0; attempt < 30; attempt++)
+            if (buf == null || count <= 0) return "(empty)";
+            int n = Math.Min(count, buf.Length);
+            StringBuilder sb = new StringBuilder(n * 3);
+            for (int i = 0; i < n; i++)
             {
-                Array.Clear(rsp, 0, rsp.Length);
+                if (i > 0) sb.Append(' ');
+                sb.Append(buf[i].ToString("X2"));
+            }
+            return sb.ToString();
+        }
+
+        private static int MatchAck(byte[] report, int bytesRead, byte cmdHi, byte cmdLo)
+        {
+            if (report == null || bytesRead < 4) return 0;
+            int limit = Math.Min(bytesRead, report.Length);
+            for (int off = 0; off <= 1; off++)
+            {
+                if (off + 3 >= limit) continue;
+                if (report[off] != cmdHi || report[off + 1] != cmdLo) continue;
+                if (report[off + 2] == 0xFF && report[off + 3] == 0x00) return 1;
+                if (report[off + 2] == 0x00 && report[off + 3] == 0xFF) return -1;
+            }
+            return 0;
+        }
+
+        private bool SendCmdReliable(ref OtaHidPort port, byte[] packet, byte cmdHi, byte cmdLo, bool waitAck, int ackTimeoutMs)
+        {
+            lastIapError = "";
+            lastRxHex = "";
+            try
+            {
+                port.WritePacket(packet);
+            }
+            catch (Exception ex)
+            {
                 try
                 {
-                    usb.USBLib_DeviceCtrlInput(0, ioOffset, reportId, reportSize, rsp);
-                    if (rsp[0] == 0x5A)
-                    {
-                        ok = true;
-                        break;
-                    }
-                    // Maybe report ID present
-                    if (rsp[1] == 0x5A)
-                    {
-                        ioOffset = 1;
-                        byte[] shifted = new byte[64];
-                        Buffer.BlockCopy(rsp, 1, shifted, 0, 63);
-                        return shifted;
-                    }
+                    port.Dispose();
+                    port = OtaHidPort.Open((ushort)DeviceType.HID_OTA_VID, (ushort)DeviceType.HID_OTA_PID);
+                    port.WritePacket(packet);
                 }
-                catch { }
-                Thread.Sleep(20);
-            }
-            if (!ok)
-                throw new Exception("读取 IAP 应答超时。");
-            return rsp;
-        }
-
-        private void IapExpectAck(ushort cmd, byte[] rsp, string step)
-        {
-            if (rsp == null || rsp.Length < 4)
-                throw new Exception(step + ": 空应答");
-            ushort rcmd = (ushort)((rsp[0] << 8) | rsp[1]);
-            ushort ack = (ushort)((rsp[2] << 8) | rsp[3]);
-            if (rcmd != cmd)
-                throw new Exception(step + ": 命令不匹配 (0x" + rcmd.ToString("X4") + ")");
-            if (ack != IAP_ACK)
-                throw new Exception(step + ": 设备返回 NACK，已中止（未跳转）。");
-        }
-
-        private uint IapGetAppAddress()
-        {
-            byte[] rsp = IapSendCmd(IAP_CMD_GETADDR);
-            IapExpectAck(IAP_CMD_GETADDR, rsp, "GETADDR");
-            if (rsp.Length < 8)
-                throw new Exception("GETADDR 应答过短");
-            return ((uint)rsp[4] << 24) | ((uint)rsp[5] << 16) | ((uint)rsp[6] << 8) | rsp[7];
-        }
-
-        private uint IapCrc(uint addr, ushort sizeKb)
-        {
-            byte[] pkt = new byte[64];
-            pkt[0] = (byte)((IAP_CMD_CRC >> 8) & 0xFF);
-            pkt[1] = (byte)(IAP_CMD_CRC & 0xFF);
-            pkt[2] = (byte)((addr >> 24) & 0xFF);
-            pkt[3] = (byte)((addr >> 16) & 0xFF);
-            pkt[4] = (byte)((addr >> 8) & 0xFF);
-            pkt[5] = (byte)(addr & 0xFF);
-            pkt[6] = (byte)((sizeKb >> 8) & 0xFF);
-            pkt[7] = (byte)(sizeKb & 0xFF);
-            usb.USBLib_DeviceCtrlOutput(0, reportId, reportSize, pkt);
-            Thread.Sleep(50);
-            byte[] rsp = IapReadResponse();
-            IapExpectAck(IAP_CMD_CRC, rsp, "CRC");
-            if (rsp.Length < 8)
-                throw new Exception("CRC 应答过短");
-            return ((uint)rsp[4] << 24) | ((uint)rsp[5] << 16) | ((uint)rsp[6] << 8) | rsp[7];
-        }
-
-        /// <summary>AT32 hardware-style CRC32 (poly 0x04C11DB7, init 0xFFFFFFFF, no reflect).</summary>
-        private static uint CalcCrcAt32(byte[] data)
-        {
-            uint crc = 0xFFFFFFFF;
-            // Process as 32-bit little-endian words (pad 0xFF already applied)
-            for (int i = 0; i + 4 <= data.Length; i += 4)
-            {
-                uint w = (uint)(data[i] | (data[i + 1] << 8) | (data[i + 2] << 16) | (data[i + 3] << 24));
-                crc ^= w;
-                for (int b = 0; b < 32; b++)
+                catch (Exception ex2)
                 {
-                    if ((crc & 0x80000000) != 0)
-                        crc = (crc << 1) ^ 0x04C11DB7;
-                    else
-                        crc <<= 1;
+                    lastIapError = ex.Message + " / " + ex2.Message;
+                    return false;
                 }
             }
-            return crc;
+
+            if (!waitAck) return true;
+
+            bool resent = false;
+            int waited = 0;
+            while (waited < ackTimeoutMs)
+            {
+                int slice = Math.Min(400, ackTimeoutMs - waited);
+                byte[] report;
+                int n;
+                bool got;
+                try
+                {
+                    got = port.TryReadReport(slice, out report, out n);
+                }
+                catch
+                {
+                    got = false;
+                    report = null;
+                    n = 0;
+                }
+
+                if (got)
+                {
+                    lastRxHex = BytesToHex(report, Math.Min(n, 8));
+                    int match = MatchAck(report, n, cmdHi, cmdLo);
+                    if (match > 0) return true;
+                    if (match < 0)
+                    {
+                        lastIapError = "NACK";
+                        return false;
+                    }
+                    waited += slice;
+                    continue;
+                }
+
+                waited += slice;
+                try
+                {
+                    port.Dispose();
+                    port = OtaHidPort.Open((ushort)DeviceType.HID_OTA_VID, (ushort)DeviceType.HID_OTA_PID);
+                }
+                catch (Exception ex)
+                {
+                    lastIapError = ex.Message;
+                    return false;
+                }
+
+                if (!resent && waited < ackTimeoutMs)
+                {
+                    resent = true;
+                    try { port.WritePacket(packet); }
+                    catch (Exception ex)
+                    {
+                        lastIapError = ex.Message;
+                        return false;
+                    }
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Sync HID interrupt port for AT32 IAP (exclusive of HIDLibrary async reader).
+        /// </summary>
+        private sealed class OtaHidPort : IDisposable
+        {
+            private const int DIGCF_PRESENT = 0x00000002;
+            private const int DIGCF_DEVICEINTERFACE = 0x00000010;
+            private const uint GENERIC_READ = 0x80000000;
+            private const uint GENERIC_WRITE = 0x40000000;
+            private const uint FILE_SHARE_READ = 0x00000001;
+            private const uint FILE_SHARE_WRITE = 0x00000002;
+            private const uint OPEN_EXISTING = 3;
+            private const uint FILE_FLAG_OVERLAPPED = 0x40000000;
+
+            [StructLayout(LayoutKind.Sequential)]
+            private struct SP_DEVICE_INTERFACE_DATA
+            {
+                public int cbSize;
+                public Guid InterfaceClassGuid;
+                public int Flags;
+                public IntPtr RESERVED;
+            }
+
+            [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+            private struct SP_DEVICE_INTERFACE_DETAIL_DATA
+            {
+                public int cbSize;
+                [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
+                public string DevicePath;
+            }
+
+            [StructLayout(LayoutKind.Sequential)]
+            private struct HIDD_ATTRIBUTES
+            {
+                public int Size;
+                public ushort VendorID;
+                public ushort ProductID;
+                public ushort VersionNumber;
+            }
+
+            [StructLayout(LayoutKind.Sequential)]
+            private struct HIDP_CAPS
+            {
+                public ushort Usage;
+                public ushort UsagePage;
+                public ushort InputReportByteLength;
+                public ushort OutputReportByteLength;
+                public ushort FeatureReportByteLength;
+                [MarshalAs(UnmanagedType.ByValArray, SizeConst = 17)]
+                public ushort[] Reserved;
+                public ushort NumberLinkCollectionNodes;
+                public ushort NumberInputButtonCaps;
+                public ushort NumberInputValueCaps;
+                public ushort NumberInputDataIndices;
+                public ushort NumberOutputButtonCaps;
+                public ushort NumberOutputValueCaps;
+                public ushort NumberOutputDataIndices;
+                public ushort NumberFeatureButtonCaps;
+                public ushort NumberFeatureValueCaps;
+                public ushort NumberFeatureDataIndices;
+            }
+
+            [DllImport("hid.dll", SetLastError = true)]
+            private static extern void HidD_GetHidGuid(out Guid hidGuid);
+
+            [DllImport("hid.dll", SetLastError = true)]
+            private static extern bool HidD_GetAttributes(IntPtr hidDeviceObject, ref HIDD_ATTRIBUTES attributes);
+
+            [DllImport("hid.dll", SetLastError = true)]
+            private static extern bool HidD_GetPreparsedData(SafeFileHandle hidDeviceObject, out IntPtr preparsedData);
+
+            [DllImport("hid.dll", SetLastError = true)]
+            private static extern bool HidD_FreePreparsedData(IntPtr preparsedData);
+
+            [DllImport("hid.dll", SetLastError = true)]
+            private static extern int HidP_GetCaps(IntPtr preparsedData, ref HIDP_CAPS capabilities);
+
+            [DllImport("setupapi.dll", CharSet = CharSet.Auto, SetLastError = true)]
+            private static extern IntPtr SetupDiGetClassDevs(ref Guid classGuid, string enumerator, IntPtr hwndParent, int flags);
+
+            [DllImport("setupapi.dll", CharSet = CharSet.Auto, SetLastError = true)]
+            private static extern bool SetupDiEnumDeviceInterfaces(IntPtr deviceInfoSet, IntPtr deviceInfoData, ref Guid interfaceClassGuid, int memberIndex, ref SP_DEVICE_INTERFACE_DATA deviceInterfaceData);
+
+            [DllImport("setupapi.dll", CharSet = CharSet.Auto, SetLastError = true)]
+            private static extern bool SetupDiGetDeviceInterfaceDetail(IntPtr deviceInfoSet, ref SP_DEVICE_INTERFACE_DATA deviceInterfaceData, IntPtr deviceInterfaceDetailData, int deviceInterfaceDetailDataSize, ref int requiredSize, IntPtr deviceInfoData);
+
+            [DllImport("setupapi.dll", CharSet = CharSet.Auto, SetLastError = true)]
+            private static extern bool SetupDiGetDeviceInterfaceDetail(IntPtr deviceInfoSet, ref SP_DEVICE_INTERFACE_DATA deviceInterfaceData, ref SP_DEVICE_INTERFACE_DETAIL_DATA deviceInterfaceDetailData, int deviceInterfaceDetailDataSize, ref int requiredSize, IntPtr deviceInfoData);
+
+            [DllImport("setupapi.dll", SetLastError = true)]
+            private static extern int SetupDiDestroyDeviceInfoList(IntPtr deviceInfoSet);
+
+            [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+            private static extern SafeFileHandle CreateFile(string lpFileName, uint dwDesiredAccess, uint dwShareMode, IntPtr lpSecurityAttributes, uint dwCreationDisposition, uint dwFlagsAndAttributes, IntPtr hTemplateFile);
+
+            private SafeFileHandle _handle;
+            private FileStream _stream;
+            public int InputReportLen { get; private set; }
+            public int OutputReportLen { get; private set; }
+            public bool? ForceReportIdPrefix;
+
+            public static OtaHidPort Open(ushort vid, ushort pid)
+            {
+                Guid hidGuid;
+                HidD_GetHidGuid(out hidGuid);
+                IntPtr devInfo = SetupDiGetClassDevs(ref hidGuid, null, IntPtr.Zero, DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
+                if (devInfo == IntPtr.Zero || devInfo == new IntPtr(-1))
+                    throw new IOException("SetupDiGetClassDevs failed");
+
+                try
+                {
+                    SP_DEVICE_INTERFACE_DATA ifData = new SP_DEVICE_INTERFACE_DATA();
+                    ifData.cbSize = Marshal.SizeOf(typeof(SP_DEVICE_INTERFACE_DATA));
+
+                    for (int index = 0; SetupDiEnumDeviceInterfaces(devInfo, IntPtr.Zero, ref hidGuid, index, ref ifData); index++)
+                    {
+                        int required = 0;
+                        SetupDiGetDeviceInterfaceDetail(devInfo, ref ifData, IntPtr.Zero, 0, ref required, IntPtr.Zero);
+
+                        SP_DEVICE_INTERFACE_DETAIL_DATA detail = new SP_DEVICE_INTERFACE_DETAIL_DATA();
+                        detail.cbSize = IntPtr.Size == 8 ? 8 : 5;
+
+                        if (!SetupDiGetDeviceInterfaceDetail(devInfo, ref ifData, ref detail, required, ref required, IntPtr.Zero))
+                            continue;
+
+                        SafeFileHandle handle = CreateFile(
+                            detail.DevicePath,
+                            GENERIC_READ | GENERIC_WRITE,
+                            FILE_SHARE_READ | FILE_SHARE_WRITE,
+                            IntPtr.Zero,
+                            OPEN_EXISTING,
+                            FILE_FLAG_OVERLAPPED,
+                            IntPtr.Zero);
+
+                        if (handle == null || handle.IsInvalid)
+                            continue;
+
+                        try
+                        {
+                            HIDD_ATTRIBUTES attrs = new HIDD_ATTRIBUTES();
+                            attrs.Size = Marshal.SizeOf(typeof(HIDD_ATTRIBUTES));
+                            if (!HidD_GetAttributes(handle.DangerousGetHandle(), ref attrs))
+                            {
+                                handle.Close();
+                                continue;
+                            }
+
+                            if (attrs.VendorID != vid || attrs.ProductID != pid)
+                            {
+                                handle.Close();
+                                continue;
+                            }
+
+                            IntPtr preparsed;
+                            if (!HidD_GetPreparsedData(handle, out preparsed))
+                            {
+                                handle.Close();
+                                continue;
+                            }
+
+                            HIDP_CAPS caps = new HIDP_CAPS();
+                            caps.Reserved = new ushort[17];
+                            HidP_GetCaps(preparsed, ref caps);
+                            HidD_FreePreparsedData(preparsed);
+
+                            int inLen = caps.InputReportByteLength > 0 ? caps.InputReportByteLength : 65;
+                            int outLen = caps.OutputReportByteLength > 0 ? caps.OutputReportByteLength : 65;
+                            int bufSize = Math.Max(Math.Max(inLen, outLen), 65);
+
+                            FileStream stream = new FileStream(handle, FileAccess.ReadWrite, bufSize, true);
+                            OtaHidPort port = new OtaHidPort();
+                            port._handle = handle;
+                            port._stream = stream;
+                            port.InputReportLen = inLen;
+                            port.OutputReportLen = outLen;
+                            return port;
+                        }
+                        catch
+                        {
+                            try { handle.Close(); } catch { }
+                        }
+                    }
+                }
+                finally
+                {
+                    SetupDiDestroyDeviceInfoList(devInfo);
+                }
+
+                throw new IOException("OTA HID 设备未找到 (0x0E8F:0x8901)");
+            }
+
+            public void WritePacket(byte[] packet64)
+            {
+                if (packet64 == null || packet64.Length < 2)
+                    throw new ArgumentException("packet");
+
+                bool usePrefix = ForceReportIdPrefix.HasValue
+                    ? ForceReportIdPrefix.Value
+                    : (OutputReportLen >= 65);
+
+                if (usePrefix)
+                {
+                    int len = Math.Max(OutputReportLen, 65);
+                    byte[] outBuf = new byte[len];
+                    outBuf[0] = 0x00;
+                    Buffer.BlockCopy(packet64, 0, outBuf, 1, Math.Min(64, len - 1));
+                    _stream.Write(outBuf, 0, outBuf.Length);
+                }
+                else
+                {
+                    byte[] outBuf = new byte[OutputReportLen];
+                    Buffer.BlockCopy(packet64, 0, outBuf, 0, Math.Min(packet64.Length, OutputReportLen));
+                    _stream.Write(outBuf, 0, outBuf.Length);
+                }
+                _stream.Flush();
+            }
+
+            public bool TryReadReport(int timeoutMs, out byte[] report, out int bytesRead)
+            {
+                report = new byte[InputReportLen];
+                bytesRead = 0;
+                IAsyncResult ar = _stream.BeginRead(report, 0, report.Length, null, null);
+                if (!ar.AsyncWaitHandle.WaitOne(timeoutMs))
+                    return false;
+                bytesRead = _stream.EndRead(ar);
+                return bytesRead > 0;
+            }
+
+            public void Dispose()
+            {
+                try { if (_stream != null) _stream.Dispose(); } catch { }
+                _stream = null;
+                try { if (_handle != null && !_handle.IsClosed) _handle.Close(); } catch { }
+                _handle = null;
+            }
         }
 
         private void btnClose_Click(object sender, EventArgs e)
