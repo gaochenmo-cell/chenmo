@@ -412,16 +412,21 @@ namespace ConfigAppNS
         private const int SENSORS_PER_KEY = 4;
         private const int CONFIG_VALUE_COUNT = KEY_COUNT_5KEY * SENSORS_PER_KEY; // 20 — FW DATA_LEN/2
         private Panel[] fiveKeyFillers = null;
-        private float uiDpiScale = 1f;
+        // Design canvas at 96 DPI — all layout math uses S(designPx)
+        private const int DesignW = 1040;
+        private const int DesignH = 780;
+        private float layoutScale = 1f;
+        private bool layoutBusy = false;
+        private bool layoutReady = false;
         private Button btnFirmwareUpgrade;
         private Button btnLangToggle;
 
         private int S(int px)
         {
-            return (int)Math.Round(px * uiDpiScale);
+            return (int)Math.Round(px * layoutScale);
         }
 
-        private void DetectDpiScale()
+        private float ReadSystemDpiScale()
         {
             float dpi = 96f;
             try
@@ -430,65 +435,121 @@ namespace ConfigAppNS
                     dpi = g.DpiX;
             }
             catch { }
-            uiDpiScale = dpi / 96f;
-            if (uiDpiScale < 1f) uiDpiScale = 1f;
-            if (uiDpiScale > 2.5f) uiDpiScale = 2.5f;
+            float s = dpi / 96f;
+            if (s < 1f) s = 1f;
+            if (s > 2.5f) s = 2.5f;
+            return s;
         }
 
         private void ApplyFiveKeyLayoutOnly()
         {
             this.Text = "PADUEX5";
             this.AutoScaleMode = AutoScaleMode.None;
-            // Fixed size — avoid maximize leaving a huge empty client area
-            this.FormBorderStyle = FormBorderStyle.FixedSingle;
-            this.MaximizeBox = false;
+            this.FormBorderStyle = FormBorderStyle.Sizable;
+            this.MaximizeBox = true;
+            this.MinimizeBox = true;
             this.StartPosition = FormStartPosition.CenterScreen;
 
-            DetectDpiScale();
-
-            // Remove right-side "传感器" diagrams
-            pictureBox1.Visible = false;
-            pictureBox1.Enabled = false;
+            // One-time chrome / hide unused controls
+            pictureBox1.Visible = false; pictureBox1.Enabled = false;
             if (groupBox_Sensi.Controls.Contains(pictureBox1))
                 groupBox_Sensi.Controls.Remove(pictureBox1);
-            pictureBox_sens.Visible = false;
-            pictureBox_sens.Enabled = false;
+            pictureBox_sens.Visible = false; pictureBox_sens.Enabled = false;
             if (tabPage_Color.Controls.Contains(pictureBox_sens))
                 tabPage_Color.Controls.Remove(pictureBox_sens);
 
-            // Color picker: Red / Blue / White only
-            Btn_Col_G.Visible = false; Btn_Col_G.Enabled = false;
-            Btn_Col_Y.Visible = false; Btn_Col_Y.Enabled = false;
-            Btn_Col_P.Visible = false; Btn_Col_P.Enabled = false;
-            Btn_Col_C.Visible = false; Btn_Col_C.Enabled = false;
-            Btn_Col_R.Visible = true; Btn_Col_R.Enabled = true;
-            Btn_Col_B.Visible = true; Btn_Col_B.Enabled = true;
-            Btn_Col_W.Visible = true; Btn_Col_W.Enabled = true;
+            Btn_Col_G.Visible = Btn_Col_Y.Visible = Btn_Col_P.Visible = Btn_Col_C.Visible = false;
+            Btn_Col_G.Enabled = Btn_Col_Y.Enabled = Btn_Col_P.Enabled = Btn_Col_C.Enabled = false;
+            Btn_K6.Visible = Btn_K7.Visible = Btn_K8.Visible = Btn_K9.Visible = false;
+            Btn_K6.Enabled = Btn_K7.Enabled = Btn_K8.Enabled = Btn_K9.Enabled = false;
+            radioButton_IO4.Visible = false;
+
+            EnsureFirmwareUpgradeButton();
+            EnsureLanguageToggleButton();
+            if (btnFirmwareUpgrade.Parent != groupBox_Mode)
+            {
+                this.Controls.Remove(btnFirmwareUpgrade);
+                groupBox_Mode.Controls.Add(btnFirmwareUpgrade);
+            }
+
+            // Initial window = design × system DPI; later Resize keeps aspect scale
+            float dpiScale = ReadSystemDpiScale();
+            layoutBusy = true;
+            this.ClientSize = new Size((int)(DesignW * dpiScale), (int)(DesignH * dpiScale));
+            this.MinimumSize = new Size((int)(DesignW * dpiScale * 0.85f) + 16,
+                                        (int)(DesignH * dpiScale * 0.85f) + 40);
+            layoutScale = dpiScale;
+            RebuildScaledLayout();
+            layoutBusy = false;
+            layoutReady = true;
+
+            this.Resize -= App_DDR_Resize;
+            this.Resize += App_DDR_Resize;
+
+            ApplyUiLanguage();
+            SensorIndex = 0;
+        }
+
+        private void App_DDR_Resize(object sender, EventArgs e)
+        {
+            if (!layoutReady || layoutBusy)
+                return;
+            layoutBusy = true;
+            try
+            {
+                float sx = (float)this.ClientSize.Width / DesignW;
+                float sy = (float)this.ClientSize.Height / DesignH;
+                float s = Math.Min(sx, sy);
+                if (s < 0.7f) s = 0.7f;
+                if (s > 3.0f) s = 3.0f;
+                layoutScale = s;
+                RebuildScaledLayout();
+            }
+            finally
+            {
+                layoutBusy = false;
+            }
+        }
+
+        /// <summary>
+        /// Place every control from the 1040×780 design canvas using layoutScale.
+        /// Maximizing / resizing keeps proportions; Sensitivity A–D stay fully visible.
+        /// </summary>
+        private void RebuildScaledLayout()
+        {
+            // Color: Red / Blue / White only
+            Btn_Col_R.Visible = Btn_Col_B.Visible = Btn_Col_W.Visible = true;
+            Btn_Col_R.Enabled = Btn_Col_B.Enabled = Btn_Col_W.Enabled = true;
             Btn_Col_R.Location = new Point(S(40), S(28));
             Btn_Col_B.Location = new Point(S(120), S(28));
             Btn_Col_W.Location = new Point(S(200), S(28));
             Btn_Col_R.Size = Btn_Col_B.Size = Btn_Col_W.Size = new Size(S(60), S(60));
-            groupBox_Color.Location = new Point(S(20), S(40));
-            groupBox_Color.Size = new Size(S(320), S(100));
-            Btn_LED.Location = new Point(S(360), S(50));
+            groupBox_Color.Location = new Point(S(16), S(30));
+            groupBox_Color.Size = new Size(S(300), S(100));
+            Btn_LED.Location = new Point(S(340), S(40));
             Btn_LED.Size = new Size(S(100), S(100));
 
-            // Compact Sensitivity (no diagram)
-            groupBox_Sensi.Location = new Point(S(8), S(8));
-            groupBox_Sensi.Size = new Size(S(520), S(560));
+            // Sensitivity A–D compact columns (must fit inside tab ~500 design px)
+            LayoutSensitivityColumns();
 
-            groupBox_DTick.Location = new Point(S(40), S(40));
-            groupBox_DTick.Size = new Size(S(480), S(140));
+            groupBox_DTick.Location = new Point(S(24), S(36));
+            groupBox_DTick.Size = new Size(S(460), S(150));
+            trackBar_DTick.Location = new Point(S(16), S(28));
+            trackBar_DTick.Size = new Size(S(420), S(45));
+            label_DTick.Location = new Point(S(80), S(90));
+            label_DTick.Size = new Size(S(180), S(36));
+            textBox_DTick.Location = new Point(S(270), S(92));
+            textBox_DTick.Size = new Size(S(72), S(32));
 
+            // Pad 3×3
             int cell = S(140);
             int gap = S(6);
             int ox = S(12);
-            int oy = S(40); // leave room for language button
+            int oy = S(42);
             int step = cell + gap;
             int x0 = ox, x1 = ox + step, x2 = ox + step * 2;
             int y0 = oy, y1 = oy + step, y2 = oy + step * 2;
             int padW = step * 3 - gap;
-            int padH = step * 3 - gap;
             Size cellSize = new Size(cell, cell);
 
             Btn_K1.Location = new Point(x0, y0);
@@ -506,9 +567,6 @@ namespace ConfigAppNS
             Btn_K3.BackgroundImage = global::ConfigAppNS.Properties.Resources.AR_C_L;
             Btn_K4.BackgroundImage = global::ConfigAppNS.Properties.Resources.AR_DL_L;
             Btn_K5.BackgroundImage = global::ConfigAppNS.Properties.Resources.AR_DR_L;
-
-            Btn_K6.Visible = Btn_K7.Visible = Btn_K8.Visible = Btn_K9.Visible = false;
-            Btn_K6.Enabled = Btn_K7.Enabled = Btn_K8.Enabled = Btn_K9.Enabled = false;
 
             Point[] fillerPos = new Point[] {
                 new Point(x1, y0), new Point(x0, y1), new Point(x2, y1), new Point(x1, y2)
@@ -533,70 +591,93 @@ namespace ConfigAppNS
                 fiveKeyFillers[i].Size = cellSize;
             }
 
-            // Edit under pad
+            // Edit
             groupBox_Button.Location = new Point(ox, y2 + cell + S(10));
-            groupBox_Button.Size = new Size(padW, S(140));
-            btn_default.Location = new Point(S(16), S(28));
-            Btn_ADJ.Location = new Point(S(16) + padW / 2, S(28));
-            btn_Read.Location = new Point(S(16), S(78));
-            btn_Save.Location = new Point(S(16) + padW / 2, S(78));
-            Size editBtn = new Size(padW / 2 - S(28), S(40));
+            groupBox_Button.Size = new Size(padW, S(130));
+            Size editBtn = new Size(padW / 2 - S(24), S(36));
+            btn_default.Location = new Point(S(14), S(26));
+            Btn_ADJ.Location = new Point(S(14) + padW / 2, S(26));
+            btn_Read.Location = new Point(S(14), S(72));
+            btn_Save.Location = new Point(S(14) + padW / 2, S(72));
             btn_default.Size = Btn_ADJ.Size = btn_Read.Size = btn_Save.Size = editBtn;
 
-            // Tabs right of pad
+            // Tabs — leave margin so right edge never clips
             int tabX = ox + padW + S(16);
-            int tabW = S(540);
+            int tabW = S(DesignW - 12) - tabX; // fill to design right margin
+            if (tabW < S(420)) tabW = S(420);
             int tabH = (y2 + cell) - oy + S(10) + groupBox_Button.Height;
             tabControl1.Location = new Point(tabX, oy);
             tabControl1.Size = new Size(tabW, tabH);
 
-            // Mode row: rebuild internals so Save/OTA are never clipped
-            int modeY = Math.Max(groupBox_Button.Bottom, tabControl1.Bottom) + S(12);
+            // Mode full width under content
+            int modeY = Math.Max(groupBox_Button.Bottom, tabControl1.Bottom) + S(10);
             int modeW = tabX + tabW - ox;
             groupBox_Mode.Location = new Point(ox, modeY);
-            groupBox_Mode.Size = new Size(modeW, S(108));
+            groupBox_Mode.Size = new Size(modeW, S(100));
 
-            groupBox_USBMode.Location = new Point(S(12), S(22));
-            groupBox_USBMode.Size = new Size(S(260), S(70));
-            radioButton_KBS.Location = new Point(S(12), S(28));
-            radioButton_HID.Location = new Point(S(120), S(28));
-            radioButton_IO4.Visible = false;
+            groupBox_USBMode.Location = new Point(S(10), S(20));
+            groupBox_USBMode.Size = new Size(S(240), S(64));
+            radioButton_KBS.Location = new Point(S(10), S(26));
+            radioButton_HID.Location = new Point(S(115), S(26));
 
-            groupBox2.Location = new Point(S(280), S(22));
-            groupBox2.Size = new Size(S(140), S(70));
-            radioButton_1P.Location = new Point(S(12), S(28));
-            radioButton_2P.Location = new Point(S(70), S(28));
+            groupBox2.Location = new Point(S(260), S(20));
+            groupBox2.Size = new Size(S(130), S(64));
+            radioButton_1P.Location = new Point(S(10), S(26));
+            radioButton_2P.Location = new Point(S(65), S(26));
 
-            Size modeBtn = new Size(S(120), S(44));
-            Btn_ReadMode.Size = Btn_SaveMode.Size = modeBtn;
-            Btn_ReadMode.Location = new Point(S(440), S(36));
-            Btn_SaveMode.Location = new Point(S(570), S(36));
-
-            EnsureFirmwareUpgradeButton();
-            // Place OTA inside Mode group so its border never clips mid-button
-            if (btnFirmwareUpgrade.Parent != groupBox_Mode)
-            {
-                this.Controls.Remove(btnFirmwareUpgrade);
-                groupBox_Mode.Controls.Add(btnFirmwareUpgrade);
-            }
-            btnFirmwareUpgrade.Size = modeBtn;
-            btnFirmwareUpgrade.Location = new Point(S(700), S(36));
+            // Three action buttons packed to the right inside Mode (no clipping)
+            int btnW = S(118);
+            int btnH = S(42);
+            int btnY = S(32);
+            int gapBtn = S(10);
+            int right = modeW - S(12);
+            btnFirmwareUpgrade.Size = Btn_SaveMode.Size = Btn_ReadMode.Size = new Size(btnW, btnH);
+            btnFirmwareUpgrade.Location = new Point(right - btnW, btnY);
+            Btn_SaveMode.Location = new Point(right - 2 * btnW - gapBtn, btnY);
+            Btn_ReadMode.Location = new Point(right - 3 * btnW - 2 * gapBtn, btnY);
             btnFirmwareUpgrade.BringToFront();
 
-            int contentW = ox + modeW + S(16);
-            int contentH = groupBox_Mode.Bottom + S(16);
-            this.ClientSize = new Size(contentW, contentH);
-            this.MinimumSize = this.Size;
-            this.MaximumSize = this.Size;
+            if (btnLangToggle != null)
+            {
+                btnLangToggle.Size = new Size(S(96), S(28));
+                btnLangToggle.Location = new Point(this.ClientSize.Width - S(110), S(8));
+                btnLangToggle.BringToFront();
+            }
+            label_Ver.Location = new Point(this.ClientSize.Width - S(70), this.ClientSize.Height - S(22));
+        }
 
-            EnsureLanguageToggleButton();
-            btnLangToggle.Location = new Point(contentW - S(110), S(8));
-            btnLangToggle.Size = new Size(S(96), S(28));
-            btnLangToggle.BringToFront();
+        private void LayoutSensitivityColumns()
+        {
+            // 4 equal columns inside ~480 design-px wide group
+            int gw = S(500);
+            int gh = S(560);
+            groupBox_Sensi.Location = new Point(S(6), S(6));
+            groupBox_Sensi.Size = new Size(gw, gh);
 
-            label_Ver.Location = new Point(contentW - S(70), contentH - S(22));
-            ApplyUiLanguage();
-            SensorIndex = 0;
+            int colW = S(110);
+            int baseX = S(24);
+            int barH = S(400);
+            int trackH = S(430);
+            int top = S(28);
+
+            TrackBar[] tracks = new TrackBar[] { trackBar1, trackBar2, trackBar3, trackBar4 };
+            ProgressBarWithValue[] bars = new ProgressBarWithValue[] { progressBar1, progressBar2, progressBar3, progressBar4 };
+            TextBox[] boxes = new TextBox[] { textBox_V1, textBox_V2, textBox_V3, textBox_V4 };
+            Label[] labels = new Label[] { label1, label2, label3, label4 };
+
+            for (int i = 0; i < 4; i++)
+            {
+                int cx = baseX + i * colW;
+                tracks[i].Orientation = Orientation.Vertical;
+                tracks[i].Location = new Point(cx, top);
+                tracks[i].Size = new Size(S(45), trackH);
+                bars[i].Location = new Point(cx + S(48), top + S(12));
+                bars[i].Size = new Size(S(36), barH);
+                boxes[i].Location = new Point(cx + S(4), top + trackH + S(8));
+                boxes[i].Size = new Size(S(64), S(28));
+                labels[i].Location = new Point(cx + S(22), top + trackH + S(40));
+                labels[i].AutoSize = true;
+            }
         }
 
         private void EnsureFirmwareUpgradeButton()
