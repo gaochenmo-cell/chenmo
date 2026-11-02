@@ -6,7 +6,7 @@ using System.Windows.Forms;
 
 namespace ConfigAppNS
 {
-    /// <summary>Vector pad key glyphs — L-corner arrows, outline style, trigger fill from LED color.</summary>
+    /// <summary>Vector pad key glyphs — chevron arrows, outline style, trigger fill from LED color.</summary>
     internal static class PadKeyPainter
     {
         internal enum PadKeyKind
@@ -78,18 +78,20 @@ namespace ConfigAppNS
                 return;
             }
 
-            using (GraphicsPath path = BuildCornerLArrow(inner, kind))
+            using (GraphicsPath path = BuildChevronArrow(inner, kind))
             {
                 if (args.Triggered)
                 {
                     using (SolidBrush fill = new SolidBrush(args.TriggerFill))
                         g.FillPath(fill, path);
                 }
-                float penW = Math.Max(2.2f, Math.Min(inner.Width, inner.Height) * 0.055f);
+                float penW = Math.Max(2f, Math.Min(inner.Width, inner.Height) * 0.04f);
                 using (Pen outline = new Pen(args.OutlineColor, penW))
                 {
                     outline.LineJoin = LineJoin.Miter;
-                    outline.MiterLimit = 4f;
+                    outline.MiterLimit = 5f;
+                    outline.StartCap = LineCap.Flat;
+                    outline.EndCap = LineCap.Flat;
                     g.DrawPath(outline, path);
                 }
             }
@@ -139,63 +141,55 @@ namespace ConfigAppNS
             }
         }
 
-        private static GraphicsPath BuildCornerLArrow(Rectangle inner, PadKeyKind kind)
-        {
-            GraphicsPath unit = BuildDownRightArrowUnit();
-            using (Matrix m = CornerTransform(inner, kind))
-            {
-                GraphicsPath path = (GraphicsPath)unit.Clone();
-                path.Transform(m);
-                return path;
-            }
-        }
-
-        /// <summary>Single winding path: L-head + diagonal shaft + junction patch (no gap).</summary>
-        private static GraphicsPath BuildDownRightArrowUnit()
-        {
-            const float t = 0.13f;
-            float ic = 1f - t;
-
-            GraphicsPath path = new GraphicsPath(FillMode.Winding);
-
-            path.AddRectangle(new RectangleF(0.34f, ic, 0.66f, t));
-            path.AddRectangle(new RectangleF(ic, 0.34f, t, ic - 0.34f));
-
-            PointF a = new PointF(0.10f, 0.28f);
-            PointF b = new PointF(0.10f + t, 0.28f + t);
-            PointF c = new PointF(ic + t * 0.08f, ic + t * 0.08f);
-            PointF d = new PointF(ic - t, ic - t);
-            path.AddPolygon(new[] { a, b, c, d });
-
-            path.AddRectangle(new RectangleF(ic - t, ic - t, t * 1.1f, t * 1.1f));
-            path.AddRectangle(new RectangleF(0.34f - t * 0.05f, ic - t * 0.05f, t * 1.1f, t * 1.1f));
-
-            return path;
-        }
-
-        private static Matrix CornerTransform(Rectangle inner, PadKeyKind kind)
+        /// <summary>Thick chevron (reference: simple &gt; shape) pointing toward each corner.</summary>
+        private static GraphicsPath BuildChevronArrow(Rectangle inner, PadKeyKind kind)
         {
             float cx = inner.X + inner.Width * 0.5f;
             float cy = inner.Y + inner.Height * 0.5f;
-            Matrix m = new Matrix();
-            m.Translate(-0.5f, -0.5f, MatrixOrder.Append);
+            float scale = Math.Min(inner.Width, inner.Height) * 0.44f;
+            float angle = ChevronAngleDegrees(kind);
+
+            // Unit chevron pointing east (tip right), centered at origin
+            PointF[] unit = new PointF[]
+            {
+                new PointF(0.82f, 0f),
+                new PointF(0.08f, -0.22f),
+                new PointF(-0.40f, -0.36f),
+                new PointF(-0.40f, 0.36f),
+                new PointF(0.08f, 0.22f),
+            };
+
+            PointF[] pts = new PointF[unit.Length];
+            for (int i = 0; i < unit.Length; i++)
+                pts[i] = new PointF(unit[i].X * scale, unit[i].Y * scale);
+
+            using (Matrix m = new Matrix())
+            {
+                m.Rotate(angle);
+                m.TransformPoints(pts);
+            }
+
+            for (int i = 0; i < pts.Length; i++)
+            {
+                pts[i].X += cx;
+                pts[i].Y += cy;
+            }
+
+            GraphicsPath path = new GraphicsPath(FillMode.Winding);
+            path.AddPolygon(pts);
+            return path;
+        }
+
+        private static float ChevronAngleDegrees(PadKeyKind kind)
+        {
             switch (kind)
             {
-                case PadKeyKind.DownRight:
-                    break;
-                case PadKeyKind.UpperLeft:
-                    m.Scale(-1f, -1f, MatrixOrder.Append);
-                    break;
-                case PadKeyKind.UpperRight:
-                    m.Scale(1f, -1f, MatrixOrder.Append);
-                    break;
-                case PadKeyKind.DownLeft:
-                    m.Scale(-1f, 1f, MatrixOrder.Append);
-                    break;
+                case PadKeyKind.UpperLeft: return 225f;
+                case PadKeyKind.UpperRight: return -45f;
+                case PadKeyKind.DownLeft: return 135f;
+                case PadKeyKind.DownRight: return 45f;
+                default: return 0f;
             }
-            m.Scale(inner.Width, inner.Height, MatrixOrder.Append);
-            m.Translate(cx, cy, MatrixOrder.Append);
-            return m;
         }
     }
 }
