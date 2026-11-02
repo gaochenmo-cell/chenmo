@@ -1,0 +1,47 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual C# Express 2010
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HIDDevice", "HIDDevice\HIDDevice.csproj", "{48223EAB-B2E0-4A64-9074-4444662EB693}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug MSRS|Any CPU = Debug MSRS|Any CPU
+		Debug MSRS|x86 = Debug MSRS|x86
+		Debug|Any CPU = Debug|Any CPU
+		Debug|x86 = Debug|x86
+		MSRS Debug|Any CPU = MSRS Debug|Any CPU
+		MSRS Debug|x86 = MSRS Debug|x86
+		Release MSRS|Any CPU = Release MSRS|Any CPU
+		Release MSRS|x86 = Release MSRS|x86
+		Release|Any CPU = Release|Any CPU
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{48223EAB-B2E0-4A64-9074-4444662EB693}.Debug MSRS|Any CPU.ActiveCfg = Debug|Any CPU
+		{48223EAB-B2E0-4A64-9074-4444662EB693}.Debug MSRS|Any CPU.Build.0 = Debug|Any CPU
+		{48223EAB-B2E0-4A64-9074-4444662EB693}.Debug MSRS|x86.ActiveCfg = Debug|Any CPU
+		{48223EAB-B2E0-4A64-9074-4444662EB693}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{48223EAB-B2E0-4A64-9074-4444662EB693}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{48223EAB-B2E0-4A64-9074-4444662EB693}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{48223EAB-B2E0-4A64-9074-4444662EB693}.MSRS Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{48223EAB-B2E0-4A64-9074-4444662EB693}.MSRS Debug|Any CPU.Build.0 = Debug|Any CPU
+		{48223EAB-B2E0-4A64-9074-4444662EB693}.MSRS Debug|x86.ActiveCfg = Debug|Any CPU
+		{48223EAB-B2E0-4A64-9074-4444662EB693}.Release MSRS|Any CPU.ActiveCfg = Release|Any CPU
+		{48223EAB-B2E0-4A64-9074-4444662EB693}.Release MSRS|Any CPU.Build.0 = Release|Any CPU
+		{48223EAB-B2E0-4A64-9074-4444662EB693}.Release MSRS|x86.ActiveCfg = Release|Any CPU
+		{48223EAB-B2E0-4A64-9074-4444662EB693}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{48223EAB-B2E0-4A64-9074-4444662EB693}.Release|Any CPU.Build.0 = Release|Any CPU
+		{48223EAB-B2E0-4A64-9074-4444662EB693}.Release|x86.ActiveCfg = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(VaultVsipSolution-v2) = preSolution
+		VaultHost = http://vault.brianpeek.com/VaultService
+		VaultRepositoryID = 3
+		VaultRepositoryGUID = fbcaea64-807b-4669-86c0-1931aeffccda
+		ProjectCount = 2
+		ProjectRelativeDiskPath1 = WiimoteTest\WiimoteTest.csproj
+		ProjectRelativeDiskPath2 = WiimoteLib\WiimoteLib.csproj
+	EndGlobalSection
+EndGlobal

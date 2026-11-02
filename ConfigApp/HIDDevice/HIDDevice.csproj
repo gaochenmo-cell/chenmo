@@ -1,0 +1,259 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProductVersion>9.0.21022</ProductVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{48223EAB-B2E0-4A64-9074-4444662EB693}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>ConfigAppNS</RootNamespace>
+    <AssemblyName>ConfigApp</AssemblyName>
+    <SccProjectName>
+    </SccProjectName>
+    <SccLocalPath>
+    </SccLocalPath>
+    <SccAuxPath>
+    </SccAuxPath>
+    <SccProvider>
+    </SccProvider>
+    <FileUpgradeFlags>
+    </FileUpgradeFlags>
+    <OldToolsVersion>3.5</OldToolsVersion>
+    <UpgradeBackupLocation>
+    </UpgradeBackupLocation>
+    <ApplicationIcon>AppLogo.ico</ApplicationIcon>
+    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
+    <TargetFrameworkProfile />
+    <PublishUrl>publish\</PublishUrl>
+    <Install>true</Install>
+    <InstallFrom>Disk</InstallFrom>
+    <UpdateEnabled>false</UpdateEnabled>
+    <UpdateMode>Foreground</UpdateMode>
+    <UpdateInterval>7</UpdateInterval>
+    <UpdateIntervalUnits>Days</UpdateIntervalUnits>
+    <UpdatePeriodically>false</UpdatePeriodically>
+    <UpdateRequired>false</UpdateRequired>
+    <MapFileExtensions>true</MapFileExtensions>
+    <ApplicationRevision>0</ApplicationRevision>
+    <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
+    <IsWebBootstrapper>false</IsWebBootstrapper>
+    <UseApplicationTrust>false</UseApplicationTrust>
+    <BootstrapperEnabled>true</BootstrapperEnabled>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="HIDLibrary, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>lib\HIDLibrary.dll</HintPath>
+    </Reference>
+    <Reference Include="LibUsbDotNet, Version=2.2.8.104, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>lib\LibUsbDotNet.dll</HintPath>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="App_ADX.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="App_ADX.Designer.cs">
+      <DependentUpon>App_ADX.cs</DependentUpon>
+    </Compile>
+    <Compile Include="App_Main.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="App_Main.Designer.cs">
+      <DependentUpon>App_Main.cs</DependentUpon>
+    </Compile>
+    <Compile Include="App_DDR.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="App_DDR.Designer.cs">
+      <DependentUpon>App_DDR.cs</DependentUpon>
+    </Compile>
+    <Compile Include="App_ZER.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="App_ZER.Designer.cs">
+      <DependentUpon>App_ZER.cs</DependentUpon>
+    </Compile>
+    <Compile Include="App_YJI.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="App_YJI.Designer.cs">
+      <DependentUpon>App_YJI.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Program.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+    <Compile Include="SerialCom.cs" />
+    <EmbeddedResource Include="App_ADX.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>App_ADX.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="App_DDR.resx">
+      <DependentUpon>App_DDR.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="App_Main.resx">
+      <DependentUpon>App_Main.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="App_YJI.resx">
+      <DependentUpon>App_YJI.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="App_ZER.resx">
+      <DependentUpon>App_ZER.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <SubType>Designer</SubType>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+    <None Include="app.config" />
+    <None Include="Properties\Settings.settings">
+      <Generator>SettingsSingleFileGenerator</Generator>
+      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
+    </None>
+    <Compile Include="Properties\Settings.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Settings.settings</DependentUpon>
+      <DesignTimeSharedInput>True</DesignTimeSharedInput>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="AppLogo.ico" />
+    <None Include="Resources\BG16Key.png" />
+    <None Include="Resources\AR-UL-L.png" />
+    <None Include="Resources\AR-UL-H.png" />
+    <None Include="Resources\AR-UR-L.png" />
+    <None Include="Resources\AR-UR-H.png" />
+    <None Include="Resources\AR-DL-L.png" />
+    <None Include="Resources\AR-DL-H.png" />
+    <None Include="Resources\AR-DR-L.png" />
+    <None Include="Resources\AR-DR-H.png" />
+    <None Include="Resources\AR-C-L.png" />
+    <None Include="Resources\AR-C-H.png" />
+    <None Include="Resources\AR-U-L.png" />
+    <None Include="Resources\AR-U-H.png" />
+    <None Include="Resources\AR-R-L.png" />
+    <None Include="Resources\AR-R-H.png" />
+    <None Include="Resources\AR-L-L.png" />
+    <None Include="Resources\AR-L-H.png" />
+    <None Include="Resources\AR-D-L.png" />
+    <None Include="Resources\AR-D-H.png" />
+    <None Include="Resources\BGNKey.png" />
+    <None Include="Resources\BG8Key.png" />
+    <None Include="Resources\BG4Key.png" />
+    <None Include="Resources\BTN11.png" />
+    <None Include="Resources\BTN10.png" />
+    <None Include="Resources\BTN9.png" />
+    <None Include="Resources\BTN8.png" />
+    <None Include="Resources\BTN7.png" />
+    <None Include="Resources\BTN6.png" />
+    <None Include="Resources\BTN5.png" />
+    <None Include="Resources\BTN4.png" />
+    <None Include="Resources\BTN3.png" />
+    <None Include="Resources\BTN2.png" />
+    <None Include="Resources\BTN1.png" />
+    <None Include="Resources\E8.png" />
+    <None Include="Resources\E7.png" />
+    <None Include="Resources\E6.png" />
+    <None Include="Resources\E5.png" />
+    <None Include="Resources\E4.png" />
+    <None Include="Resources\E3.png" />
+    <None Include="Resources\E2.png" />
+    <None Include="Resources\E1.png" />
+    <None Include="Resources\D8.png" />
+    <None Include="Resources\D7.png" />
+    <None Include="Resources\D6.png" />
+    <None Include="Resources\D5.png" />
+    <None Include="Resources\D4.png" />
+    <None Include="Resources\D3.png" />
+    <None Include="Resources\D2.png" />
+    <None Include="Resources\D1.png" />
+    <None Include="Resources\C2.png" />
+    <None Include="Resources\C1.png" />
+    <None Include="Resources\B8.png" />
+    <None Include="Resources\B7.png" />
+    <None Include="Resources\B6.png" />
+    <None Include="Resources\B5.png" />
+    <None Include="Resources\B4.png" />
+    <None Include="Resources\B3.png" />
+    <None Include="Resources\B2.png" />
+    <None Include="Resources\B1.png" />
+    <None Include="Resources\A8.png" />
+    <None Include="Resources\A7.png" />
+    <None Include="Resources\A6.png" />
+    <None Include="Resources\A5.png" />
+    <None Include="Resources\A4.png" />
+    <None Include="Resources\DDR_Sensi.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <COMReference Include="VBIDE">
+      <Guid>{0002E157-0000-0000-C000-000000000046}</Guid>
+      <VersionMajor>5</VersionMajor>
+      <VersionMinor>3</VersionMinor>
+      <Lcid>0</Lcid>
+      <WrapperTool>primary</WrapperTool>
+      <Isolated>False</Isolated>
+      <EmbedInteropTypes>True</EmbedInteropTypes>
+    </COMReference>
+  </ItemGroup>
+  <ItemGroup>
+    <BootstrapperPackage Include=".NETFramework,Version=v4.0">
+      <Visible>False</Visible>
+      <ProductName>Microsoft .NET Framework 4 %28x86 and x64%29</ProductName>
+      <Install>true</Install>
+    </BootstrapperPackage>
+    <BootstrapperPackage Include="Microsoft.Net.Client.3.5">
+      <Visible>False</Visible>
+      <ProductName>.NET Framework 3.5 SP1 Client Profile</ProductName>
+      <Install>false</Install>
+    </BootstrapperPackage>
+    <BootstrapperPackage Include="Microsoft.Net.Framework.3.5.SP1">
+      <Visible>False</Visible>
+      <ProductName>.NET Framework 3.5 SP1</ProductName>
+      <Install>false</Install>
+    </BootstrapperPackage>
+    <BootstrapperPackage Include="Microsoft.Windows.Installer.3.1">
+      <Visible>False</Visible>
+      <ProductName>Windows Installer 3.1</ProductName>
+      <Install>true</Install>
+    </BootstrapperPackage>
+  </ItemGroup>
+  <ItemGroup />
+  <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
+  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+       Other similar extension points exist, see Microsoft.Common.targets.
+  <Target Name="BeforeBuild">
+  </Target>
+  <Target Name="AfterBuild">
+  </Target>
+  -->
+</Project>
