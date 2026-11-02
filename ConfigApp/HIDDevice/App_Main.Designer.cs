@@ -84,7 +84,7 @@
             this.Controls.Add(this.Btn_DDR);
             this.Controls.Add(this.Btn_ADX);
             this.Name = "App_Main";
-            this.Text = "Form1";
+            this.Text = "PADUEX5";
             this.ResumeLayout(false);
 
         }

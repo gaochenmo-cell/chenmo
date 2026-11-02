@@ -9,7 +9,7 @@
     <OutputType>WinExe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>ConfigAppNS</RootNamespace>
-    <AssemblyName>ConfigApp</AssemblyName>
+    <AssemblyName>PADUEX5</AssemblyName>
     <SccProjectName>
     </SccProjectName>
     <SccLocalPath>
@@ -94,6 +94,12 @@
     <Compile Include="App_DDR.Designer.cs">
       <DependentUpon>App_DDR.cs</DependentUpon>
     </Compile>
+    <Compile Include="App_OTA.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="App_OTA.Designer.cs">
+      <DependentUpon>App_OTA.cs</DependentUpon>
+    </Compile>
     <Compile Include="App_ZER.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -120,6 +126,9 @@
     </EmbeddedResource>
     <EmbeddedResource Include="App_DDR.resx">
       <DependentUpon>App_DDR.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="App_OTA.resx">
+      <DependentUpon>App_OTA.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="App_Main.resx">
       <DependentUpon>App_Main.cs</DependentUpon>

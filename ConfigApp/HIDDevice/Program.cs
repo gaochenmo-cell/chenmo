@@ -62,7 +62,7 @@ namespace ConfigAppNS
         {
             //------------------------------------------------------------------------------------------------------------------
             //string Currentpath = Directory.GetCurrentDirectory() + "\\Config.ini";
-            string TempAppName = "Config App";
+            string TempAppName = "PADUEX5";
             /*string Str = "";
             //------------------------------------------------------------------------------------------------------------------
             using (StreamReader Rhandle = File.OpenText(Currentpath))         // Create a file to write to.

@@ -371,6 +371,7 @@ namespace ConfigAppNS
 
             ///------------------------------------------------------------------------------------------
             ApplyFiveKeyLayoutOnly();  // Yuanpad 5Key only — real PIU corner+center layout
+            EnsureFirmwareUpgradeButton();
             ///------------------------------------------------------------------------------------------
             tabControl1.SelectedIndexChanged += TabControl_SelectedIndexChanged;
             progressBar1.Direction = ProgressBarDirection.Vertical;
@@ -393,7 +394,7 @@ namespace ConfigAppNS
 
         private void ApplyFiveKeyLayoutOnly()
         {
-            this.Text = "Yuanpad 5Key Config";
+            this.Text = "PADUEX5";
 
             int cell = 165;
             int gap = 6;
@@ -463,6 +464,24 @@ namespace ConfigAppNS
 
             SensorIndex = 0; // start on key 1
             // Keep edit panels disabled until a pad is selected after device connect
+        }
+
+        private Button btnFirmwareUpgrade;
+
+        private void EnsureFirmwareUpgradeButton()
+        {
+            if (btnFirmwareUpgrade != null)
+                return;
+            btnFirmwareUpgrade = new Button();
+            btnFirmwareUpgrade.Name = "btnFirmwareUpgrade";
+            btnFirmwareUpgrade.Text = "固件升级";
+            btnFirmwareUpgrade.Size = new System.Drawing.Size(147, 48);
+            // Place near mode controls
+            btnFirmwareUpgrade.Location = new System.Drawing.Point(groupBox_Mode.Location.X + groupBox_Mode.Width + 16, groupBox_Mode.Location.Y + 30);
+            btnFirmwareUpgrade.BackColor = System.Drawing.SystemColors.Control;
+            btnFirmwareUpgrade.Click += new System.EventHandler(this.Btn_OTA_Click);
+            this.Controls.Add(btnFirmwareUpgrade);
+            btnFirmwareUpgrade.BringToFront();
         }
 
         /// =============================================================================================
@@ -1521,30 +1540,11 @@ namespace ConfigAppNS
         ///
         private void Btn_OTA_Click(object sender, EventArgs e)
         {
-            //-------------------------------------------------------------------------------------------
-            DialogResult result;
-            result = MessageBox.Show("Enter OTA Mode !   " + "\r\n" + "Are you sure to Set Device OTA Mode ? ", "Warning Message", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-            if (result == DialogResult.No)
-            {
-                return;
-            }
-            //-------------------------------------------------------------------------------------------
-            byte ReportSize = 64;
-            byte ReportID = 0;
-            byte[] SendByteBuf = new byte[64];
-            //-------------------------------------------------------------------------------------------
-            SendByteBuf[0] = (byte)UserCommand.SET_OTA;
-            SendByteBuf[1] = (byte)'O';
-            SendByteBuf[2] = (byte)'T';
-            SendByteBuf[3] = (byte)'A';
-            //-------------------------------------------------------------------------------------------
-            //USBCtrl.DDR_USBDeviceCtrlOutput(mDeviceIndex, SendByteBuf, ReportSize);
-            USBCtrl.USBLib_DeviceCtrlOutput(mDeviceIndex, ReportID, ReportSize, SendByteBuf);
-            //-------------------------------------------------------------------------------------------
-            //App_OTA ota = new App_OTA();
-            //this.Hide();
-            //ota.Show();
-            //-------------------------------------------------------------------------------------------
+            // Open PADUEX5 upgrade tool (progress + anti-brick). It can enter OTA itself.
+            App_OTA ota = new App_OTA();
+            ota.ShowDialog(this);
+            // Refresh device state after upgrade window closes
+            Find_USB_Deivce();
         }
 
         /// =============================================================================================
