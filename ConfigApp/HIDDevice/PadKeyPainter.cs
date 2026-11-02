@@ -6,7 +6,7 @@ using System.Windows.Forms;
 
 namespace ConfigAppNS
 {
-    /// <summary>Vector pad key glyphs (anti-aliased) for Yuanpad 5Key layout.</summary>
+    /// <summary>Vector pad key glyphs — L-corner arrows matching classic PIU pad art.</summary>
     internal static class PadKeyPainter
     {
         internal enum PadKeyKind
@@ -53,12 +53,10 @@ namespace ConfigAppNS
 
             Color back = highlighted ? Color.IndianRed : SystemColors.ButtonFace;
             using (SolidBrush backBrush = new SolidBrush(back))
-            {
                 g.FillRectangle(backBrush, bounds);
-            }
 
             Rectangle inner = bounds;
-            inner.Inflate(-Math.Max(4, bounds.Width / 12), -Math.Max(4, bounds.Height / 12));
+            inner.Inflate(-Math.Max(4, bounds.Width / 14), -Math.Max(4, bounds.Height / 14));
 
             if (kind == PadKeyKind.Center)
             {
@@ -66,12 +64,10 @@ namespace ConfigAppNS
                 return;
             }
 
-            Color arrowFill = highlighted ? Color.FromArgb(255, 255, 120, 220) : Color.FromArgb(255, 210, 0, 150);
-            using (GraphicsPath path = BuildArrowPath(inner, kind))
+            Color arrowFill = highlighted ? Color.FromArgb(255, 255, 180, 230) : Color.FromArgb(255, 210, 0, 150);
+            using (GraphicsPath path = BuildCornerLArrow(inner, kind))
             using (SolidBrush fill = new SolidBrush(arrowFill))
-            {
                 g.FillPath(fill, path);
-            }
         }
 
         private static void PadKeyButton_Paint(object sender, PaintEventArgs e)
@@ -101,56 +97,66 @@ namespace ConfigAppNS
             }
         }
 
-        private static GraphicsPath BuildArrowPath(Rectangle inner, PadKeyKind kind)
+        /// <summary>
+        /// Classic thick diagonal shaft + orthogonal L head (reference: corner arrow pointing to cell corner).
+        /// Built once in unit square for down-right, then mirrored for other corners.
+        /// </summary>
+        private static GraphicsPath BuildCornerLArrow(Rectangle inner, PadKeyKind kind)
+        {
+            GraphicsPath unit = BuildDownRightArrowUnit();
+            using (Matrix m = CornerTransform(inner, kind))
+            {
+                GraphicsPath path = (GraphicsPath)unit.Clone();
+                path.Transform(m);
+                return path;
+            }
+        }
+
+        private static GraphicsPath BuildDownRightArrowUnit()
+        {
+            // Coordinates 0..1; arrow points to bottom-right outer corner.
+            const float t = 0.13f;
+
+            GraphicsPath path = new GraphicsPath(FillMode.Winding);
+
+            // Bottom horizontal leg of L
+            path.AddRectangle(new RectangleF(0.34f, 1f - t, 0.66f, t));
+            // Right vertical leg of L
+            path.AddRectangle(new RectangleF(1f - t, 0.34f, t, 0.66f));
+
+            // Diagonal shaft (45° bar from upper-left toward inner corner of L)
+            PointF a = new PointF(0.10f, 0.30f);
+            PointF b = new PointF(0.10f + t, 0.30f);
+            PointF c = new PointF(1f - t, 1f - t - t * 0.15f);
+            PointF d = new PointF(1f - t - t * 0.15f, 1f - t);
+            path.AddPolygon(new[] { a, b, c, d });
+
+            return path;
+        }
+
+        private static Matrix CornerTransform(Rectangle inner, PadKeyKind kind)
         {
             float cx = inner.X + inner.Width * 0.5f;
             float cy = inner.Y + inner.Height * 0.5f;
-            float arm = Math.Min(inner.Width, inner.Height) * 0.38f;
-            float head = arm * 0.55f;
-            float shaft = arm * 0.22f;
-
-            PointF tip;
-            PointF tail;
+            Matrix m = new Matrix();
+            m.Translate(-0.5f, -0.5f, MatrixOrder.Append);
             switch (kind)
             {
+                case PadKeyKind.DownRight:
+                    break;
                 case PadKeyKind.UpperLeft:
-                    tip = new PointF(inner.Left + inner.Width * 0.18f, inner.Top + inner.Height * 0.18f);
-                    tail = new PointF(cx, cy);
+                    m.Scale(-1f, -1f, MatrixOrder.Append);
                     break;
                 case PadKeyKind.UpperRight:
-                    tip = new PointF(inner.Right - inner.Width * 0.18f, inner.Top + inner.Height * 0.18f);
-                    tail = new PointF(cx, cy);
+                    m.Scale(1f, -1f, MatrixOrder.Append);
                     break;
                 case PadKeyKind.DownLeft:
-                    tip = new PointF(inner.Left + inner.Width * 0.18f, inner.Bottom - inner.Height * 0.18f);
-                    tail = new PointF(cx, cy);
-                    break;
-                default: // DownRight
-                    tip = new PointF(inner.Right - inner.Width * 0.18f, inner.Bottom - inner.Height * 0.18f);
-                    tail = new PointF(cx, cy);
+                    m.Scale(-1f, 1f, MatrixOrder.Append);
                     break;
             }
-
-            float dx = tip.X - tail.X;
-            float dy = tip.Y - tail.Y;
-            float len = (float)Math.Sqrt(dx * dx + dy * dy);
-            if (len < 1f)
-                len = 1f;
-            dx /= len;
-            dy /= len;
-            float px = -dy;
-            float py = dx;
-
-            PointF baseCenter = new PointF(tip.X - dx * head, tip.Y - dy * head);
-            PointF s1 = new PointF(tail.X + px * shaft, tail.Y + py * shaft);
-            PointF s2 = new PointF(tail.X - px * shaft, tail.Y - py * shaft);
-            PointF b1 = new PointF(baseCenter.X + px * head * 0.45f, baseCenter.Y + py * head * 0.45f);
-            PointF b2 = new PointF(baseCenter.X - px * head * 0.45f, baseCenter.Y - py * head * 0.45f);
-
-            GraphicsPath path = new GraphicsPath();
-            path.AddPolygon(new[] { tip, b1, s1, s2, b2 });
-            path.CloseFigure();
-            return path;
+            m.Scale(inner.Width, inner.Height, MatrixOrder.Append);
+            m.Translate(cx, cy, MatrixOrder.Append);
+            return m;
         }
     }
 }
