@@ -46,6 +46,19 @@ namespace ConfigAppNS
         public App_OTA()
         {
             InitializeComponent();
+            try
+            {
+                string icoPath = Path.Combine(Application.StartupPath, "AppLogo.ico");
+                if (File.Exists(icoPath))
+                    this.Icon = new Icon(icoPath);
+                else
+                {
+                    Icon ico = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+                    if (ico != null)
+                        this.Icon = ico;
+                }
+            }
+            catch { }
             this.Text = "PADUEX5 Firmware Upgrade";
             labelTitle.Text = "PADUEX5 固件升级";
             labelAddr.Text = "APP 地址: 0x" + FLASH_APP_ADDR.ToString("X8");

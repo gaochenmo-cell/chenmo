@@ -354,6 +354,7 @@ namespace ConfigAppNS
         {
             ///------------------------------------------------------------------------------------------
             InitializeComponent();
+            ApplyAppIcon();
             ///------------------------------------------------------------------------------------------
             ReadAppConfig();
             ///------------------------------------------------------------------------------------------
@@ -379,6 +380,27 @@ namespace ConfigAppNS
             progressBar3.Direction = ProgressBarDirection.Vertical;
             progressBar4.Direction = ProgressBarDirection.Vertical;
             ///------------------------------------------------------------------------------------------
+        }
+
+        private void ApplyAppIcon()
+        {
+            try
+            {
+                string icoPath = Path.Combine(Application.StartupPath, "AppLogo.ico");
+                if (File.Exists(icoPath))
+                {
+                    this.Icon = new Icon(icoPath);
+                    return;
+                }
+            }
+            catch { }
+            try
+            {
+                Icon ico = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+                if (ico != null)
+                    this.Icon = ico;
+            }
+            catch { }
         }
 
         /// =============================================================================================
