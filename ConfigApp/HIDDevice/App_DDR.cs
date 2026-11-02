@@ -432,8 +432,8 @@ namespace ConfigAppNS
         private Button btn_MapRead;
         private Button btn_MapSave;
         private readonly int[] KeyMappingBuffer = new int[KEY_COUNT_5KEY];
-        // Default HID usages = stock BUTTON_NKRO_MAP_P1[0..4]: W E D C X
-        private readonly int[] DefaultKeyMapping = new int[] { 0x1A, 0x08, 0x07, 0x06, 0x1B };
+        // Default HID usages = stock Report_Normal 1P Index0..4: W X A D S
+        private readonly int[] DefaultKeyMapping = new int[] { 0x1A, 0x1B, 0x04, 0x07, 0x16 };
 
         private int S(int px)
         {
@@ -904,8 +904,8 @@ namespace ConfigAppNS
             {
                 MessageBox.Show(
                     bLanguageEN
-                        ? "Device has no keymap protocol. Flash firmware/grok1.0 (full build with Mapping) or use defaults."
-                        : "设备暂无按键映射协议。请刷入带 Mapping 的固件，或先用默认键位。",
+                        ? "Device has no keymap protocol. Flash firmware/grok1.1.bin (OTA), then retry."
+                        : "设备暂无按键映射协议。请用固件升级刷入 firmware/grok1.1.bin 后重试。",
                     "PADUEX5", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
@@ -944,8 +944,8 @@ namespace ConfigAppNS
             {
                 MessageBox.Show(
                     bLanguageEN
-                        ? "Save failed — flash firmware with GET_MAPP/SET_MAPP support (see firmware/README.md)."
-                        : "保存失败：请刷入支持按键映射的固件（见 firmware/README.md）。",
+                        ? "Save failed — flash firmware/grok1.1.bin via OTA (see firmware/README.md)."
+                        : "保存失败：请用固件升级刷入 firmware/grok1.1.bin（见 firmware/README.md）。",
                     "PADUEX5", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
@@ -1196,7 +1196,7 @@ namespace ConfigAppNS
                 radioButton_HID.Text = "HID Mode";
                 if (tabPage_Map != null) tabPage_Map.Text = "Key Map";
                 if (groupBox_Map != null) groupBox_Map.Text = "Keyboard mapping";
-                if (label_MapHint != null) label_MapHint.Text = "Keyboard mode only. Remap replaces 1P/2P key tables; HID mode still uses 1P/2P.";
+                if (label_MapHint != null) label_MapHint.Text = "Keyboard mode only. Requires firmware grok1.1+. Remap replaces 1P/2P; HID mode still uses 1P/2P.";
                 if (label_MapKey != null) label_MapKey.Text = "Per-pad HID usage (select then Save Map):";
                 if (btn_MapRead != null) btn_MapRead.Text = "Read Map";
                 if (btn_MapSave != null) btn_MapSave.Text = "Save Map";
@@ -1224,7 +1224,7 @@ namespace ConfigAppNS
                 radioButton_HID.Text = "手柄";
                 if (tabPage_Map != null) tabPage_Map.Text = "按键映射";
                 if (groupBox_Map != null) groupBox_Map.Text = "键盘按键映射";
-                if (label_MapHint != null) label_MapHint.Text = "仅键盘模式。可改键后不必再分 1P/2P；手柄模式仍用 1P/2P。";
+                if (label_MapHint != null) label_MapHint.Text = "仅键盘模式，需固件 grok1.1+。改键后不必再分 1P/2P；手柄模式仍用 1P/2P。";
                 if (label_MapKey != null) label_MapKey.Text = "五个踏板对应 HID 键值（选好后点保存映射）：";
                 if (btn_MapRead != null) btn_MapRead.Text = "读取映射";
                 if (btn_MapSave != null) btn_MapSave.Text = "保存映射";
