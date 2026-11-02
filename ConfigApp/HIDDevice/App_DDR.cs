@@ -33,7 +33,9 @@ namespace ConfigAppNS
         private bool bDeviceStatusFG = false;
         //private bool bTouchTestMode = false;
         private bool bLanguageEN = false;
+        private bool bDarkMode = false;
         private bool bDebugModesFG = false;
+        private readonly bool[] padKeyActive = new bool[5];
         private byte mDeviceIndex = 0;
         private byte DefaultOffset = 0x01;			//V1.0.0.18:20241012(1)Change ADX Save Issue
         ///-------------------------------------------------------------------------------------------
@@ -421,6 +423,7 @@ namespace ConfigAppNS
         private bool padKeyVectorWired = false;
         private Button btnFirmwareUpgrade;
         private Button btnLangToggle;
+        private Button btnThemeToggle;
 
         private int S(int px)
         {
@@ -467,6 +470,7 @@ namespace ConfigAppNS
 
             EnsureFirmwareUpgradeButton();
             EnsureLanguageToggleButton();
+            EnsureThemeToggleButton();
             EnsurePadKeyVectorPaint();
             if (btnFirmwareUpgrade.Parent != groupBox_Mode)
             {
@@ -489,6 +493,7 @@ namespace ConfigAppNS
             this.Resize += App_DDR_Resize;
 
             ApplyUiLanguage();
+            ApplyTheme();
             SensorIndex = 0;
         }
 
@@ -639,6 +644,12 @@ namespace ConfigAppNS
                 btnLangToggle.Location = new Point(this.ClientSize.Width - S(110), S(8));
                 btnLangToggle.BringToFront();
             }
+            if (btnThemeToggle != null)
+            {
+                btnThemeToggle.Size = new Size(S(96), S(28));
+                btnThemeToggle.Location = new Point(this.ClientSize.Width - S(220), S(8));
+                btnThemeToggle.BringToFront();
+            }
             label_Ver.Location = new Point(this.ClientSize.Width - S(70), this.ClientSize.Height - S(22));
         }
 
@@ -700,6 +711,103 @@ namespace ConfigAppNS
             this.Controls.Add(btnLangToggle);
         }
 
+        private void EnsureThemeToggleButton()
+        {
+            if (btnThemeToggle != null)
+                return;
+            btnThemeToggle = new Button();
+            btnThemeToggle.Name = "btnThemeToggle";
+            btnThemeToggle.BackColor = SystemColors.Control;
+            btnThemeToggle.UseVisualStyleBackColor = false;
+            btnThemeToggle.Click += new EventHandler(this.Btn_ThemeToggle_Click);
+            this.Controls.Add(btnThemeToggle);
+        }
+
+        private void Btn_ThemeToggle_Click(object sender, EventArgs e)
+        {
+            bDarkMode = !bDarkMode;
+            ApplyTheme();
+            UpdateThemeToggleText();
+            WriteThemeToConfig();
+        }
+
+        private void UpdateThemeToggleText()
+        {
+            if (btnThemeToggle == null)
+                return;
+            if (bLanguageEN)
+                btnThemeToggle.Text = bDarkMode ? "Light" : "Dark";
+            else
+                btnThemeToggle.Text = bDarkMode ? "白天" : "夜间";
+        }
+
+        private void WriteThemeToConfig()
+        {
+            try
+            {
+                string path = Directory.GetCurrentDirectory() + "\\Config.ini";
+                if (!File.Exists(path))
+                    return;
+                string[] lines = File.ReadAllLines(path);
+                bool found = false;
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    if (lines[i].StartsWith("THEME=", StringComparison.OrdinalIgnoreCase))
+                    {
+                        lines[i] = "THEME=" + (bDarkMode ? "DARK" : "LIGHT");
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found)
+                {
+                    Array.Resize(ref lines, lines.Length + 1);
+                    lines[lines.Length - 1] = "THEME=" + (bDarkMode ? "DARK" : "LIGHT");
+                }
+                File.WriteAllLines(path, lines);
+            }
+            catch { }
+        }
+
+        private void ApplyTheme()
+        {
+            Color formBg = bDarkMode ? Color.FromArgb(45, 45, 48) : SystemColors.Control;
+            Color panelBg = bDarkMode ? Color.FromArgb(55, 55, 58) : SystemColors.Control;
+            Color text = bDarkMode ? Color.FromArgb(240, 240, 240) : SystemColors.ControlText;
+            Color filler = bDarkMode ? Color.FromArgb(50, 50, 52) : Color.FromArgb(245, 245, 245);
+
+            this.BackColor = formBg;
+            tabControl1.BackColor = panelBg;
+            tabPage_Sensi.BackColor = tabPage_Color.BackColor = tabPage_DTick.BackColor = panelBg;
+            groupBox_Button.BackColor = groupBox_Mode.BackColor = groupBox_Sensi.BackColor =
+                groupBox_Color.BackColor = groupBox_DTick.BackColor = groupBox_USBMode.BackColor =
+                groupBox2.BackColor = panelBg;
+            groupBox_Button.ForeColor = groupBox_Mode.ForeColor = groupBox_Sensi.ForeColor =
+                groupBox_Color.ForeColor = groupBox_DTick.ForeColor = groupBox_USBMode.ForeColor =
+                groupBox2.ForeColor = text;
+            tabControl1.ForeColor = text;
+
+            if (fiveKeyFillers != null)
+            {
+                for (int i = 0; i < fiveKeyFillers.Length; i++)
+                    fiveKeyFillers[i].BackColor = filler;
+            }
+
+            if (btnLangToggle != null)
+            {
+                btnLangToggle.ForeColor = text;
+                btnLangToggle.BackColor = panelBg;
+            }
+            if (btnThemeToggle != null)
+            {
+                btnThemeToggle.ForeColor = text;
+                btnThemeToggle.BackColor = panelBg;
+            }
+
+            UpdateThemeToggleText();
+            InvalidatePadKeyButtons();
+        }
+
         private void EnsurePadKeyVectorPaint()
         {
             if (padKeyVectorWired)
@@ -712,10 +820,112 @@ namespace ConfigAppNS
             padKeyVectorWired = true;
         }
 
-        internal bool IsPadKeyHighlighted(PadKeyPainter.PadKeyKind kind)
+        internal PadKeyPainter.PadKeyPaintArgs GetPadKeyPaintArgs(PadKeyPainter.PadKeyKind kind)
         {
-            int key = SensorIndex / SENSORS_PER_KEY;
-            return (int)kind == key;
+            int key = (int)kind;
+            int selected = SensorIndex / SENSORS_PER_KEY;
+            Color cellBg = bDarkMode ? Color.FromArgb(64, 64, 64) : SystemColors.ButtonFace;
+            Color outline = bDarkMode ? Color.FromArgb(230, 230, 230) : Color.Black;
+            bool triggered = key >= 0 && key < padKeyActive.Length && padKeyActive[key];
+            Color triggerFill = GetPadLedColor(key);
+            if (triggered)
+                triggerFill = Color.FromArgb(220, triggerFill);
+            return new PadKeyPainter.PadKeyPaintArgs
+            {
+                CellBackground = cellBg,
+                OutlineColor = outline,
+                Selected = key == selected,
+                Triggered = triggered,
+                TriggerFill = triggerFill
+            };
+        }
+
+        private Color GetPadLedColor(int keyIndex)
+        {
+            if (keyIndex < 0 || keyIndex >= KEY_COUNT_5KEY)
+                return Color.White;
+            int led = ColorBuffer[keyIndex * SENSORS_PER_KEY];
+            return LedCodeToColor(led);
+        }
+
+        private Color LedCodeToColor(int led)
+        {
+            if (led == LED_COLOR_R) return Color.Red;
+            if (led == LED_COLOR_G) return Color.LimeGreen;
+            if (led == LED_COLOR_B) return Color.RoyalBlue;
+            if (led == LED_COLOR_Y) return Color.Gold;
+            if (led == LED_COLOR_P) return Color.Fuchsia;
+            if (led == LED_COLOR_C) return Color.Cyan;
+            if (led == LED_COLOR_W) return Color.White;
+            return Color.White;
+        }
+
+        private void UpdatePadTriggerFromReport(byte[] buf, int reportIndex)
+        {
+            bool[] next = new bool[KEY_COUNT_5KEY];
+
+            if (buf[reportIndex + 0] == (byte)UserCommand.SET_MRAW &&
+                buf[reportIndex + 1] == 0x4D &&
+                buf[reportIndex + 2] == 0x52 &&
+                buf[reportIndex + 3] == 0x41 &&
+                buf[reportIndex + 4] == 0x57)
+            {
+                int keyCode = (buf[reportIndex + 5] << 8) | buf[reportIndex + 6];
+                for (int k = 0; k < KEY_COUNT_5KEY; k++)
+                {
+                    if ((keyCode & (1 << k)) != 0)
+                        next[k] = true;
+                }
+
+                for (int k = 0; k < KEY_COUNT_5KEY; k++)
+                {
+                    if (next[k])
+                        continue;
+                    int baseIdx = k * SENSORS_PER_KEY;
+                    for (int s = 0; s < SENSORS_PER_KEY; s++)
+                    {
+                        int idx = baseIdx + s;
+                        int raw = (buf[reportIndex + 8 + idx * 2] << 8) | buf[reportIndex + 8 + idx * 2 + 1];
+                        if (raw >= SensiBuffer[idx])
+                            next[k] = true;
+                    }
+                }
+            }
+            else if (bDeviceStatusFG)
+            {
+                int mask = buf[reportIndex + 1];
+                if (mask == 0)
+                    mask = buf[reportIndex + 2];
+                for (int k = 0; k < KEY_COUNT_5KEY; k++)
+                {
+                    if ((mask & (1 << k)) != 0)
+                        next[k] = true;
+                }
+            }
+
+            bool changed = false;
+            for (int k = 0; k < KEY_COUNT_5KEY; k++)
+            {
+                if (padKeyActive[k] != next[k])
+                {
+                    padKeyActive[k] = next[k];
+                    changed = true;
+                }
+            }
+            if (changed)
+                InvalidatePadKeyButtons();
+        }
+
+        private void PollPadInputState()
+        {
+            if (!bDeviceStatusFG)
+                return;
+            byte reportSize = 64;
+            byte reportId = 0;
+            byte reportIndex = 0;
+            byte[] inputReportBuf = new byte[64];
+            USBCtrl.USBLib_DeviceCtrlInput(mDeviceIndex, DefaultOffset, reportId, reportSize, inputReportBuf);
+            UpdatePadTriggerFromReport(inputReportBuf, reportIndex);
         }
 
         private void InvalidatePadKeyButtons()
@@ -781,6 +991,7 @@ namespace ConfigAppNS
                 radioButton_HID.Text = "手柄";
             }
             UpdateDebugButtonText();
+            UpdateThemeToggleText();
         }
 
         private void UpdateDebugButtonText()
@@ -858,9 +1069,12 @@ namespace ConfigAppNS
         private void timer1_Tick(object sender, EventArgs e)
         {
             ///------------------------------------------------------------------------------------------
-            if (bDebugModesFG == true)
+            if (bDeviceStatusFG)
             {
-                Seneor_Raw_Data_Read_and_Display();
+                if (bDebugModesFG)
+                    Seneor_Raw_Data_Read_and_Display();
+                else
+                    PollPadInputState();
             }
             ///------------------------------------------------------------------------------------------
         }
@@ -902,6 +1116,10 @@ namespace ConfigAppNS
                             else if (Str == "LANGUAGE")
                             {
                                 bLanguageEN = (StrTab[1] == "EN");
+                            }
+                            else if (Str == "THEME")
+                            {
+                                bDarkMode = (StrTab[1] == "DARK");
                             }
                             else if (Str == "UPDATE")
                             {
@@ -1426,6 +1644,7 @@ namespace ConfigAppNS
                 progressBar3.Value = RawBuffer[SenIndex + 2];
                 progressBar4.Value = RawBuffer[SenIndex + 3];
                 //---------------------------------------------------------------------------------------
+                UpdatePadTriggerFromReport(InputReportBuf, ReportIndex);
             }
         }
 
@@ -1442,12 +1661,6 @@ namespace ConfigAppNS
         private void Sensor_Panel_Display_ReFlash()
         {
             //-------------------------------------------------------------------------------------------
-            // 5Key only — reset then highlight selected pad
-            Btn_K1.BackColor = System.Drawing.SystemColors.ButtonFace;
-            Btn_K2.BackColor = System.Drawing.SystemColors.ButtonFace;
-            Btn_K3.BackColor = System.Drawing.SystemColors.ButtonFace;
-            Btn_K4.BackColor = System.Drawing.SystemColors.ButtonFace;
-            Btn_K5.BackColor = System.Drawing.SystemColors.ButtonFace;
             InvalidatePadKeyButtons();
             //-------------------------------------------------------------------------------------------
             groupBox_Button.Enabled = true;
