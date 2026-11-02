@@ -1,5 +1,17 @@
 # PADUEX5
 
+
+## 下载已编译程序（推荐）
+
+解压即用（Windows）：
+
+- 仓库内：[`dist/PADUEX5/`](./dist/PADUEX5/) → 直接运行 **`PADUEX5.exe`**
+- 压缩包：[`dist/PADUEX5-win-release.zip`](./dist/PADUEX5-win-release.zip)
+
+同目录需保留：`PADUEX5.exe`、`HIDLibrary.dll`、`LibUsbDotNet.dll`、`Config.INI`
+
+需要 **.NET Framework 4.0+**（Win7/10/11 一般已有）。
+
 Yuanpad **5Key** Windows 配置与固件升级工具（原 ConfigApp DDR 分支）。
 
 ## 功能
