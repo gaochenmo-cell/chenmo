@@ -6,7 +6,10 @@ using System.Windows.Forms;
 
 namespace ConfigAppNS
 {
-    /// <summary>Vector pad key glyphs — chevron arrows, outline style, trigger fill from LED color.</summary>
+    /// <summary>
+    /// SVG-style corner arrows: thick uniform strokes forming diagonal + orthogonal L head
+    /// (same geometry as the reference SVG / tukuppt L-arrow).
+    /// </summary>
     internal static class PadKeyPainter
     {
         internal enum PadKeyKind
@@ -70,7 +73,7 @@ namespace ConfigAppNS
             }
 
             Rectangle inner = bounds;
-            inner.Inflate(-Math.Max(4, bounds.Width / 14), -Math.Max(4, bounds.Height / 14));
+            inner.Inflate(-Math.Max(5, bounds.Width / 12), -Math.Max(5, bounds.Height / 12));
 
             if (kind == PadKeyKind.Center)
             {
@@ -78,18 +81,19 @@ namespace ConfigAppNS
                 return;
             }
 
-            using (GraphicsPath path = BuildChevronArrow(inner, kind))
+            using (GraphicsPath path = BuildSvgLArrowPath(inner, kind))
             {
                 if (args.Triggered)
                 {
                     using (SolidBrush fill = new SolidBrush(args.TriggerFill))
                         g.FillPath(fill, path);
                 }
-                float penW = Math.Max(2f, Math.Min(inner.Width, inner.Height) * 0.04f);
-                using (Pen outline = new Pen(args.OutlineColor, penW))
+
+                float stroke = Math.Max(2f, Math.Min(inner.Width, inner.Height) * 0.035f);
+                using (Pen outline = new Pen(args.OutlineColor, stroke))
                 {
                     outline.LineJoin = LineJoin.Miter;
-                    outline.MiterLimit = 5f;
+                    outline.MiterLimit = 8f;
                     outline.StartCap = LineCap.Flat;
                     outline.EndCap = LineCap.Flat;
                     g.DrawPath(outline, path);
@@ -134,62 +138,76 @@ namespace ConfigAppNS
 
             using (Pen pen = new Pen(args.OutlineColor, stroke))
             {
-                pen.StartCap = LineCap.Round;
-                pen.EndCap = LineCap.Round;
-                pen.LineJoin = LineJoin.Round;
+                pen.StartCap = LineCap.Flat;
+                pen.EndCap = LineCap.Flat;
                 g.DrawEllipse(pen, ring);
             }
         }
 
-        /// <summary>Thick chevron (reference: simple &gt; shape) pointing toward each corner.</summary>
-        private static GraphicsPath BuildChevronArrow(Rectangle inner, PadKeyKind kind)
+        /// <summary>
+        /// Single filled path matching SVG L-arrow: equal-thickness diagonal shaft + L head,
+        /// built in unit space for down-right then mirrored. Junction is continuous (no gap).
+        /// </summary>
+        private static GraphicsPath BuildSvgLArrowPath(Rectangle inner, PadKeyKind kind)
+        {
+            // Unit geometry (0..1): thickness t, tip at bottom-right outer corner.
+            const float t = 0.145f;
+            float outer = 1f;
+            float innerC = 1f - t;
+
+            // Continuous outline of the union of:
+            //  - horizontal bar [0.32, 1-t]..[1, 1]
+            //  - vertical bar   [1-t, 0.32]..[1, 1]
+            //  - diagonal shaft from upper-left into the inner corner (overlapping by t)
+            GraphicsPath unit = new GraphicsPath(FillMode.Winding);
+
+            PointF[] poly = new PointF[]
+            {
+                // start at outer tip corner, walk around clockwise
+                new PointF(outer, outer),
+                new PointF(0.32f, outer),
+                new PointF(0.32f, innerC),
+                // meet diagonal lower edge
+                new PointF(innerC - t * 0.15f, innerC),
+                new PointF(0.12f, 0.12f + t * 1.414f * 0.5f + t * 0.15f),
+                new PointF(0.12f + t * 1.414f * 0.5f + t * 0.15f, 0.12f),
+                new PointF(innerC, innerC - t * 0.15f),
+                new PointF(innerC, 0.32f),
+                new PointF(outer, 0.32f),
+            };
+            unit.AddPolygon(poly);
+
+            using (Matrix m = CornerTransform(inner, kind))
+            {
+                GraphicsPath path = (GraphicsPath)unit.Clone();
+                path.Transform(m);
+                return path;
+            }
+        }
+
+        private static Matrix CornerTransform(Rectangle inner, PadKeyKind kind)
         {
             float cx = inner.X + inner.Width * 0.5f;
             float cy = inner.Y + inner.Height * 0.5f;
-            float scale = Math.Min(inner.Width, inner.Height) * 0.44f;
-            float angle = ChevronAngleDegrees(kind);
-
-            // Unit chevron pointing east (tip right), centered at origin
-            PointF[] unit = new PointF[]
-            {
-                new PointF(0.82f, 0f),
-                new PointF(0.08f, -0.22f),
-                new PointF(-0.40f, -0.36f),
-                new PointF(-0.40f, 0.36f),
-                new PointF(0.08f, 0.22f),
-            };
-
-            PointF[] pts = new PointF[unit.Length];
-            for (int i = 0; i < unit.Length; i++)
-                pts[i] = new PointF(unit[i].X * scale, unit[i].Y * scale);
-
-            using (Matrix m = new Matrix())
-            {
-                m.Rotate(angle);
-                m.TransformPoints(pts);
-            }
-
-            for (int i = 0; i < pts.Length; i++)
-            {
-                pts[i].X += cx;
-                pts[i].Y += cy;
-            }
-
-            GraphicsPath path = new GraphicsPath(FillMode.Winding);
-            path.AddPolygon(pts);
-            return path;
-        }
-
-        private static float ChevronAngleDegrees(PadKeyKind kind)
-        {
+            Matrix m = new Matrix();
+            m.Translate(-0.5f, -0.5f, MatrixOrder.Append);
             switch (kind)
             {
-                case PadKeyKind.UpperLeft: return 225f;
-                case PadKeyKind.UpperRight: return -45f;
-                case PadKeyKind.DownLeft: return 135f;
-                case PadKeyKind.DownRight: return 45f;
-                default: return 0f;
+                case PadKeyKind.DownRight:
+                    break;
+                case PadKeyKind.UpperLeft:
+                    m.Scale(-1f, -1f, MatrixOrder.Append);
+                    break;
+                case PadKeyKind.UpperRight:
+                    m.Scale(1f, -1f, MatrixOrder.Append);
+                    break;
+                case PadKeyKind.DownLeft:
+                    m.Scale(-1f, 1f, MatrixOrder.Append);
+                    break;
             }
+            m.Scale(inner.Width, inner.Height, MatrixOrder.Append);
+            m.Translate(cx, cy, MatrixOrder.Append);
+            return m;
         }
     }
 }

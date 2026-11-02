@@ -364,7 +364,7 @@ namespace ConfigAppNS
             Find_USB_Deivce();
             ///------------------------------------------------------------------------------------------
             timer1.Enabled = true;
-            timer1.Interval = 50;//ReadTagTime;
+            timer1.Interval = 10; // ~100 Hz sensor poll in debug / live pad highlight
             ///------------------------------------------------------------------------------------------
             Load_Default_Sens();
             groupBox_Button.Visible = true;
@@ -424,6 +424,16 @@ namespace ConfigAppNS
         private Button btnFirmwareUpgrade;
         private Button btnLangToggle;
         private Button btnThemeToggle;
+        private TabPage tabPage_Map;
+        private GroupBox groupBox_Map;
+        private Label label_MapHint;
+        private Label label_MapKey;
+        private ComboBox[] mapKeyCombos;
+        private Button btn_MapRead;
+        private Button btn_MapSave;
+        private readonly int[] KeyMappingBuffer = new int[KEY_COUNT_5KEY];
+        // Default HID usages = stock BUTTON_NKRO_MAP_P1[0..4]: W E D C X
+        private readonly int[] DefaultKeyMapping = new int[] { 0x1A, 0x08, 0x07, 0x06, 0x1B };
 
         private int S(int px)
         {
@@ -471,7 +481,10 @@ namespace ConfigAppNS
             EnsureFirmwareUpgradeButton();
             EnsureLanguageToggleButton();
             EnsureThemeToggleButton();
+            EnsureKeyMappingUi();
             EnsurePadKeyVectorPaint();
+            for (int i = 0; i < KEY_COUNT_5KEY; i++)
+                KeyMappingBuffer[i] = DefaultKeyMapping[i];
             if (btnFirmwareUpgrade.Parent != groupBox_Mode)
             {
                 this.Controls.Remove(btnFirmwareUpgrade);
@@ -723,6 +736,220 @@ namespace ConfigAppNS
             this.Controls.Add(btnThemeToggle);
         }
 
+        private void EnsureKeyMappingUi()
+        {
+            if (tabPage_Map != null)
+                return;
+
+            tabPage_Map = new TabPage();
+            tabPage_Map.Name = "tabPage_Map";
+            tabPage_Map.UseVisualStyleBackColor = true;
+            tabControl1.TabPages.Add(tabPage_Map);
+
+            groupBox_Map = new GroupBox();
+            groupBox_Map.Location = new Point(S(16), S(20));
+            groupBox_Map.Size = new Size(S(480), S(420));
+            tabPage_Map.Controls.Add(groupBox_Map);
+
+            label_MapHint = new Label();
+            label_MapHint.AutoSize = false;
+            label_MapHint.Location = new Point(S(16), S(28));
+            label_MapHint.Size = new Size(S(440), S(48));
+            groupBox_Map.Controls.Add(label_MapHint);
+
+            label_MapKey = new Label();
+            label_MapKey.AutoSize = false;
+            label_MapKey.Location = new Point(S(16), S(84));
+            label_MapKey.Size = new Size(S(440), S(24));
+            groupBox_Map.Controls.Add(label_MapKey);
+
+            string[] names = new string[] { "↖ UL", "↗ UR", "● Center", "↙ DL", "↘ DR" };
+            mapKeyCombos = new ComboBox[KEY_COUNT_5KEY];
+            for (int i = 0; i < KEY_COUNT_5KEY; i++)
+            {
+                Label lb = new Label();
+                lb.Text = names[i];
+                lb.Location = new Point(S(16), S(120) + i * S(42));
+                lb.Size = new Size(S(100), S(28));
+                groupBox_Map.Controls.Add(lb);
+
+                ComboBox cb = new ComboBox();
+                cb.DropDownStyle = ComboBoxStyle.DropDownList;
+                cb.Location = new Point(S(130), S(118) + i * S(42));
+                cb.Size = new Size(S(200), S(28));
+                FillHidUsageCombo(cb);
+                int captured = i;
+                cb.SelectedIndexChanged += (s, e) =>
+                {
+                    if (cb.SelectedItem is HidUsageItem item)
+                        KeyMappingBuffer[captured] = item.Usage;
+                };
+                mapKeyCombos[i] = cb;
+                groupBox_Map.Controls.Add(cb);
+            }
+
+            btn_MapRead = new Button();
+            btn_MapRead.Location = new Point(S(16), S(350));
+            btn_MapRead.Size = new Size(S(140), S(36));
+            btn_MapRead.Click += (s, e) => Read_KeyMapping_Config();
+            groupBox_Map.Controls.Add(btn_MapRead);
+
+            btn_MapSave = new Button();
+            btn_MapSave.Location = new Point(S(170), S(350));
+            btn_MapSave.Size = new Size(S(140), S(36));
+            btn_MapSave.Click += (s, e) => Save_KeyMapping_Config();
+            groupBox_Map.Controls.Add(btn_MapSave);
+
+            SyncMapCombosFromBuffer();
+            radioButton_KBS.CheckedChanged += (s, e) => UpdatePlayerVisibilityForMode();
+            radioButton_HID.CheckedChanged += (s, e) => UpdatePlayerVisibilityForMode();
+            UpdatePlayerVisibilityForMode();
+        }
+
+        private sealed class HidUsageItem
+        {
+            public int Usage;
+            public string Name;
+            public override string ToString() { return Name; }
+        }
+
+        private void FillHidUsageCombo(ComboBox cb)
+        {
+            cb.Items.Clear();
+            // Common NKRO usages (HID keyboard page)
+            string[][] table = new string[][] {
+                new[]{"04","A"}, new[]{"05","B"}, new[]{"06","C"}, new[]{"07","D"},
+                new[]{"08","E"}, new[]{"09","F"}, new[]{"0A","G"}, new[]{"0B","H"},
+                new[]{"0C","I"}, new[]{"0D","J"}, new[]{"0E","K"}, new[]{"0F","L"},
+                new[]{"10","M"}, new[]{"11","N"}, new[]{"12","O"}, new[]{"13","P"},
+                new[]{"14","Q"}, new[]{"15","R"}, new[]{"16","S"}, new[]{"17","T"},
+                new[]{"18","U"}, new[]{"19","V"}, new[]{"1A","W"}, new[]{"1B","X"},
+                new[]{"1C","Y"}, new[]{"1D","Z"},
+                new[]{"1E","1"}, new[]{"1F","2"}, new[]{"20","3"}, new[]{"21","4"},
+                new[]{"22","5"}, new[]{"23","6"}, new[]{"24","7"}, new[]{"25","8"},
+                new[]{"26","9"}, new[]{"27","0"},
+                new[]{"2C","Space"}, new[]{"28","Enter"}, new[]{"2A","Backspace"},
+                new[]{"50","Left"}, new[]{"4F","Right"}, new[]{"52","Up"}, new[]{"51","Down"},
+                new[]{"3A","F1"}, new[]{"3B","F2"}, new[]{"3C","F3"},
+                new[]{"59","N1"}, new[]{"5A","N2"}, new[]{"5B","N3"}, new[]{"5C","N4"},
+                new[]{"5D","N5"}, new[]{"5E","N6"}, new[]{"5F","N7"}, new[]{"60","N8"},
+                new[]{"61","N9"}, new[]{"62","N0"},
+            };
+            foreach (string[] row in table)
+            {
+                int u = Convert.ToInt32(row[0], 16);
+                cb.Items.Add(new HidUsageItem { Usage = u, Name = row[1] + " (0x" + row[0] + ")" });
+            }
+        }
+
+        private void SyncMapCombosFromBuffer()
+        {
+            if (mapKeyCombos == null) return;
+            for (int i = 0; i < mapKeyCombos.Length; i++)
+            {
+                ComboBox cb = mapKeyCombos[i];
+                int want = KeyMappingBuffer[i];
+                int found = -1;
+                for (int j = 0; j < cb.Items.Count; j++)
+                {
+                    HidUsageItem it = cb.Items[j] as HidUsageItem;
+                    if (it != null && it.Usage == want) { found = j; break; }
+                }
+                if (found < 0)
+                {
+                    cb.Items.Add(new HidUsageItem { Usage = want, Name = "0x" + want.ToString("X02") });
+                    found = cb.Items.Count - 1;
+                }
+                cb.SelectedIndex = found;
+            }
+        }
+
+        private void UpdatePlayerVisibilityForMode()
+        {
+            // Keyboard remapping replaces 1P/2P keymap tables; HID mode still needs player.
+            bool kbs = radioButton_KBS.Checked;
+            groupBox2.Visible = !kbs;
+            if (tabPage_Map != null)
+                tabPage_Map.Enabled = kbs;
+        }
+
+        private void Read_KeyMapping_Config()
+        {
+            byte ReportSize = 64;
+            byte ReportID = 0;
+            byte ReportIndex = 0x00;
+            byte[] SendByteBuf = new byte[64];
+            byte[] InputReportBuf = new byte[64];
+            int index = 0;
+            SendByteBuf[index++] = (byte)UserCommand.GET_MAPP;
+            SendByteBuf[index++] = 0x45; // E
+            SendByteBuf[index++] = 0x41; // A
+            SendByteBuf[index++] = 0x44; // D
+            SendByteBuf[index++] = 0x00;
+            USBCtrl.USBLib_DeviceCtrlOutput(mDeviceIndex, ReportID, ReportSize, SendByteBuf);
+            Thread.Sleep(100);
+            USBCtrl.USBLib_DeviceCtrlInput(mDeviceIndex, DefaultOffset, ReportID, ReportSize, InputReportBuf);
+            if (InputReportBuf[ReportIndex] == (byte)UserCommand.GET_MAPP &&
+                InputReportBuf[ReportIndex + 1] == 0x52 &&
+                InputReportBuf[ReportIndex + 2] == 0x53 &&
+                InputReportBuf[ReportIndex + 3] == 0x50)
+            {
+                for (int i = 0; i < KEY_COUNT_5KEY; i++)
+                    KeyMappingBuffer[i] = InputReportBuf[ReportIndex + 5 + i];
+                SyncMapCombosFromBuffer();
+                MessageBox.Show(bLanguageEN ? "Key map read OK" : "按键映射读取成功", "PADUEX5",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            else
+            {
+                MessageBox.Show(
+                    bLanguageEN
+                        ? "Device has no keymap protocol. Flash firmware/grok1.0 (full build with Mapping) or use defaults."
+                        : "设备暂无按键映射协议。请刷入带 Mapping 的固件，或先用默认键位。",
+                    "PADUEX5", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+        private void Save_KeyMapping_Config()
+        {
+            byte ReportSize = 64;
+            byte ReportID = 0;
+            byte ReportIndex = 0x00;
+            byte[] SendByteBuf = new byte[64];
+            byte[] InputReportBuf = new byte[64];
+            int index = 0;
+            SendByteBuf[index++] = (byte)UserCommand.SET_MAPP;
+            SendByteBuf[index++] = 0x52; // R
+            SendByteBuf[index++] = 0x49; // I
+            SendByteBuf[index++] = 0x54; // T
+            SendByteBuf[index++] = 0x00;
+            for (int i = 0; i < KEY_COUNT_5KEY; i++)
+                SendByteBuf[index++] = (byte)KeyMappingBuffer[i];
+            // pad to 12 usages like stock keymap length
+            for (int i = KEY_COUNT_5KEY; i < 12; i++)
+                SendByteBuf[index++] = 0x00;
+            byte cs = USBCtrl.UPDATE_CRC(0, SendByteBuf, (byte)index);
+            SendByteBuf[index++] = cs;
+            USBCtrl.USBLib_DeviceCtrlOutput(mDeviceIndex, ReportID, ReportSize, SendByteBuf);
+            Thread.Sleep(100);
+            USBCtrl.USBLib_DeviceCtrlInput(mDeviceIndex, DefaultOffset, ReportID, ReportSize, InputReportBuf);
+            if (InputReportBuf[ReportIndex] == (byte)UserCommand.SET_MAPP &&
+                InputReportBuf[ReportIndex + 1] == 0x4F &&
+                InputReportBuf[ReportIndex + 2] == 0x4B)
+            {
+                MessageBox.Show(bLanguageEN ? "Key map saved" : "按键映射已保存", "PADUEX5",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            else
+            {
+                MessageBox.Show(
+                    bLanguageEN
+                        ? "Save failed — flash firmware with GET_MAPP/SET_MAPP support (see firmware/README.md)."
+                        : "保存失败：请刷入支持按键映射的固件（见 firmware/README.md）。",
+                    "PADUEX5", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
         private void Btn_ThemeToggle_Click(object sender, EventArgs e)
         {
             bDarkMode = !bDarkMode;
@@ -967,6 +1194,12 @@ namespace ConfigAppNS
                 groupBox_USBMode.Text = "USB";
                 radioButton_KBS.Text = "KeyBoard";
                 radioButton_HID.Text = "HID Mode";
+                if (tabPage_Map != null) tabPage_Map.Text = "Key Map";
+                if (groupBox_Map != null) groupBox_Map.Text = "Keyboard mapping";
+                if (label_MapHint != null) label_MapHint.Text = "Keyboard mode only. Remap replaces 1P/2P key tables; HID mode still uses 1P/2P.";
+                if (label_MapKey != null) label_MapKey.Text = "Per-pad HID usage (select then Save Map):";
+                if (btn_MapRead != null) btn_MapRead.Text = "Read Map";
+                if (btn_MapSave != null) btn_MapSave.Text = "Save Map";
             }
             else
             {
@@ -989,6 +1222,12 @@ namespace ConfigAppNS
                 groupBox_USBMode.Text = "USB";
                 radioButton_KBS.Text = "键盘";
                 radioButton_HID.Text = "手柄";
+                if (tabPage_Map != null) tabPage_Map.Text = "按键映射";
+                if (groupBox_Map != null) groupBox_Map.Text = "键盘按键映射";
+                if (label_MapHint != null) label_MapHint.Text = "仅键盘模式。可改键后不必再分 1P/2P；手柄模式仍用 1P/2P。";
+                if (label_MapKey != null) label_MapKey.Text = "五个踏板对应 HID 键值（选好后点保存映射）：";
+                if (btn_MapRead != null) btn_MapRead.Text = "读取映射";
+                if (btn_MapSave != null) btn_MapSave.Text = "保存映射";
             }
             UpdateDebugButtonText();
             UpdateThemeToggleText();
@@ -1380,12 +1619,12 @@ namespace ConfigAppNS
             if (ms < 0) ms = 0;
             if (ms > 1000) ms = 1000;
             int key = GetDebounceKeyIndex();
+            // grok1.0.bin + fixed source: DTick[(i/4)*4]; V2.12 quirk: DTick[key].
+            // Write both layouts so save works on either firmware.
             DTickBuffer[key] = ms;
-            // Keep unused tail slots at the same value so a future FW fix
-            // that reads DTick[key*4] still sees something sensible for this key
-            // without clobbering other keys' FW slots 0..4.
-            // (Only fill key*4 when key*4 > 4, i.e. key>=2, overlapping risk for key0/1.)
-            // Safest for current FW: ONLY write DTick[key].
+            int packed = key * SENSORS_PER_KEY;
+            if (packed >= 0 && packed < CONFIG_VALUE_COUNT)
+                DTickBuffer[packed] = ms;
         }
 
         readonly int[] DEFAULT_SENSI_TAB = new int[]//5*4
