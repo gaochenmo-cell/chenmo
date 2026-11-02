@@ -431,7 +431,8 @@ namespace ConfigAppNS
                 tabPage_Color.Controls.Remove(pictureBox_sens);
 
             // Debounce label matches firmware meaning (release hold / 消抖, unit ms)
-            groupBox_DTick.Text = "Debounce 消抖 (0~1000 ms)";
+            // Index layout mirrors FW V2.12 DTick[key] quirk (see GetDebounceKeyIndex).
+            groupBox_DTick.Text = "Debounce 消抖 (0~1000 ms, 按键独立)";
             label_DTick.Text = "松开保持(ms) =";
 
             // Compact Sensitivity group after removing diagram
@@ -899,6 +900,38 @@ namespace ConfigAppNS
         private int[] ColorBuffer = new int[CONFIG_VALUE_COUNT];
         private int[] DTickBuffer = new int[CONFIG_VALUE_COUNT];
 
+        /// <summary>
+        /// FW V2.12 (and current tree) applies debounce as DTick[key] via:
+        ///   Tck[i/4] = DTick[i/4]
+        /// NOT DTick[key*4]. Host mirrors that layout so save/feel match on V2.12.
+        /// When firmware is fixed to DTick[(i/4)*4], switch GetDebounceKeyIndex back.
+        /// </summary>
+        private int GetDebounceKeyIndex()
+        {
+            int key = SensorIndex / 4;
+            if (key < 0) key = 0;
+            if (key >= KEY_COUNT_5KEY) key = KEY_COUNT_5KEY - 1;
+            return key; // FW quirk: one slot per key at index 0..4
+        }
+
+        private int GetDebounceValue()
+        {
+            return DTickBuffer[GetDebounceKeyIndex()];
+        }
+
+        private void SetDebounceValue(int ms)
+        {
+            if (ms < 0) ms = 0;
+            if (ms > 1000) ms = 1000;
+            int key = GetDebounceKeyIndex();
+            DTickBuffer[key] = ms;
+            // Keep unused tail slots at the same value so a future FW fix
+            // that reads DTick[key*4] still sees something sensible for this key
+            // without clobbering other keys' FW slots 0..4.
+            // (Only fill key*4 when key*4 > 4, i.e. key>=2, overlapping risk for key0/1.)
+            // Safest for current FW: ONLY write DTick[key].
+        }
+
         readonly int[] DEFAULT_SENSI_TAB = new int[]//5*4
         {
           DEFAULT_SENSI,DEFAULT_SENSI,DEFAULT_SENSI,DEFAULT_SENSI, //  0..3  : Key1 UL
@@ -916,13 +949,18 @@ namespace ConfigAppNS
           DEFAULT_COLOR4,DEFAULT_COLOR4,DEFAULT_COLOR4,DEFAULT_COLOR4, // Key4
           DEFAULT_COLOR5,DEFAULT_COLOR5,DEFAULT_COLOR5,DEFAULT_COLOR5, // Key5
         };
-        readonly int[] DEFAULT_DTICK_TAB = new int[]//5*4
+        // Debounce defaults: indices 0..4 = Key1..Key5 (match FW DTick[i/4]); rest unused
+        readonly int[] DEFAULT_DTICK_TAB = new int[]//5*4 packet, FW uses [0..4]
         {
-          DEFAULT_DTICK,DEFAULT_DTICK,DEFAULT_DTICK,DEFAULT_DTICK, // Key1
-          DEFAULT_DTICK,DEFAULT_DTICK,DEFAULT_DTICK,DEFAULT_DTICK, // Key2
-          DEFAULT_DTICK,DEFAULT_DTICK,DEFAULT_DTICK,DEFAULT_DTICK, // Key3
-          DEFAULT_DTICK,DEFAULT_DTICK,DEFAULT_DTICK,DEFAULT_DTICK, // Key4
-          DEFAULT_DTICK,DEFAULT_DTICK,DEFAULT_DTICK,DEFAULT_DTICK, // Key5
+          DEFAULT_DTICK, // 0 Key1
+          DEFAULT_DTICK, // 1 Key2
+          DEFAULT_DTICK, // 2 Key3
+          DEFAULT_DTICK, // 3 Key4
+          DEFAULT_DTICK, // 4 Key5
+          DEFAULT_DTICK,DEFAULT_DTICK,DEFAULT_DTICK, // 5..7 unused by FW quirk
+          DEFAULT_DTICK,DEFAULT_DTICK,DEFAULT_DTICK,DEFAULT_DTICK, // 8..11
+          DEFAULT_DTICK,DEFAULT_DTICK,DEFAULT_DTICK,DEFAULT_DTICK, // 12..15
+          DEFAULT_DTICK,DEFAULT_DTICK,DEFAULT_DTICK,DEFAULT_DTICK, // 16..19
         };
 
         /// =============================================================================================
@@ -1240,9 +1278,11 @@ namespace ConfigAppNS
             else if (tabControl1.SelectedIndex == 2)
             {
                 //---------------------------------------------------------------------------------------
-                int SensVal = DTickBuffer[(SensorIndex / 4) * 4 + 0]; 
-                //double Percent = (double)(100.0 * ((double)SensVal / 1000.0));
-                textBox_DTick.Text = SensVal.ToString() ;// "Debounce="+ "mS" + SensVal.ToString() + "mS";//Percent.ToString("F1") + "% (" + SensVal + ")";
+                // FW V2.12: effective slot is DTick[key], not DTick[key*4]
+                int SensVal = GetDebounceValue();
+                if (SensVal < trackBar_DTick.Minimum) SensVal = trackBar_DTick.Minimum;
+                if (SensVal > trackBar_DTick.Maximum) SensVal = trackBar_DTick.Maximum;
+                textBox_DTick.Text = SensVal.ToString();
                 trackBar_DTick.Value = SensVal;
                 //---------------------------------------------------------------------------------------
             }
@@ -1523,14 +1563,9 @@ namespace ConfigAppNS
         ///
         private void trackBar_DTick_Scroll(object sender, EventArgs e)
         {
-            //TrackBar_Display(trackBar_DTick.Value);
             int SensVal = trackBar_DTick.Value;
-            //double Percent = (double)(100.0 * ((double)SensVal / 1000.0));
-            DTickBuffer[(SensorIndex / 4) * 4 + 0] = SensVal;
-            DTickBuffer[(SensorIndex / 4) * 4 + 1] = SensVal;
-            DTickBuffer[(SensorIndex / 4) * 4 + 2] = SensVal;
-            DTickBuffer[(SensorIndex / 4) * 4 + 3] = SensVal;
-            textBox_DTick.Text =SensVal.ToString();  //"Debounce=" + + "mS" Percent.ToString("F1") + "% (" + SensVal + ")";
+            SetDebounceValue(SensVal); // FW V2.12: DTick[key]
+            textBox_DTick.Text = SensVal.ToString();
         }
 
         private void textBox_DTick_TextChanged(object sender, EventArgs e)
@@ -1541,12 +1576,11 @@ namespace ConfigAppNS
                 if (InputStr.Length > 0)
                 {
                     int SensVal = Convert.ToInt32(InputStr);
+                    if (SensVal < trackBar_DTick.Minimum) SensVal = trackBar_DTick.Minimum;
+                    if (SensVal > trackBar_DTick.Maximum) SensVal = trackBar_DTick.Maximum;
                     textBox_DTick.Text = SensVal.ToString();
                     trackBar_DTick.Value = SensVal;
-                    DTickBuffer[(SensorIndex / 4) * 4 + 0] = SensVal;
-                    DTickBuffer[(SensorIndex / 4) * 4 + 1] = SensVal;
-                    DTickBuffer[(SensorIndex / 4) * 4 + 2] = SensVal;
-                    DTickBuffer[(SensorIndex / 4) * 4 + 3] = SensVal;
+                    SetDebounceValue(SensVal); // FW V2.12: DTick[key]
                 }
             }
             catch (Exception ex)
