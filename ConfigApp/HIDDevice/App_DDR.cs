@@ -413,14 +413,40 @@ namespace ConfigAppNS
         private const int CONFIG_VALUE_COUNT = KEY_COUNT_5KEY * SENSORS_PER_KEY; // 20 — FW DATA_LEN/2
         private Panel[] fiveKeyFillers = null;
         private float uiDpiScale = 1f;
-        private bool uiDpiApplied = false;
+        private Button btnFirmwareUpgrade;
+        private Button btnLangToggle;
+
+        private int S(int px)
+        {
+            return (int)Math.Round(px * uiDpiScale);
+        }
+
+        private void DetectDpiScale()
+        {
+            float dpi = 96f;
+            try
+            {
+                using (Graphics g = this.CreateGraphics())
+                    dpi = g.DpiX;
+            }
+            catch { }
+            uiDpiScale = dpi / 96f;
+            if (uiDpiScale < 1f) uiDpiScale = 1f;
+            if (uiDpiScale > 2.5f) uiDpiScale = 2.5f;
+        }
 
         private void ApplyFiveKeyLayoutOnly()
         {
             this.Text = "PADUEX5";
             this.AutoScaleMode = AutoScaleMode.None;
+            // Fixed size — avoid maximize leaving a huge empty client area
+            this.FormBorderStyle = FormBorderStyle.FixedSingle;
+            this.MaximizeBox = false;
+            this.StartPosition = FormStartPosition.CenterScreen;
 
-            // Remove right-side "传感器" diagrams (Sensitivity + Color tabs)
+            DetectDpiScale();
+
+            // Remove right-side "传感器" diagrams
             pictureBox1.Visible = false;
             pictureBox1.Enabled = false;
             if (groupBox_Sensi.Controls.Contains(pictureBox1))
@@ -430,66 +456,62 @@ namespace ConfigAppNS
             if (tabPage_Color.Controls.Contains(pictureBox_sens))
                 tabPage_Color.Controls.Remove(pictureBox_sens);
 
-            // Debounce label matches firmware meaning (release hold / 消抖, unit ms)
-            // Index layout mirrors FW V2.12 DTick[key] quirk (see GetDebounceKeyIndex).
-            groupBox_DTick.Text = "Debounce 消抖 (0~1000 ms, 按键独立)";
-            label_DTick.Text = "松开保持(ms) =";
+            // Color picker: Red / Blue / White only
+            Btn_Col_G.Visible = false; Btn_Col_G.Enabled = false;
+            Btn_Col_Y.Visible = false; Btn_Col_Y.Enabled = false;
+            Btn_Col_P.Visible = false; Btn_Col_P.Enabled = false;
+            Btn_Col_C.Visible = false; Btn_Col_C.Enabled = false;
+            Btn_Col_R.Visible = true; Btn_Col_R.Enabled = true;
+            Btn_Col_B.Visible = true; Btn_Col_B.Enabled = true;
+            Btn_Col_W.Visible = true; Btn_Col_W.Enabled = true;
+            Btn_Col_R.Location = new Point(S(40), S(28));
+            Btn_Col_B.Location = new Point(S(120), S(28));
+            Btn_Col_W.Location = new Point(S(200), S(28));
+            Btn_Col_R.Size = Btn_Col_B.Size = Btn_Col_W.Size = new Size(S(60), S(60));
+            groupBox_Color.Location = new Point(S(20), S(40));
+            groupBox_Color.Size = new Size(S(320), S(100));
+            Btn_LED.Location = new Point(S(360), S(50));
+            Btn_LED.Size = new Size(S(100), S(100));
 
-            // Compact Sensitivity group after removing diagram
-            groupBox_Sensi.Size = new System.Drawing.Size(560, 620);
-            groupBox_Color.Size = new System.Drawing.Size(540, 90);
-            if (groupBox_Color.Location.X > 40)
-                groupBox_Color.Location = new System.Drawing.Point(20, groupBox_Color.Location.Y);
-            Btn_LED.Location = new System.Drawing.Point(240, 120);
+            // Compact Sensitivity (no diagram)
+            groupBox_Sensi.Location = new Point(S(8), S(8));
+            groupBox_Sensi.Size = new Size(S(520), S(560));
 
-            int cell = 150;
-            int gap = 6;
-            int ox = 12;
-            int oy = 12;
+            groupBox_DTick.Location = new Point(S(40), S(40));
+            groupBox_DTick.Size = new Size(S(480), S(140));
+
+            int cell = S(140);
+            int gap = S(6);
+            int ox = S(12);
+            int oy = S(40); // leave room for language button
             int step = cell + gap;
-            int x0 = ox;
-            int x1 = ox + step;
-            int x2 = ox + step * 2;
-            int y0 = oy;
-            int y1 = oy + step;
-            int y2 = oy + step * 2;
+            int x0 = ox, x1 = ox + step, x2 = ox + step * 2;
+            int y0 = oy, y1 = oy + step, y2 = oy + step * 2;
             int padW = step * 3 - gap;
             int padH = step * 3 - gap;
+            Size cellSize = new Size(cell, cell);
 
-            // Active keys — real 5Key positions
-            Btn_K1.Location = new System.Drawing.Point(x0, y0); // ↖
-            Btn_K2.Location = new System.Drawing.Point(x2, y0); // ↗
-            Btn_K3.Location = new System.Drawing.Point(x1, y1); // center
-            Btn_K4.Location = new System.Drawing.Point(x0, y2); // ↙
-            Btn_K5.Location = new System.Drawing.Point(x2, y2); // ↘
-
-            Size cellSize = new System.Drawing.Size(cell, cell);
-            Btn_K1.Size = cellSize; Btn_K2.Size = cellSize; Btn_K3.Size = cellSize;
-            Btn_K4.Size = cellSize; Btn_K5.Size = cellSize;
-            Btn_K1.Enabled = true; Btn_K2.Enabled = true; Btn_K3.Enabled = true; Btn_K4.Enabled = true; Btn_K5.Enabled = true;
-            Btn_K1.Visible = true; Btn_K2.Visible = true; Btn_K3.Visible = true; Btn_K4.Visible = true; Btn_K5.Visible = true;
-            Btn_K1.BackgroundImageLayout = ImageLayout.Zoom;
-            Btn_K2.BackgroundImageLayout = ImageLayout.Zoom;
-            Btn_K3.BackgroundImageLayout = ImageLayout.Zoom;
-            Btn_K4.BackgroundImageLayout = ImageLayout.Zoom;
-            Btn_K5.BackgroundImageLayout = ImageLayout.Zoom;
-
+            Btn_K1.Location = new Point(x0, y0);
+            Btn_K2.Location = new Point(x2, y0);
+            Btn_K3.Location = new Point(x1, y1);
+            Btn_K4.Location = new Point(x0, y2);
+            Btn_K5.Location = new Point(x2, y2);
+            Btn_K1.Size = Btn_K2.Size = Btn_K3.Size = Btn_K4.Size = Btn_K5.Size = cellSize;
+            Btn_K1.Enabled = Btn_K2.Enabled = Btn_K3.Enabled = Btn_K4.Enabled = Btn_K5.Enabled = true;
+            Btn_K1.Visible = Btn_K2.Visible = Btn_K3.Visible = Btn_K4.Visible = Btn_K5.Visible = true;
+            Btn_K1.BackgroundImageLayout = Btn_K2.BackgroundImageLayout = Btn_K3.BackgroundImageLayout =
+                Btn_K4.BackgroundImageLayout = Btn_K5.BackgroundImageLayout = ImageLayout.Zoom;
             Btn_K1.BackgroundImage = global::ConfigAppNS.Properties.Resources.AR_UL_L;
             Btn_K2.BackgroundImage = global::ConfigAppNS.Properties.Resources.AR_UR_L;
-            Btn_K3.BackgroundImage = global::ConfigAppNS.Properties.Resources.AR_C_L; // yellow hollow circle
+            Btn_K3.BackgroundImage = global::ConfigAppNS.Properties.Resources.AR_C_L;
             Btn_K4.BackgroundImage = global::ConfigAppNS.Properties.Resources.AR_DL_L;
             Btn_K5.BackgroundImage = global::ConfigAppNS.Properties.Resources.AR_DR_L;
 
-            // Hide 6–9 — 5Key only
-            Btn_K6.Visible = false; Btn_K7.Visible = false; Btn_K8.Visible = false; Btn_K9.Visible = false;
-            Btn_K6.Enabled = false; Btn_K7.Enabled = false; Btn_K8.Enabled = false; Btn_K9.Enabled = false;
+            Btn_K6.Visible = Btn_K7.Visible = Btn_K8.Visible = Btn_K9.Visible = false;
+            Btn_K6.Enabled = Btn_K7.Enabled = Btn_K8.Enabled = Btn_K9.Enabled = false;
 
-            // Filler cells so the 3×3 pad silhouette matches hardware
-            System.Drawing.Point[] fillerPos = new System.Drawing.Point[] {
-                new System.Drawing.Point(x1, y0),
-                new System.Drawing.Point(x0, y1),
-                new System.Drawing.Point(x2, y1),
-                new System.Drawing.Point(x1, y2),
+            Point[] fillerPos = new Point[] {
+                new Point(x1, y0), new Point(x0, y1), new Point(x2, y1), new Point(x1, y2)
             };
             if (fiveKeyFillers == null)
             {
@@ -497,7 +519,7 @@ namespace ConfigAppNS
                 for (int i = 0; i < fillerPos.Length; i++)
                 {
                     Panel p = new Panel();
-                    p.BackColor = System.Drawing.Color.FromArgb(245, 245, 245);
+                    p.BackColor = Color.FromArgb(245, 245, 245);
                     p.BorderStyle = BorderStyle.FixedSingle;
                     p.Enabled = false;
                     this.Controls.Add(p);
@@ -512,86 +534,143 @@ namespace ConfigAppNS
             }
 
             // Edit under pad
-            groupBox_Button.Location = new System.Drawing.Point(ox, y2 + cell + 10);
-            groupBox_Button.Size = new System.Drawing.Size(padW, 150);
+            groupBox_Button.Location = new Point(ox, y2 + cell + S(10));
+            groupBox_Button.Size = new Size(padW, S(140));
+            btn_default.Location = new Point(S(16), S(28));
+            Btn_ADJ.Location = new Point(S(16) + padW / 2, S(28));
+            btn_Read.Location = new Point(S(16), S(78));
+            btn_Save.Location = new Point(S(16) + padW / 2, S(78));
+            Size editBtn = new Size(padW / 2 - S(28), S(40));
+            btn_default.Size = Btn_ADJ.Size = btn_Read.Size = btn_Save.Size = editBtn;
 
-            // Settings tabs to the right of pad (no sensor diagram → narrower)
-            int tabX = ox + padW + 16;
-            int tabW = 580;
-            int tabH = padH + 10 + groupBox_Button.Height;
-            tabControl1.Location = new System.Drawing.Point(tabX, oy);
-            tabControl1.Size = new System.Drawing.Size(tabW, tabH);
+            // Tabs right of pad
+            int tabX = ox + padW + S(16);
+            int tabW = S(540);
+            int tabH = (y2 + cell) - oy + S(10) + groupBox_Button.Height;
+            tabControl1.Location = new Point(tabX, oy);
+            tabControl1.Size = new Size(tabW, tabH);
 
-            // Mode row under everything
-            int modeY = Math.Max(groupBox_Button.Bottom, tabControl1.Bottom) + 12;
-            groupBox_Mode.Location = new System.Drawing.Point(ox, modeY);
-            groupBox_Mode.Size = new System.Drawing.Size(tabX + tabW - ox - 170, 100);
+            // Mode row: rebuild internals so Save/OTA are never clipped
+            int modeY = Math.Max(groupBox_Button.Bottom, tabControl1.Bottom) + S(12);
+            int modeW = tabX + tabW - ox;
+            groupBox_Mode.Location = new Point(ox, modeY);
+            groupBox_Mode.Size = new Size(modeW, S(108));
 
-            // Fit client to content (96-dpi baseline), place OTA btn, then scale for system DPI
-            int contentW = tabX + tabW + 16;
-            int contentH = groupBox_Mode.Bottom + 16;
-            this.ClientSize = new System.Drawing.Size(contentW, contentH);
-            label_Ver.Location = new System.Drawing.Point(contentW - 80, contentH - 24);
+            groupBox_USBMode.Location = new Point(S(12), S(22));
+            groupBox_USBMode.Size = new Size(S(260), S(70));
+            radioButton_KBS.Location = new Point(S(12), S(28));
+            radioButton_HID.Location = new Point(S(120), S(28));
+            radioButton_IO4.Visible = false;
+
+            groupBox2.Location = new Point(S(280), S(22));
+            groupBox2.Size = new Size(S(140), S(70));
+            radioButton_1P.Location = new Point(S(12), S(28));
+            radioButton_2P.Location = new Point(S(70), S(28));
+
+            Size modeBtn = new Size(S(120), S(44));
+            Btn_ReadMode.Size = Btn_SaveMode.Size = modeBtn;
+            Btn_ReadMode.Location = new Point(S(440), S(36));
+            Btn_SaveMode.Location = new Point(S(570), S(36));
 
             EnsureFirmwareUpgradeButton();
-            ApplySystemDpiScale();
+            // Place OTA inside Mode group so its border never clips mid-button
+            if (btnFirmwareUpgrade.Parent != groupBox_Mode)
+            {
+                this.Controls.Remove(btnFirmwareUpgrade);
+                groupBox_Mode.Controls.Add(btnFirmwareUpgrade);
+            }
+            btnFirmwareUpgrade.Size = modeBtn;
+            btnFirmwareUpgrade.Location = new Point(S(700), S(36));
+            btnFirmwareUpgrade.BringToFront();
+
+            int contentW = ox + modeW + S(16);
+            int contentH = groupBox_Mode.Bottom + S(16);
+            this.ClientSize = new Size(contentW, contentH);
+            this.MinimumSize = this.Size;
+            this.MaximumSize = this.Size;
+
+            EnsureLanguageToggleButton();
+            btnLangToggle.Location = new Point(contentW - S(110), S(8));
+            btnLangToggle.Size = new Size(S(96), S(28));
+            btnLangToggle.BringToFront();
+
+            label_Ver.Location = new Point(contentW - S(70), contentH - S(22));
+            ApplyUiLanguage();
             SensorIndex = 0;
         }
-
-        /// <summary>
-        /// Scale the whole form from the 96-DPI layout using current system DPI.
-        /// .NET 4.0 + System DPI aware; avoids the empty large client area from PerMonitor.
-        /// </summary>
-        private void ApplySystemDpiScale()
-        {
-            if (uiDpiApplied)
-                return;
-            float dpi = 96f;
-            try
-            {
-                using (Graphics g = this.CreateGraphics())
-                    dpi = g.DpiX;
-            }
-            catch { }
-            uiDpiScale = dpi / 96f;
-            if (uiDpiScale < 0.5f) uiDpiScale = 0.5f;
-            if (uiDpiScale > 3.0f) uiDpiScale = 3.0f;
-
-            if (Math.Abs(uiDpiScale - 1f) > 0.02f)
-            {
-                this.Scale(new SizeF(uiDpiScale, uiDpiScale));
-            }
-            this.MinimumSize = new System.Drawing.Size(
-                (int)(900 * uiDpiScale),
-                (int)(640 * uiDpiScale));
-            this.StartPosition = FormStartPosition.CenterScreen;
-            uiDpiApplied = true;
-        }
-
-        private Button btnFirmwareUpgrade;
 
         private void EnsureFirmwareUpgradeButton()
         {
             if (btnFirmwareUpgrade != null)
-            {
-                // Keep beside Mode after layout/DPI scale
-                btnFirmwareUpgrade.Location = new System.Drawing.Point(
-                    groupBox_Mode.Right + 12,
-                    groupBox_Mode.Location.Y + 28);
-                btnFirmwareUpgrade.BringToFront();
                 return;
-            }
             btnFirmwareUpgrade = new Button();
             btnFirmwareUpgrade.Name = "btnFirmwareUpgrade";
-            btnFirmwareUpgrade.Text = "固件升级";
-            btnFirmwareUpgrade.Size = new System.Drawing.Size(147, 48);
-            btnFirmwareUpgrade.Location = new System.Drawing.Point(
-                groupBox_Mode.Right + 12,
-                groupBox_Mode.Location.Y + 28);
-            btnFirmwareUpgrade.BackColor = System.Drawing.SystemColors.Control;
-            btnFirmwareUpgrade.Click += new System.EventHandler(this.Btn_OTA_Click);
+            btnFirmwareUpgrade.BackColor = SystemColors.Control;
+            btnFirmwareUpgrade.UseVisualStyleBackColor = false;
+            btnFirmwareUpgrade.Click += new EventHandler(this.Btn_OTA_Click);
             this.Controls.Add(btnFirmwareUpgrade);
-            btnFirmwareUpgrade.BringToFront();
+        }
+
+        private void EnsureLanguageToggleButton()
+        {
+            if (btnLangToggle != null)
+                return;
+            btnLangToggle = new Button();
+            btnLangToggle.Name = "btnLangToggle";
+            btnLangToggle.BackColor = SystemColors.Control;
+            btnLangToggle.UseVisualStyleBackColor = false;
+            btnLangToggle.Click += new EventHandler(this.Btn_LangToggle_Click);
+            this.Controls.Add(btnLangToggle);
+        }
+
+        private void Btn_LangToggle_Click(object sender, EventArgs e)
+        {
+            bLanguageEN = !bLanguageEN;
+            ApplyUiLanguage();
+        }
+
+        private void ApplyUiLanguage()
+        {
+            if (bLanguageEN)
+            {
+                if (btnLangToggle != null) btnLangToggle.Text = "中文";
+                btn_default.Text = "Default";
+                btn_Read.Text = "Read";
+                btn_Save.Text = "Save";
+                Btn_ADJ.Text = "Debug";
+                Btn_ReadMode.Text = "Read Mode";
+                Btn_SaveMode.Text = "Save Mode";
+                if (btnFirmwareUpgrade != null) btnFirmwareUpgrade.Text = "FW Upgrade";
+                groupBox_Button.Text = "Edit";
+                groupBox_Mode.Text = "Mode";
+                groupBox_Sensi.Text = "Sensitivity";
+                groupBox_Color.Text = "Color";
+                groupBox_DTick.Text = "Debounce (0~1000 ms)";
+                label_DTick.Text = "Hold (ms) =";
+                tabPage_Sensi.Text = "Sensitivity";
+                tabPage_Color.Text = "Color";
+                tabPage_DTick.Text = "Debounce";
+            }
+            else
+            {
+                if (btnLangToggle != null) btnLangToggle.Text = "English";
+                btn_default.Text = "默认设置";
+                btn_Read.Text = "读取设置";
+                btn_Save.Text = "保存设置";
+                Btn_ADJ.Text = "调试模式";
+                Btn_ReadMode.Text = "读取模式";
+                Btn_SaveMode.Text = "保存模式";
+                if (btnFirmwareUpgrade != null) btnFirmwareUpgrade.Text = "固件升级";
+                groupBox_Button.Text = "Edit";
+                groupBox_Mode.Text = "Mode";
+                groupBox_Sensi.Text = "Sensitivity";
+                groupBox_Color.Text = "Color";
+                groupBox_DTick.Text = "Debounce 消抖 (0~1000 ms)";
+                label_DTick.Text = "松开保持(ms) =";
+                tabPage_Sensi.Text = "Sensitivity";
+                tabPage_Color.Text = "Color";
+                tabPage_DTick.Text = "Debounce";
+            }
         }
 
         /// =============================================================================================
@@ -644,26 +723,7 @@ namespace ConfigAppNS
                             }
                             else if (Str == "LANGUAGE")
                             {
-                                if (StrTab[1] == "EN")
-                                {
-                                    bLanguageEN = true;
-                                    btn_default.Text = "DefaultSetting";
-                                    btn_Read.Text = "ReadSetting";
-                                    btn_Save.Text = "SaveSetting";
-                                    Btn_ADJ.Text = "DebugMode";
-                                    Btn_ReadMode.Text = "ReadMode";
-                                    Btn_SaveMode.Text = "SaveMode";
-                                }
-                                else
-                                {
-                                    bLanguageEN = false;
-                                    btn_default.Text = "默认设置";
-                                    btn_Read.Text = "读取设置";
-                                    btn_Save.Text = "保存设置";
-                                    Btn_ADJ.Text = "调试模式";
-                                    Btn_ReadMode.Text = "读取模式";
-                                    Btn_SaveMode.Text = "保存模式";
-                                }
+                                bLanguageEN = (StrTab[1] == "EN");
                             }
                             else if (Str == "UPDATE")
                             {
@@ -885,11 +945,11 @@ namespace ConfigAppNS
         private const int ADC_MAX_CHAN  = CONFIG_VALUE_COUNT;
         private const int DEFAULT_SENSI = 200;//800;  //V1.0.0.25:20250402(2)Default Seni change from 800 to 200
         private const int MAX_VAL_SENSI = 4095;
-        // Match FW SENS_MODE_5KEY defaults: 1&2=P(magenta), 3=Y, 4&5=B
+        // Pedal LED palette limited to Red / Blue / White
         private const int DEFAULT_COLOR  = LED_COLOR_W;
-        private const int DEFAULT_COLOR1 = LED_COLOR_P; // Key1 ↖ magenta
-        private const int DEFAULT_COLOR2 = LED_COLOR_P; // Key2 ↗ magenta
-        private const int DEFAULT_COLOR3 = LED_COLOR_Y; // Key3 center yellow
+        private const int DEFAULT_COLOR1 = LED_COLOR_R; // Key1 ↖ red
+        private const int DEFAULT_COLOR2 = LED_COLOR_R; // Key2 ↗ red
+        private const int DEFAULT_COLOR3 = LED_COLOR_W; // Key3 center white
         private const int DEFAULT_COLOR4 = LED_COLOR_B; // Key4 ↙ blue
         private const int DEFAULT_COLOR5 = LED_COLOR_B; // Key5 ↘ blue
 
