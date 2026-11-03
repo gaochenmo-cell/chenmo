@@ -22,6 +22,8 @@ namespace ConfigAppNS
         private const uint FLASH_CONFIG_ADDR = 0x0800F800;
         private const int MAX_APP_SIZE = (int)(FLASH_CONFIG_ADDR - FLASH_APP_ADDR); // 0xB800
         private const int MIN_APP_SIZE = 1024;
+        /// <summary>Stock / grok1.0 / grok1.2 image length — ISP-safe.</summary>
+        private const int STOCK_APP_SIZE = 37072;
         private const int CHUNK_1K = 1024;
         private const int HID_PAYLOAD = 60; // 64 - cmd(2) - len(2)
 
@@ -60,9 +62,9 @@ namespace ConfigAppNS
             labelTitle.Text = "PADUEX5 固件升级";
             labelTips.Text =
                 "操作提示：\r\n" +
-                "1. 选择 firmware\\grok1.1.bin（或官方 5KEY_*.bin）\r\n" +
+                "1. 选择 firmware\\grok1.2.bin（与原厂同体积，含改键；也可用官方 5KEY_*.bin）\r\n" +
                 "2. 保持 USB 连接，升级中勿拔线、勿关机、勿关闭本窗口\r\n" +
-                "3. 若已停在 Bootloader，直接再点「开始升级」即可（一般不会变砖）";
+                "3. 失败留在 Bootloader 可重试；ISP 刷写请用 grok1.2/1.0（勿用 grok1.1）";
             labelAddr.Text = "APP 地址: 0x" + FLASH_APP_ADDR.ToString("X8");
             labelLimit.Text = "最大允许: " + MAX_APP_SIZE + " 字节（保护配置区）";
             labelWarn.Text = "升级中，请勿关机！";
@@ -194,6 +196,19 @@ namespace ConfigAppNS
                 labelFileInfo.Text = "大小: " + binData.Length + " 字节  |  对齐后: " + Align1K(binData.Length) + " 字节";
                 btnStart.Enabled = true;
                 SetStatus("已加载固件: " + Path.GetFileName(binPath));
+                // Soft warn: images longer than stock (e.g. grok1.1 cave) are OK for this OTA,
+                // but ISP tools that flash by old length can truncate and brick.
+                if (binData.Length > STOCK_APP_SIZE)
+                {
+                    MessageBox.Show(
+                        "此固件比原厂镜像长（" + binData.Length + " > " + STOCK_APP_SIZE + " 字节）。\r\n\r\n" +
+                        "本窗口 OTA 会整包写入，一般可用。\r\n" +
+                        "若改用厂家 ISP/IPS：请改刷 grok1.2.bin 或 grok1.0.bin（同体积），" +
+                        "地址 0x08004000，否则可能截断末尾导致 USB 无法识别。",
+                        "PADUEX5 体积提示",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                }
             }
             catch (Exception ex)
             {
@@ -254,7 +269,8 @@ namespace ConfigAppNS
                 "请注意：\r\n" +
                 "· 升级中请勿拔 USB、勿关机、勿关闭本窗口\r\n" +
                 "· 写完并 CRC 通过后才会跳转；失败则留在 Bootloader，可重试\r\n" +
-                "· 推荐刷入 grok1.1.bin（含按键映射）\r\n\r\n" +
+                "· 推荐刷入 grok1.2.bin（含按键映射，与原厂同体积，ISP 也安全）\r\n" +
+                "· 勿再用 ISP 刷 grok1.1.bin（末尾加长，易截断变砖）\r\n\r\n" +
                 "确认开始？",
                 "PADUEX5 升级确认",
                 MessageBoxButtons.YesNo,
