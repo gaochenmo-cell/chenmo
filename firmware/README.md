@@ -48,6 +48,15 @@ python3 firmware/patches/build_grok1.2.py   # 读 grok1.0.bin → 写 grok1.2.bi
 
 仅灵敏度持久化 + 消抖索引；**无**改键协议。见 `patches/grok1.0-App_User.patch`。
 
+## 离线自测（无硬件）
+
+```bash
+python3 firmware/tests/sim_paduex5.py
+```
+
+覆盖：镜像体积/向量/补丁范围、改色→灯板 GRB×25 逻辑输出、模式 KBS/HID×1P/2P、改键 GET/SET_MAPP。  
+**不能替代**真机 OTA/ISP；发给客户前请在自有板上刷一次 `grok1.3.bin`。报告见 `firmware/tests/sim-report.md`。
+
 ## 源码对照
 
 - grok1.0：`patches/grok1.0-App_User.patch`  
