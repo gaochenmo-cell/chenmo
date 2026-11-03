@@ -904,8 +904,8 @@ namespace ConfigAppNS
             {
                 MessageBox.Show(
                     bLanguageEN
-                        ? "Device has no keymap protocol. Flash firmware/grok1.2.bin (OTA or ISP @ 0x08004000), then retry."
-                        : "设备暂无按键映射协议。请刷入 firmware/grok1.2.bin（OTA 或 ISP 地址 0x08004000）后重试。",
+                        ? "Device has no keymap protocol. Flash firmware/grok1.3.bin (OTA or ISP @ 0x08004000), then retry."
+                        : "设备暂无按键映射协议。请刷入 firmware/grok1.3.bin（OTA 或 ISP 地址 0x08004000）后重试。",
                     "PADUEX5", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
@@ -944,8 +944,8 @@ namespace ConfigAppNS
             {
                 MessageBox.Show(
                     bLanguageEN
-                        ? "Save failed — flash firmware/grok1.2.bin (see firmware/README.md)."
-                        : "保存失败：请刷入 firmware/grok1.2.bin（见 firmware/README.md）。",
+                        ? "Save failed — flash firmware/grok1.3.bin (see firmware/README.md)."
+                        : "保存失败：请刷入 firmware/grok1.3.bin（见 firmware/README.md）。",
                     "PADUEX5", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
@@ -1196,7 +1196,7 @@ namespace ConfigAppNS
                 radioButton_HID.Text = "HID Mode";
                 if (tabPage_Map != null) tabPage_Map.Text = "Key Map";
                 if (groupBox_Map != null) groupBox_Map.Text = "Keyboard mapping";
-                if (label_MapHint != null) label_MapHint.Text = "Keyboard mode only. Requires firmware grok1.2+. Remap replaces 1P/2P; HID mode still uses 1P/2P.";
+                if (label_MapHint != null) label_MapHint.Text = "Keyboard mode only. Requires firmware grok1.2+ (prefer 1.3). Remap replaces 1P/2P; HID mode still uses 1P/2P.";
                 if (label_MapKey != null) label_MapKey.Text = "Per-pad HID usage (select then Save Map):";
                 if (btn_MapRead != null) btn_MapRead.Text = "Read Map";
                 if (btn_MapSave != null) btn_MapSave.Text = "Save Map";
@@ -1224,7 +1224,7 @@ namespace ConfigAppNS
                 radioButton_HID.Text = "手柄";
                 if (tabPage_Map != null) tabPage_Map.Text = "按键映射";
                 if (groupBox_Map != null) groupBox_Map.Text = "键盘按键映射";
-                if (label_MapHint != null) label_MapHint.Text = "仅键盘模式，需固件 grok1.2+。改键后不必再分 1P/2P；手柄模式仍用 1P/2P。";
+                if (label_MapHint != null) label_MapHint.Text = "仅键盘模式，需固件 grok1.2+（推荐 1.3）。改键后不必再分 1P/2P；手柄模式仍用 1P/2P。";
                 if (label_MapKey != null) label_MapKey.Text = "五个踏板对应 HID 键值（选好后点保存映射）：";
                 if (btn_MapRead != null) btn_MapRead.Text = "读取映射";
                 if (btn_MapSave != null) btn_MapSave.Text = "保存映射";

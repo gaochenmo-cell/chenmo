@@ -22,13 +22,13 @@ Yuanpad **5Key** Windows 配置与固件升级工具（原 ConfigApp DDR 分支�
 - **中/英切换**：右上角一键切换
 - **灯色**：仅红 / 蓝 / 白
 - **Debounce**：固件消抖（松开保持，单位 ms，默认 3）。上位机按 V2.12 的 `DTick[键号]` 布局读写
-- **按键映射**：键盘模式下可改 5 键 HID usage（需刷 **`firmware/grok1.2.bin`**）
+- **按键映射**：键盘模式下可改 5 键 HID usage（需刷 **`firmware/grok1.3.bin`**）
 - **固件升级**：AT32 USB HID IAP（AN0007），带进度条与日志
 - **防砖**：
   - 升级前检查向量表与体积（禁止覆盖 `0x0800F800` 配置区）
   - 校验 Bootloader APP 地址必须为 `0x08004000`
   - 整包写完并 **CRC 通过后才跳转**；失败则留在 Bootloader，可重试
-  - **`grok1.2.bin` 与原厂同体积**，ISP 按旧长度写也不会截断 cave（勿再 ISP 刷 grok1.1）
+  - **`grok1.3.bin` 与原厂同体积**，ISP 按旧长度写也不会截断 cave（勿再 ISP 刷 grok1.1）
 
 ## 布局
 
@@ -49,4 +49,5 @@ Yuanpad **5Key** Windows 配置与固件升级工具（原 ConfigApp DDR 分支�
 
 ## 相关
 
-- 板端固件：`uandancedance`（`5KEY_*.bin`，APP @ `0x08004000`）
+- 板端固件：推荐 **`firmware/grok1.3.bin`**（改键 + 粘键发送超时修复，APP @ `0x08004000`）
+- 救砖说明：[`firmware/RECOVERY.md`](./firmware/RECOVERY.md)
