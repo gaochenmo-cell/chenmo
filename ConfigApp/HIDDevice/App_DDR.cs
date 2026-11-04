@@ -1192,11 +1192,19 @@ namespace ConfigAppNS
             AppConfig.Write("THEME", bDarkMode ? "DARK" : "LIGHT");
         }
 
-        /// <summary>Laverita palette (Tailwind gray scale + blue / amber / red accents).</summary>
+        /// <summary>
+        /// Light: Laverita palette (Tailwind gray scale + blue / amber / red accents).
+        /// Dark: neon purple (deep violet-black background, violet→pink gradient highlights with glow).
+        /// Gradient / glow fields are Color.Empty on the light palette, which disables those effects.
+        /// </summary>
         private sealed class Palette
         {
             public Color FormBg, PanelBg, CardBg, Border, BorderStrong, Text, MutedText, Title;
             public Color Accent, AccentText, Danger, Neutral, NeutralText, Selected, BarTrack, BarFill;
+            public Color PadOutline;          // arrow / ring stroke on an unselected pad key
+            public Color SelectedGradientEnd; // second stop of the selected pad key fill (Empty = solid)
+            public Color AccentGradientEnd;   // second stop of the tab underline (Empty = solid)
+            public Color Glow;                // outer glow around selected / pressed pad keys (Empty = none)
 
             public static Palette Light()
             {
@@ -1217,28 +1225,36 @@ namespace ConfigAppNS
                 p.Selected = Color.FromArgb(245, 158, 11);
                 p.BarTrack = Color.FromArgb(229, 231, 235);
                 p.BarFill = Color.FromArgb(200, 220, 245);
+                p.PadOutline = Color.FromArgb(31, 41, 55);
+                p.SelectedGradientEnd = Color.Empty;
+                p.AccentGradientEnd = Color.Empty;
+                p.Glow = Color.Empty;
                 return p;
             }
 
             public static Palette Dark()
             {
                 Palette p = new Palette();
-                p.FormBg = Color.FromArgb(17, 24, 39);
-                p.PanelBg = Color.FromArgb(31, 41, 55);
-                p.CardBg = Color.FromArgb(55, 65, 81);
-                p.Border = Color.FromArgb(75, 85, 99);
-                p.BorderStrong = Color.FromArgb(107, 114, 128);
-                p.Text = Color.FromArgb(249, 250, 251);
-                p.MutedText = Color.FromArgb(156, 163, 175);
-                p.Title = Color.FromArgb(96, 165, 250);
-                p.Accent = Color.FromArgb(96, 165, 250);
+                p.FormBg = Color.FromArgb(13, 10, 31);          // #0D0A1F deep violet-black
+                p.PanelBg = Color.FromArgb(23, 18, 51);         // #171233 card
+                p.CardBg = Color.FromArgb(36, 29, 74);          // #241D4A inner cell / input
+                p.Border = Color.FromArgb(52, 42, 102);         // #342A66
+                p.BorderStrong = Color.FromArgb(91, 74, 160);   // #5B4AA0
+                p.Text = Color.FromArgb(237, 233, 254);         // #EDE9FE
+                p.MutedText = Color.FromArgb(157, 146, 201);    // #9D92C9 violet-grey
+                p.Title = Color.FromArgb(192, 132, 252);        // #C084FC
+                p.Accent = Color.FromArgb(124, 58, 237);        // #7C3AED
                 p.AccentText = Color.White;
-                p.Danger = Color.FromArgb(220, 38, 38);
-                p.Neutral = Color.FromArgb(55, 65, 81);
-                p.NeutralText = Color.FromArgb(249, 250, 251);
-                p.Selected = Color.FromArgb(245, 158, 11);
-                p.BarTrack = Color.FromArgb(55, 65, 81);
-                p.BarFill = Color.FromArgb(75, 85, 99);
+                p.Danger = Color.FromArgb(236, 72, 153);        // #EC4899 neon pink
+                p.Neutral = Color.FromArgb(42, 34, 80);         // #2A2250
+                p.NeutralText = Color.FromArgb(237, 233, 254);
+                p.Selected = Color.FromArgb(124, 58, 237);      // #7C3AED → gradient end below
+                p.BarTrack = Color.FromArgb(36, 29, 74);
+                p.BarFill = Color.FromArgb(91, 74, 160);
+                p.PadOutline = Color.FromArgb(196, 181, 253);   // #C4B5FD lavender
+                p.SelectedGradientEnd = Color.FromArgb(236, 72, 153); // #EC4899
+                p.AccentGradientEnd = Color.FromArgb(96, 165, 250);   // #60A5FA
+                p.Glow = Color.FromArgb(168, 85, 247);          // #A855F7
                 return p;
             }
         }
@@ -1523,8 +1539,18 @@ namespace ConfigAppNS
                 e.Graphics.FillRectangle(bg, r);
             if (selected)
             {
-                using (SolidBrush underline = new SolidBrush(pal.Accent))
-                    e.Graphics.FillRectangle(underline, r.X + 2, r.Bottom - 3, r.Width - 4, 3);
+                Rectangle ul = new Rectangle(r.X + 2, r.Bottom - 3, r.Width - 4, 3);
+                if (pal.AccentGradientEnd.IsEmpty)
+                {
+                    using (SolidBrush underline = new SolidBrush(pal.Accent))
+                        e.Graphics.FillRectangle(underline, ul);
+                }
+                else
+                {
+                    using (System.Drawing.Drawing2D.LinearGradientBrush underline =
+                        new System.Drawing.Drawing2D.LinearGradientBrush(ul, pal.Accent, pal.AccentGradientEnd, 0f))
+                        e.Graphics.FillRectangle(underline, ul);
+                }
             }
             using (Font f = new Font("Microsoft YaHei UI", 9f, selected ? FontStyle.Bold : FontStyle.Regular))
             using (SolidBrush tb = new SolidBrush(selected ? pal.Title : pal.MutedText))
@@ -1553,7 +1579,7 @@ namespace ConfigAppNS
             int key = (int)kind;
             int selected = SensorIndex / SENSORS_PER_KEY;
             Color cellBg = pal.CardBg;
-            Color outline = bDarkMode ? Color.FromArgb(249, 250, 251) : Color.FromArgb(31, 41, 55);
+            Color outline = pal.PadOutline;
             bool triggered = key >= 0 && key < padKeyActive.Length && padKeyActive[key];
             Color triggerFill = GetPadLedColor(key);
             if (triggered)
@@ -1563,6 +1589,8 @@ namespace ConfigAppNS
                 CellBackground = cellBg,
                 OutlineColor = (key == selected) ? Color.White : outline,
                 SelectedFill = pal.Selected,
+                SelectedGradientEnd = pal.SelectedGradientEnd,
+                GlowColor = pal.Glow,
                 BorderColor = pal.Border,
                 Selected = key == selected,
                 Triggered = triggered,

@@ -75,7 +75,7 @@ python3 firmware/tests/emu_keymap_e2e.py firmware/grok1.7.bin    # Unicorn 全�
 - 多语言：所有文案在 `ConfigApp/HIDDevice/Strings.resx`（en，中性）和 `Strings.zh-CN.resx`，代码里用 `L.Get("Key")` / `L.F("Key", args)`（`Localization.cs`）。新增文案必须两个 resx 都加。`Config.ini` `LANGUAGE=AUTO|CN|EN`（`AppConfig.cs` 读写），`AUTO` 跟随系统；切换走 `App_DDR.SetLanguage()` → `L.LanguageChanged` → `ApplyUiLanguage()`。
 - 固件版本：`ReadDeviceMode()` 是唯一的 GET_MODE 入口（暂停 RAW、重试、校验 UID=0xA2）；`mFwValid` 为 false 时任何地方都不能使用 `mFwMajor/mFwMinor`。GET_MODE 回包固件只写进共享回复缓冲区（`AppUser+0x11E`），不走中断 IN 端点，靠 `HidD_GetInputReport` 取。
 
-- Laverita 配色（白天 `#F3F4F6/#FFFFFF/#2F6FED`，黑夜 `#111827/#1F2937/#60A5FA`，选中键琥珀 `#F59E0B`，默认按钮红 `#DC2626`），`Palette` 类 + 递归 `ApplyTheme`，GroupBox/Tab/进度条自绘。
+- 白天 Laverita 配色（`#F3F4F6/#FFFFFF/#2F6FED`，选中键琥珀 `#F59E0B`，默认按钮红 `#DC2626`）；黑夜自 1.0.0.59 起为霓虹紫（背景 `#0D0A1F`、卡片 `#171233/#241D4A`、主色 `#7C3AED`、标题 `#C084FC`、选中键 `#7C3AED→#EC4899` 渐变 + `#A855F7` 外发光、默认按钮粉 `#EC4899`）。`Palette` 类 + 递归 `ApplyTheme`，GroupBox/Tab/进度条自绘；`Palette.Glow/SelectedGradientEnd/AccentGradientEnd` 为 `Color.Empty` 时（白天）`PadKeyPainter` 不画渐变/发光，白天模式像素级不变。
 - 窗口标题显示上位机版本；左上角显示 `UID/HVer/FVer (grokX.Y)`。
 - 无设备时在 Linux 下可用 mono + Xvfb 跑起来截图（需用 dllmap 把 hid.dll/setupapi.dll 等映射到空桩）。
 
