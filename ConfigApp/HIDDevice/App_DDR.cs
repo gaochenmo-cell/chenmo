@@ -43,6 +43,7 @@ namespace ConfigAppNS
         private byte DefaultOffset = 0x01;			//V1.0.0.18:20241012(1)Change ADX Save Issue
         ///-------------------------------------------------------------------------------------------
         private string AppName = "DDR Config";
+        private static readonly string HostVer = "v" + System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString();
 
         ///-------------------------------------------------------------------------------------------
         //System.IO.FileInfo[] files;
@@ -503,7 +504,7 @@ namespace ConfigAppNS
 
         private void ApplyFiveKeyLayoutOnly()
         {
-            this.Text = "PADUEX5";
+            this.Text = "PADUEX5 " + HostVer;
             this.AutoScaleMode = AutoScaleMode.None;
             this.FormBorderStyle = FormBorderStyle.Sizable;
             this.MaximizeBox = true;
@@ -712,7 +713,9 @@ namespace ConfigAppNS
                 btnThemeToggle.Location = new Point(this.ClientSize.Width - S(220), S(8));
                 btnThemeToggle.BringToFront();
             }
-            label_Ver.Location = new Point(this.ClientSize.Width - S(70), this.ClientSize.Height - S(22));
+            label_Ver.AutoSize = true;
+            label_Ver.Location = new Point(ox + S(2), S(12));
+            label_Ver.BringToFront();
         }
 
         private void LayoutSensitivityColumns()
@@ -1720,7 +1723,7 @@ namespace ConfigAppNS
                 }
             }
             ///------------------------------------------------------------------------------------------
-            this.Text = AppName;
+            this.Text = AppName + " " + HostVer;
             ///------------------------------------------------------------------------------------------
         }
 
@@ -1778,7 +1781,7 @@ namespace ConfigAppNS
             //-------------------------------------------------------------------------------------------
             //USBCtrl.HIDLibraryLibChanged += HID_Event_Changed_Delegate;
             //-------------------------------------------------------------------------------------------
-            this.Text = AppName;
+            this.Text = AppName + " " + HostVer;
             label_Ver.Text = "";
             SetModeGroupEnabled(false);
             bool slot0 = false, slot1 = false;
@@ -1786,7 +1789,7 @@ namespace ConfigAppNS
             //-------------------------------------------------------------------------------------------//V1.0.0.20:20241231(1)Display OTA Device infor on App Title
             if (USBCtrl.USBLib_Connect((int)DeviceType.HID_OTA_VID, (int)DeviceType.HID_OTA_PID, (int)DeviceType.None) != (int)DeviceType.None)
             {
-                this.Text = AppName + " ( OTA Device Connected)";
+                this.Text = AppName + " " + HostVer + " ( OTA Device Connected)";
                 return;
             }
             //-------------------------------------------------------------------------------------------
@@ -1807,7 +1810,7 @@ namespace ConfigAppNS
             //-------------------------------------------------------------------------------------------
             if (bDeviceStatusFG == true)
             {
-                this.Text = AppName + " (Device Connected)";
+                this.Text = AppName + " " + HostVer + " (Device Connected)";
                 SetModeGroupEnabled(true);
                 //---------------------------------------------------------------------------------------
                 // HIDLibrary opens PID1 devices in slot 0 and PID2/PID3 devices in slot 1.

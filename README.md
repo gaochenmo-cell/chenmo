@@ -2,8 +2,12 @@
 
 ## 下载
 
-- [`dist/PADUEX5/`](./dist/PADUEX5/) → `PADUEX5.exe`（1.0.0.55）
+- [`dist/PADUEX5/`](./dist/PADUEX5/) → `PADUEX5.exe`（1.0.0.56）
 - [`dist/PADUEX5-win-release.zip`](./dist/PADUEX5-win-release.zip)
+
+## 上位机 1.0.0.56
+
+- 窗口标题显示上位机版本号；设备 UID/HVer/FVer 标签移到左上角。
 
 ## 上位机 1.0.0.55
 
