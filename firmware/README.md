@@ -1,37 +1,30 @@
 # PADUEX5 firmware
 
-## `grok1.4.bin`（推荐 — 改键 + 粘键超时，栈对齐正确）
+## `grok1.5.bin`（推荐 — 改键 + 启动修复）
 
-基于 **grok1.2**，体积 **37072**（= 原厂）。含：
-
-1. 改键 `GET_MAPP` / `SET_MAPP`、灵敏度 / `DTick`  
-2. KBS/HID `SendPacket` **有界等待**（修粘键）  
-3. **`push.w/pop.w {r4–r8,lr/pc}`** — 保持 8 字节栈对齐（修 grok1.3 变砖）
+体积 **37072**（= 原厂）。基于 grok1.2，但 **修正 boot hook 多写 4 字节导致的启动 HardFault**。
 
 ```bash
-python3 firmware/patches/build_grok1.4.py   # 读 grok1.2.bin → 写 grok1.4.bin
+python3 firmware/patches/build_grok1.5.py
 ```
 
-OTA / ISP 地址必须 **`0x08004000`**。
+OTA / ISP 地址 **`0x08004000`**。
 
-## `grok1.3.bin`（禁止 — 会变砖）
+## 禁止使用
 
-粘键超时逻辑正确，但压栈少保存了 `r8`，**破坏 8 字节栈对齐** → USB 路径 HardFault。  
-详见 [`patches/grok1.3-Brick.md`](./patches/grok1.3-Brick.md)。已刷 1.3 请用 ISP/OTA 改刷 **1.4 或 1.2**。
+| 固件 | 原因 |
+|------|------|
+| grok1.2 | boot hook 16B 盖坏后续 memcpy → 启动变砖 |
+| grok1.3 | 上述 + SendPacket 栈对齐错误 |
+| grok1.4 | 修了栈，**未修 boot hook** → 仍变砖 |
+| grok1.1 | 体积 +228，ISP 截断变砖 |
 
-## `grok1.2.bin`（改键，同体积，可用）
-
-无粘键超时修复。见 `patches/build_grok1.2.py`。
-
-## `grok1.1.bin`（禁止 ISP）
-
-末尾 +228 字节 cave，ISP 截断会变砖。见 [`RECOVERY.md`](./RECOVERY.md)。
+详见 `patches/grok1.2-Brick.md`、`patches/grok1.3-Brick.md`。
 
 ## `grok1.0.bin`
 
-仅灵敏度 + 消抖索引；无改键。
+灵敏度 + 消抖；无改键；boot 未改，可作救砖保底。
 
-## 救砖 / 离线自测
+## 救砖
 
-- 救砖：[`RECOVERY.md`](./RECOVERY.md)  
-- 自测：`python3 firmware/tests/sim_paduex5.py`（逻辑仿真，不能替代真机）
+电脑完全无 USB 时用 **ISP** 刷 `grok1.5.bin` 或 `grok1.0.bin` / 官方 V2.13 @ `0x08004000`。见 [`RECOVERY.md`](./RECOVERY.md)。

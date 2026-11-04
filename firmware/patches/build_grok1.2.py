@@ -360,9 +360,13 @@ def main() -> int:
     buf[va_to_off(SWITCH_HIGH) : va_to_off(SWITCH_HIGH) + 4] = asm_bw(SWITCH_HIGH, DISP)
     buf[va_to_off(SWITCH_HIGH) + 4 : va_to_off(SWITCH_HIGH) + 10] = b"\x00\xbf" * 3
 
-    # Boot hook → Mapping_Load (still inside original image)
-    boot = asm_bl(BOOT_HOOK, LOAD) + b"\x00\xbf" * 6
-    buf[va_to_off(BOOT_HOOK) : va_to_off(BOOT_HOOK) + 16] = boot
+    # Boot hook → Mapping_Load (still inside original image).
+    # MUST be exactly 12 bytes (BL + 4 NOPs): the stock first memcpy is 12B.
+    # Using 16B (BL+6 NOPs) overwrites the next `movs r2`/`ldr r1` and leaves
+    # a naked `adr; bl memcpy` with garbage args → HardFault / no USB. See grok1.5.
+    boot = asm_bl(BOOT_HOOK, LOAD) + b"\x00\xbf" * 4
+    assert len(boot) == 12
+    buf[va_to_off(BOOT_HOOK) : va_to_off(BOOT_HOOK) + 12] = boot
 
     assert len(buf) == orig_len, f"size changed {orig_len} -> {len(buf)}"
     dst_path.write_bytes(buf)
