@@ -76,7 +76,7 @@ namespace ConfigAppNS
             this.labelTips.Padding = new System.Windows.Forms.Padding(10, 8, 10, 8);
             this.labelTips.Size = new System.Drawing.Size(520, 88);
             this.labelTips.TabIndex = 2;
-            this.labelTips.Text = "操作提示：\r\n1. 选择 firmware\\grok1.3.bin（同体积；改键 + 粘键发送超时修复）\r\n2. 保持 USB 连接，升级中勿拔线、勿关机、勿关闭本窗口\r\n3. 失败留在 Bootloader 可重试；ISP 请用 grok1.3/1.2/1.0（勿用 grok1.1）";
+            this.labelTips.Text = "操作提示：\r\n1. 选择 firmware\\grok1.4.bin（同体积；改键 + 粘键超时；勿用 grok1.3）\r\n2. 保持 USB 连接，升级中勿拔线、勿关机、勿关闭本窗口\r\n3. 失败留在 Bootloader 可重试；ISP 请用 grok1.4/1.2/1.0（勿用 grok1.3 / grok1.1）";
             // 
             // labelAddr
             // 
