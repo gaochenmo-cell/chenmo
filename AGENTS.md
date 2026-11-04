@@ -22,34 +22,34 @@
 | `AppUser` 结构体 RAM | `0x200019D0`；`Color[36]` 在 `+0x146` = `0x20001B16` |
 | `ConfigMode` | `0x20000008`（bit7 = 2P，低 4 位 = 键盘0/手柄1/IO4 2） |
 
-## 血泪史：为什么 grok1.0～1.5 全部禁用
+## 血泪史：为什么 paduex3_1.0～1.5 全部禁用
 
-grok1.0 把补丁代码写进 `0x08004130..0x0800415F`，那是**中断向量表**。`0x14C`（USB 中断）被改成 `0x0000BD5B`，APP 一收到第一个 USB 中断就跳进乱码 → OTA 显示成功、插上无提示音、上位机找不到、只能 ISP/SWD 救。两块板因此变砖。grok1.1～1.5 全部继承了这个错误（1.2 另有 boot hook 多写 4 字节、1.3 另有 5 寄存器 push 栈不对齐，都是真 bug 但不是主因）。
-详见 `firmware/patches/grok1.0-Vector-Brick.md`、`grok1.2-Brick.md`、`grok1.3-Brick.md`。
+paduex3_1.0 把补丁代码写进 `0x08004130..0x0800415F`，那是**中断向量表**。`0x14C`（USB 中断）被改成 `0x0000BD5B`，APP 一收到第一个 USB 中断就跳进乱码 → OTA 显示成功、插上无提示音、上位机找不到、只能 ISP/SWD 救。两块板因此变砖。paduex3_1.1～1.5 全部继承了这个错误（1.2 另有 boot hook 多写 4 字节、1.3 另有 5 寄存器 push 栈不对齐，都是真 bug 但不是主因）。
+详见 `firmware/patches/paduex3_1.0-Vector-Brick.md`、`paduex3_1.2-Brick.md`、`paduex3_1.3-Brick.md`。
 
 **铁律**：
 1. 任何新固件必须以**官方 `5KEY_2P_V2.13.bin`** 为底，构建脚本必须断言"所有差异都在预期范围内"且 `0x14C == 0x080084A5`、体积 == 37072。
 2. 不新增 USB 命令、不新增 Flash 写入代码、不新增 RAM 变量，除非找到真正的空闲区并经 Unicorn 验证。
-3. 上位机 OTA 前会校验 `0x14C`（`App_OTA.cs`），拒绝 grok1.0～1.5。
+3. 上位机 OTA 前会校验 `0x14C`（`App_OTA.cs`），拒绝 paduex3_1.0～1.5。
 
 ## 当前可用固件
 
 | 文件 | 内容 | 上报版本 |
 |---|---|---|
-| `firmware/grok1.6.bin` | 官方 V2.13 + 两处 `SendPacket` 有界等待（防粘键，60 字节） | 2.12（与原厂同） |
-| **`firmware/grok1.7.bin`（推荐）** | grok1.6 + 键盘模式改键（`Report_Normal` 86 字节）+ 版本字节 | **2.17**，上位机标注 `(grok1.7)` |
+| `firmware/paduex3_1.6.bin` | 官方 V2.13 + 两处 `SendPacket` 有界等待（防粘键，60 字节） | 2.12（与原厂同） |
+| **`firmware/paduex3_1.7.bin`（推荐）** | paduex3_1.6 + 键盘模式改键（`Report_Normal` 86 字节）+ 版本字节 | **2.17**，上位机标注 `(paduex3_1.7)` |
 
-原厂 V2.13 的 `FW_VERSION_MINOR` 常量仍是 12，所以原厂 2.12/2.13 和 grok1.6 都显示 2.12，无法区分；看到 2.17 才是 grok1.7。
+原厂 V2.13 的 `FW_VERSION_MINOR` 常量仍是 12，所以原厂 2.12/2.13 和 paduex3_1.6 都显示 2.12，无法区分；看到 2.17 才是 paduex3_1.7。
 
-构建：`python3 firmware/patches/build_grok1.6.py && python3 firmware/patches/build_grok1.7.py`（需要 `/tmp/uandancedance/V2.13/5KEY_2P_V2.13.bin`、capstone、keystone）。
+构建：`python3 firmware/patches/build_paduex3_1.6.py && python3 firmware/patches/build_paduex3_1.7.py`（需要 `/tmp/uandancedance/V2.13/5KEY_2P_V2.13.bin`、capstone、keystone）。
 
 ## 关键事实（省得再反汇编一遍）
 
-- 粘键根因：`App_USB_KBS/HID_SendPacket` 里 `while(g_*_tx_completed)` 死等。grok1.6 改为 ~0x80000 次有界循环，保留 6 寄存器 `push.w {r4-r8,lr}`（8 字节栈对齐）。
+- 粘键根因：`App_USB_KBS/HID_SendPacket` 里 `while(g_*_tx_completed)` 死等。paduex3_1.6 改为 ~0x80000 次有界循环，保留 6 寄存器 `push.w {r4-r8,lr}`（8 字节栈对齐）。
 - 灯色改色、消抖 DTick、~1000Hz（bInterval=1）原厂 V2.13 本来就有，不需要新固件。
 - 1P/2P：固件自 V2.12 起 `ConfigMode = (flash & 0x0F) | DEFAULT_1P2P`，上位机设的 1P/2P 位无效；游戏按插入顺序分配玩家。上位机已去掉该选项。
 - 12V 供电检测：固件读 PF4/PF5 但从不通过 USB 上报，上位机无法知道。
-- 改键原理（grok1.7）：`Color[key*4]` 决定灯色，`Color[key*4+1]` 原厂从不使用但随 GET/SET_SENS(type 1) 传输并存 Flash。放 `0x4B00 | usage`（'K' 标签）即为该键键值，否则走原厂 1P/2P 表（1P: W X A D S，2P: H K J N M）。仅键盘模式；usage ≤ 0x7F。详见 `firmware/patches/grok1.7-KeyMap.md`。
+- 改键原理（paduex3_1.7）：`Color[key*4]` 决定灯色，`Color[key*4+1]` 原厂从不使用但随 GET/SET_SENS(type 1) 传输并存 Flash。放 `0x4B00 | usage`（'K' 标签）即为该键键值，否则走原厂 1P/2P 表（1P: W X A D S，2P: H K J N M）。仅键盘模式；usage ≤ 0x7F。详见 `firmware/patches/paduex3_1.7-KeyMap.md`。
 - 上位机改键页：读 = GET_SENS(1) 后解码；存 = 先 GET 刷新灯色再写 slot 再 SET_SENS(1)；"默认设置" = slot 清 0。调色页涂色不碰 `+1` 槽位。
 
 ## USB HID 协议速查
@@ -65,10 +65,10 @@ grok1.0 把补丁代码写进 `0x08004130..0x0800415F`，那是**中断向量表
 
 ```bash
 python3 firmware/tests/sim_paduex5.py                            # 协议/灯色/模式模拟 53 项
-python3 firmware/tests/emu_report_normal.py firmware/grok1.7.bin # Unicorn 跑真实 Report_Normal 25 项
-python3 firmware/tests/emu_keymap_e2e.py firmware/grok1.7.bin    # Unicorn 全链路：改键→存Flash→重启→按键 21 项
+python3 firmware/tests/emu_report_normal.py firmware/paduex3_1.7.bin # Unicorn 跑真实 Report_Normal 25 项
+python3 firmware/tests/emu_keymap_e2e.py firmware/paduex3_1.7.bin    # Unicorn 全链路：改键→存Flash→重启→按键 21 项
 ```
-`emu_*` 只给 Flash 外设和 printf 打桩，其余全是镜像里的原字节；在 grok1.6 上跑 e2e 应有 5 项失败（对照组）。
+`emu_*` 只给 Flash 外设和 printf 打桩，其余全是镜像里的原字节；在 paduex3_1.6 上跑 e2e 应有 5 项失败（对照组）。
 
 ## 上位机现状（1.0.0.60）
 
@@ -78,11 +78,11 @@ python3 firmware/tests/emu_keymap_e2e.py firmware/grok1.7.bin    # Unicorn 全�
 - 诊断日志：`DebugLog.cs`，`Config.ini` `DEBUGLOG=1`（默认开，0/NO/OFF 关）→ exe 同目录 `PADUEX5.log`（2 MB 轮转到 `.1`），记录 USB 连接、每笔 TX 字节、RX 64 字节原始 hex、判定结果（Match/NoData/Empty/RawStream/Other）和最终状态。真机排障先看这个文件。
 
 - 白天 Laverita 配色（`#F3F4F6/#FFFFFF/#2F6FED`，选中键琥珀 `#F59E0B`，默认按钮红 `#DC2626`）；黑夜自 1.0.0.59 起为霓虹紫（背景 `#0D0A1F`、卡片 `#171233/#241D4A`、主色 `#7C3AED`、标题 `#C084FC`、选中键 `#7C3AED→#EC4899` 渐变 + `#A855F7` 外发光、默认按钮粉 `#EC4899`）。`Palette` 类 + 递归 `ApplyTheme`，GroupBox/Tab/进度条自绘；`Palette.Glow/SelectedGradientEnd/AccentGradientEnd` 为 `Color.Empty` 时（白天）`PadKeyPainter` 不画渐变/发光，白天模式像素级不变。
-- 窗口标题显示上位机版本；左上角显示 `UID/HVer/FVer (grokX.Y)`。
+- 窗口标题显示上位机版本；左上角显示 `UID/HVer/FVer (paduex3_X.Y)`。
 - 无设备时在 Linux 下可用 mono + Xvfb 跑起来截图。mono 6 不读 `.config` 里的 dllmap，直接把桩 `.so` 复制成 `hid.dll`/`setupapi.dll`/`kernel32.dll`/`Kernel32.dll`/`user32.dll` 放到 exe 目录即可；桩的 `CreateFile` 必须返回 mono 自己打开过的 fd（先用托管 FileStream 打开 FIFO 再把 fd 交给桩），否则 `FileStream(SafeFileHandle)` 报 Invalid handle。
 
 ## 未完成 / 可继续的方向
 
 - 手柄(HID)模式改键（目前只做了键盘模式）。
-- grok1.7 还没有真机回报（截至 2026-11-04 用户刷的是旧 grok1.7，上报 2.12；新版应上报 2.17）。
-- 已变砖的两块板需 ISP/SWD 在 `0x08004000` 刷 grok1.7 或官方 V2.13。
+- paduex3_1.7 还没有真机回报（截至 2026-11-04 用户刷的是旧 paduex3_1.7，上报 2.12；新版应上报 2.17）。
+- 已变砖的两块板需 ISP/SWD 在 `0x08004000` 刷 paduex3_1.7 或官方 V2.13。

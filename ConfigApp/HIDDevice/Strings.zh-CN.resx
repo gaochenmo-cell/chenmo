@@ -190,7 +190,7 @@
     <value>键盘按键映射</value>
   </data>
   <data name="Map.Hint" xml:space="preserve">
-    <value>仅键盘模式，需固件 grok1.7 及以上。映射随灯色一起保存在板子里。1P/2P 由游戏按插入顺序自动分配，无需设置。</value>
+    <value>仅键盘模式，需固件 paduex3_1.7 及以上。映射随灯色一起保存在板子里。1P/2P 由游戏按插入顺序自动分配，无需设置。</value>
   </data>
   <data name="Map.KeyLabel" xml:space="preserve">
     <value>五个踏板对应 HID 键值（选好后点保存映射）：</value>
@@ -229,14 +229,14 @@
     <value>设备未设置自定义映射，显示的是固件默认键位。</value>
   </data>
   <data name="Map.FwNoSupport" xml:space="preserve">
-    <value>设备固件版本 {0} 不支持改键（需 grok1.7，显示为 2.17）。
-仍要保存吗？刷入 grok1.7 后会生效。</value>
+    <value>设备固件版本 {0} 不支持改键（需 paduex3_1.7，显示为 2.17）。
+仍要保存吗？刷入 paduex3_1.7 后会生效。</value>
   </data>
   <data name="Map.ResetOk" xml:space="preserve">
     <value>按键映射已恢复固件默认。</value>
   </data>
   <data name="Map.SaveOk" xml:space="preserve">
-    <value>按键映射已保存。键盘模式下立即生效（需固件 grok1.7 及以上）。</value>
+    <value>按键映射已保存。键盘模式下立即生效（需固件 paduex3_1.7 及以上）。</value>
   </data>
   <data name="Hid.Space" xml:space="preserve">
     <value>空格</value>
@@ -268,11 +268,11 @@
   <data name="Ver.NotRead" xml:space="preserve">
     <value>未读到设备版本——点击「读取模式」重试。</value>
   </data>
-  <data name="Ver.Tag.Grok17" xml:space="preserve">
-    <value> (grok1.7)</value>
+  <data name="Ver.Tag.Paduex3_17" xml:space="preserve">
+    <value> (paduex3_1.7)</value>
   </data>
   <data name="Ver.Tag.Stock212" xml:space="preserve">
-    <value> (原厂 V2.12/V2.13 或 grok1.6)</value>
+    <value> (原厂 V2.12/V2.13 或 paduex3_1.6)</value>
   </data>
   <data name="Cfg.ReadOk" xml:space="preserve">
     <value>读取完成。</value>
@@ -294,9 +294,9 @@
   </data>
   <data name="Ota.Tips" xml:space="preserve">
     <value>操作提示：
-1. 选择 firmware\grok1.7.bin（原厂 V2.13 + 防粘键 + 键盘改键；勿用 grok1.0～1.5）
+1. 选择 firmware\paduex3_1.7.bin（原厂 V2.13 + 防粘键 + 键盘改键；勿用 paduex3_1.0～1.5）
 2. 保持 USB 连接，升级中勿拔线、勿关机、勿关闭本窗口
-3. 失败留在 Bootloader 可重试；ISP 请用 grok1.7 或官方 V2.13（grok1.0～1.5 全部禁止）</value>
+3. 失败留在 Bootloader 可重试；ISP 请用 paduex3_1.7 或官方 V2.13（paduex3_1.0～1.5 全部禁止）</value>
   </data>
   <data name="Ota.Addr" xml:space="preserve">
     <value>APP 地址: 0x{0}</value>
@@ -338,7 +338,7 @@
     <value>此固件比原厂镜像长（{0} &gt; {1} 字节）。
 
 本窗口 OTA 会整包写入，一般可用。
-若改用厂家 ISP/IPS：请改刷 grok1.7.bin 或官方 V2.13（grok1.0～1.5 全部禁止），地址 0x08004000，否则可能截断末尾导致 USB 无法识别。</value>
+若改用厂家 ISP/IPS：请改刷 paduex3_1.7.bin 或官方 V2.13（paduex3_1.0～1.5 全部禁止），地址 0x08004000，否则可能截断末尾导致 USB 无法识别。</value>
   </data>
   <data name="Ota.SizeWarnTitle" xml:space="preserve">
     <value>PADUEX5 体积提示</value>
@@ -359,7 +359,7 @@
     <value>固件复位向量不在 APP 区 (0x08004000~0x0800F800)，已拒绝以防变砖。</value>
   </data>
   <data name="Ota.V.BadUsbVector" xml:space="preserve">
-    <value>固件 USB 中断向量(0x14C)已被覆盖（grok1.0～1.5 的已知致命问题），已拒绝。请改用 grok1.7 或官方 V2.13。</value>
+    <value>固件 USB 中断向量(0x14C)已被覆盖（paduex3_1.0～1.5 的已知致命问题），已拒绝。请改用 paduex3_1.7 或官方 V2.13。</value>
   </data>
   <data name="Ota.SelectFirst" xml:space="preserve">
     <value>请先选择固件文件。</value>
@@ -374,8 +374,8 @@
 请注意：
 · 升级中请勿拔 USB、勿关机、勿关闭本窗口
 · 写完并 CRC 通过后才会跳转；失败则留在 Bootloader，可重试
-· 推荐刷入 grok1.7.bin（原厂底 + 防粘键 + 键盘改键，向量表未动；grok1.0～1.5 全部禁止）
-· 勿再用 ISP 刷 grok1.1.bin（末尾加长，易截断变砖）
+· 推荐刷入 paduex3_1.7.bin（原厂底 + 防粘键 + 键盘改键，向量表未动；paduex3_1.0～1.5 全部禁止）
+· 勿再用 ISP 刷 paduex3_1.1.bin（末尾加长，易截断变砖）
 
 确认开始？</value>
   </data>

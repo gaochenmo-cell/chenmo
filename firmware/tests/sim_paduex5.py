@@ -3,7 +3,7 @@
 PADUEX5 offline self-test (no hardware).
 
 What this can prove:
-  - grok1.3.bin is ISP-safe (same size/vectors as stock) and only touches SendPacket
+  - paduex3_1.3.bin is ISP-safe (same size/vectors as stock) and only touches SendPacket
   - Host color/mode/keymap packet formats match FW source (App_User / App_RGB / Chip2813)
   - After SET color, simulated WS2812 wire bytes (GRB×25 LEDs/key) match the chosen palette
   - Mode bits encode KBS/HID × 1P/2P correctly; keymap GET/SET round-trips with CRC
@@ -110,7 +110,7 @@ class SimDevice:
         default_factory=lambda: [[(0, 0, 0)] * BTN_RGB_NUMBER for _ in range(5)]
     )
     reset_pending: bool = False
-    has_mapp: bool = True  # grok1.2+
+    has_mapp: bool = True  # paduex3_1.2+
 
     def press_keys(self, mask: int) -> None:
         """Simulate App_RGB_SetValue on KeyCode change."""
@@ -245,10 +245,10 @@ def check(name: str, cond: bool, detail: str = "") -> dict:
 def test_firmware_safety() -> list[dict]:
     results = []
     stock = Path("/tmp/uandancedance/V2.13/5KEY_2P_V2.13.bin").read_bytes()
-    g12 = (FW / "grok1.2.bin").read_bytes()
-    g13 = (FW / "grok1.3.bin").read_bytes()
-    results.append(check("grok1.3 size == stock", len(g13) == STOCK_SIZE == len(stock), f"{len(g13)}"))
-    results.append(check("grok1.3 size == grok1.2", len(g13) == len(g12)))
+    g12 = (FW / "paduex3_1.2.bin").read_bytes()
+    g13 = (FW / "paduex3_1.3.bin").read_bytes()
+    results.append(check("paduex3_1.3 size == stock", len(g13) == STOCK_SIZE == len(stock), f"{len(g13)}"))
+    results.append(check("paduex3_1.3 size == paduex3_1.2", len(g13) == len(g12)))
 
     sp, rst = struct.unpack_from("<II", g13, 0)
     results.append(check("vector SP in SRAM", (sp & 0xFFF00000) == 0x20000000, hex(sp)))
@@ -301,12 +301,12 @@ def test_firmware_safety() -> list[dict]:
     import subprocess
 
     rebuild = subprocess.run(
-        [sys.executable, str(FW / "patches" / "build_grok1.3.py")],
+        [sys.executable, str(FW / "patches" / "build_paduex3_1.3.py")],
         capture_output=True,
         text=True,
     )
-    g13b = (FW / "grok1.3.bin").read_bytes()
-    results.append(check("build_grok1.3.py reproducible", rebuild.returncode == 0 and g13b == g13))
+    g13b = (FW / "paduex3_1.3.bin").read_bytes()
+    results.append(check("build_paduex3_1.3.py reproducible", rebuild.returncode == 0 and g13b == g13))
     return results
 
 
@@ -421,7 +421,7 @@ def test_keymap() -> list[dict]:
 
     dev = SimDevice(has_mapp=True)
     gr = dev.handle(HostEncoder.get_mapp())
-    results.append(check("grok: GET_MAPP header", gr[0:4] == bytes([GET_MAPP, 0x52, 0x53, 0x50])))
+    results.append(check("paduex3: GET_MAPP header", gr[0:4] == bytes([GET_MAPP, 0x52, 0x53, 0x50])))
     got = list(gr[5:10])
     results.append(check("default map 5Key = W X A D S", got == [0x1A, 0x1B, 0x04, 0x07, 0x16], got))
 
@@ -439,8 +439,8 @@ def test_keymap() -> list[dict]:
     # Report_Normal would index Mapping[0..4] for 5 keys — verify table length 12
     results.append(check("Mapping table length 12", len(dev.mapping) == 12))
 
-    # MAPP constant present in grok1.3 image (handler wired)
-    g13 = (FW / "grok1.3.bin").read_bytes()
+    # MAPP constant present in paduex3_1.3 image (handler wired)
+    g13 = (FW / "paduex3_1.3.bin").read_bytes()
     results.append(check("binary contains MAPP flash addr", struct.pack("<I", MAPP_FLASH) in g13))
     # Default keymap stored as uint16 LE halfwords in Mapping defaults / 1P table
     default_u16 = b"".join(struct.pack("<H", u) for u in DEFAULT_MAP)
@@ -520,7 +520,7 @@ def main() -> int:
         "limits": [
             "No physical AT32 pad in this environment — OTA/ISP flash and USB enum not exercised.",
             "LED check is logic-level (App_RGB → GRB×25) using Chip2813 pin map from App_BSP.h / 灯板 PCB; not a scope capture.",
-            "Customer brick risk from truncated ISP of grok1.1 is mitigated by grok1.3 size==stock; still flash once on your own board before shipping.",
+            "Customer brick risk from truncated ISP of paduex3_1.1 is mitigated by paduex3_1.3 size==stock; still flash once on your own board before shipping.",
         ],
         "led_summary": led_summary,
         "results": all_r,
@@ -538,7 +538,7 @@ def main() -> int:
         "",
         "| 能证明 | 不能证明 |",
         "|--------|----------|",
-        "| grok1.3 与原厂同体积、向量合法、仅改 SendPacket | 客户板真实 OTA/ISP 刷写 |",
+        "| paduex3_1.3 与原厂同体积、向量合法、仅改 SendPacket | 客户板真实 OTA/ISP 刷写 |",
         "| 改色协议 CRC/ACK、灯板 GRB×25 逻辑输出与 UI 一致 | WS2812 真实电时序 |",
         "| 模式位 KBS/HID×1P/2P 编解码与复位写 Flash | USB 重新枚举 PID |",
         "| 改键 GET/SET_MAPP 往返与 0x08011800 持久化模型 | 真机 HID usage 注入游戏 |",
@@ -557,9 +557,9 @@ def main() -> int:
         "",
         "## 发给客户前建议",
         "",
-        "1. 用本仓库 **OTA** 在自有一块板上刷 `grok1.3.bin`，确认仍能被 PADUEX5 识别。",
+        "1. 用本仓库 **OTA** 在自有一块板上刷 `paduex3_1.3.bin`，确认仍能被 PADUEX5 识别。",
         "2. 再测：改色（红/白/蓝）、键盘↔手柄模式、改键保存后拔插。",
-        "3. 勿用 ISP 刷 grok1.1；ISP 请用 grok1.3（37072 字节 @ `0x08004000`）。",
+        "3. 勿用 ISP 刷 paduex3_1.1；ISP 请用 paduex3_1.3（37072 字节 @ `0x08004000`）。",
         "",
     ]
     md.write_text("\n".join(lines))

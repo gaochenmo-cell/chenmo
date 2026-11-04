@@ -64,14 +64,14 @@ namespace ConfigAppNS
         }
 
         // Only tag versions we actually know. Stock V2.12, stock V2.13 (its FW_VERSION_MINOR
-        // constant was never bumped) and grok1.6 all report 2.12; grok1.7 is the only image
+        // constant was never bumped) and paduex3_1.6 all report 2.12; paduex3_1.7 is the only image
         // that reports 2.17. Anything else is shown as-is without a guess.
         // UID / HVer that differ from the known board are annotated, never rejected.
         private string FwTag()
         {
             if (!mFwValid) return "";
             string tag = "";
-            if (mFwMajor == 2 && mFwMinor == 17) tag = L.Get("Ver.Tag.Grok17");
+            if (mFwMajor == 2 && mFwMinor == 17) tag = L.Get("Ver.Tag.Paduex3_17");
             else if (mFwMajor == 2 && mFwMinor == 12) tag = L.Get("Ver.Tag.Stock212");
             if (mDevUid != DeviceProtocol.ID_DDR) tag += L.Get("Ver.Tag.UidMismatch");
             if (mDevHVer != DeviceProtocol.HVER_KNOWN) tag += L.Get("Ver.Tag.HVerUnknown");
@@ -540,7 +540,7 @@ namespace ConfigAppNS
         // Stock Report_Normal tables. 1P: W X A D S   2P: H K J N M (firmware fixes 2P since V2.12)
         private readonly int[] DefaultKeyMapping1P = new int[] { 0x1A, 0x1B, 0x04, 0x07, 0x16 };
         private readonly int[] DefaultKeyMapping2P = new int[] { 0x0B, 0x0E, 0x0D, 0x11, 0x10 };
-        // grok1.7 keymap lives in the unused Color[key*4+1] slot, tagged 0x4B00 ("K") | usage.
+        // paduex3_1.7 keymap lives in the unused Color[key*4+1] slot, tagged 0x4B00 ("K") | usage.
         private const int MAP_TAG = 0x4B;
         private Button btn_MapDefault;
 
@@ -2144,7 +2144,7 @@ namespace ConfigAppNS
             if (ms < 0) ms = 0;
             if (ms > 1000) ms = 1000;
             int key = GetDebounceKeyIndex();
-            // grok1.0.bin + fixed source: DTick[(i/4)*4]; V2.12 quirk: DTick[key].
+            // paduex3_1.0.bin + fixed source: DTick[(i/4)*4]; V2.12 quirk: DTick[key].
             // Write both layouts so save works on either firmware.
             DTickBuffer[key] = ms;
             int packed = key * SENSORS_PER_KEY;
@@ -2191,7 +2191,7 @@ namespace ConfigAppNS
             for (int i = 0; i < CONFIG_VALUE_COUNT; i++)
             {
                 SensiBuffer[i] = DEFAULT_SENSI_TAB[i];
-                if (!IsMapSlot(i)) ColorBuffer[i] = DEFAULT_COLOR_TAB[i];   // slot +1 = keymap (grok1.7)
+                if (!IsMapSlot(i)) ColorBuffer[i] = DEFAULT_COLOR_TAB[i];   // slot +1 = keymap (paduex3_1.7)
                 DTickBuffer[i] = DEFAULT_DTICK_TAB[i];
             }
         }
