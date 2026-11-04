@@ -49,6 +49,9 @@ tab_2p: 0B 0E 0D 11 10 14 08 1D 06 55
 `firmware/tests/emu_report_normal.py` 用 Unicorn 执行真实的 `Report_Normal`：
 原厂 1P/2P 表、全部重映射、部分重映射、组合键、错误标签回退 —— 25/25 通过；对 grok1.6 跑同一测试，重映射用例按预期失败（证明测试有效）。
 
+`firmware/tests/emu_keymap_e2e.py` 跑完整链路（真实固件代码：USB 命令解析 → CRC8 → `App_Set_Flash_Cofnig` → Flash 页 → 重启 `App_Get_Flash_Cofnig` → `Report_Normal`），
+把五键改成 Q E S Z C：读取默认 → 保存 → 立即生效 → 掉电重启后仍为 Q E S Z C → 改灯色不影响键位 → 恢复默认回 H K J N M，21/21 通过；grok1.6 上同一脚本 5 项按预期失败。
+
 ## 上位机
 
 「按键映射」页：读取 = GET_SENS(1) 后解码；保存 = 先 GET_SENS(1) 刷新灯色，再写入 slot，再 SET_SENS(1)；

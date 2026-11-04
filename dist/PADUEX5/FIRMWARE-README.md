@@ -9,6 +9,7 @@
 python3 firmware/patches/build_grok1.6.py   # 原厂 + 防粘键
 python3 firmware/patches/build_grok1.7.py   # + 改键
 python3 firmware/tests/emu_report_normal.py firmware/grok1.7.bin   # Unicorn 验证 25/25
+python3 firmware/tests/emu_keymap_e2e.py firmware/grok1.7.bin      # 全链路：改 Q E S Z C → 存 Flash → 重启 → 按键 21/21
 ```
 
 改键原理见 [`patches/grok1.7-KeyMap.md`](./patches/grok1.7-KeyMap.md)。`grok1.6.bin` 保留作为无改键的保守版本。
