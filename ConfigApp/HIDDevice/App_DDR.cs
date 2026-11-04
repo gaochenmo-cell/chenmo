@@ -452,8 +452,34 @@ namespace ConfigAppNS
         private Button btn_MapRead;
         private Button btn_MapSave;
         private readonly int[] KeyMappingBuffer = new int[KEY_COUNT_5KEY];
-        // Default HID usages = stock Report_Normal 1P Index0..4: W X A D S
-        private readonly int[] DefaultKeyMapping = new int[] { 0x1A, 0x1B, 0x04, 0x07, 0x16 };
+        // Stock Report_Normal tables. 1P: W X A D S   2P: H K J N M (firmware fixes 2P since V2.12)
+        private readonly int[] DefaultKeyMapping1P = new int[] { 0x1A, 0x1B, 0x04, 0x07, 0x16 };
+        private readonly int[] DefaultKeyMapping2P = new int[] { 0x0B, 0x0E, 0x0D, 0x11, 0x10 };
+        // grok1.7 keymap lives in the unused Color[key*4+1] slot, tagged 0x4B00 ("K") | usage.
+        private const int MAP_TAG = 0x4B;
+        private Button btn_MapDefault;
+
+        private int[] DefaultKeyMapping
+        {
+            get { return mDevicePlayerBits == (byte)UserMode.DDR_1PS ? DefaultKeyMapping1P : DefaultKeyMapping2P; }
+        }
+
+        private static bool IsMapSlot(int i) { return (i % 4) == 1; }
+
+        private void DecodeKeyMapFromColor()
+        {
+            for (int k = 0; k < KEY_COUNT_5KEY; k++)
+            {
+                int v = ColorBuffer[k * 4 + 1];
+                KeyMappingBuffer[k] = ((v >> 8) & 0xFF) == MAP_TAG ? (v & 0x7F) : DefaultKeyMapping[k];
+            }
+        }
+
+        private void EncodeKeyMapIntoColor(bool clear)
+        {
+            for (int k = 0; k < KEY_COUNT_5KEY; k++)
+                ColorBuffer[k * 4 + 1] = clear ? 0 : ((MAP_TAG << 8) | (KeyMappingBuffer[k] & 0x7F));
+        }
 
         private int S(int px)
         {
@@ -501,10 +527,10 @@ namespace ConfigAppNS
             EnsureFirmwareUpgradeButton();
             EnsureLanguageToggleButton();
             EnsureThemeToggleButton();
-            EnsureKeyMappingUi();
-            EnsurePadKeyVectorPaint();
             for (int i = 0; i < KEY_COUNT_5KEY; i++)
                 KeyMappingBuffer[i] = DefaultKeyMapping[i];
+            EnsureKeyMappingUi();
+            EnsurePadKeyVectorPaint();
             if (btnFirmwareUpgrade.Parent != groupBox_Mode)
             {
                 this.Controls.Remove(btnFirmwareUpgrade);
@@ -823,6 +849,13 @@ namespace ConfigAppNS
             btn_MapSave.Click += (s, e) => Save_KeyMapping_Config();
             groupBox_Map.Controls.Add(btn_MapSave);
 
+            btn_MapDefault = new Button();
+            btn_MapDefault.Name = "btn_MapDefault";
+            btn_MapDefault.Location = new Point(S(324), S(350));
+            btn_MapDefault.Size = new Size(S(140), S(36));
+            btn_MapDefault.Click += (s, e) => Reset_KeyMapping_Config();
+            groupBox_Map.Controls.Add(btn_MapDefault);
+
             SyncMapCombosFromBuffer();
             radioButton_KBS.CheckedChanged += (s, e) => UpdatePlayerVisibilityForMode();
             radioButton_HID.CheckedChanged += (s, e) => UpdatePlayerVisibilityForMode();
@@ -897,79 +930,63 @@ namespace ConfigAppNS
 
         private void Read_KeyMapping_Config()
         {
-            byte ReportSize = 64;
-            byte ReportID = 0;
-            byte ReportIndex = 0x00;
-            byte[] SendByteBuf = new byte[64];
-            byte[] InputReportBuf = new byte[64];
-            int index = 0;
-            SendByteBuf[index++] = (byte)UserCommand.GET_MAPP;
-            SendByteBuf[index++] = 0x45; // E
-            SendByteBuf[index++] = 0x41; // A
-            SendByteBuf[index++] = 0x44; // D
-            SendByteBuf[index++] = 0x00;
-            USBCtrl.USBLib_DeviceCtrlOutput(mDeviceIndex, ReportID, ReportSize, SendByteBuf);
-            Thread.Sleep(100);
-            USBCtrl.USBLib_DeviceCtrlInput(mDeviceIndex, DefaultOffset, ReportID, ReportSize, InputReportBuf);
-            if (InputReportBuf[ReportIndex] == (byte)UserCommand.GET_MAPP &&
-                InputReportBuf[ReportIndex + 1] == 0x52 &&
-                InputReportBuf[ReportIndex + 2] == 0x53 &&
-                InputReportBuf[ReportIndex + 3] == 0x50)
+            if (!bDeviceStatusFG)
             {
-                for (int i = 0; i < KEY_COUNT_5KEY; i++)
-                    KeyMappingBuffer[i] = InputReportBuf[ReportIndex + 5 + i];
-                SyncMapCombosFromBuffer();
-                MessageBox.Show(bLanguageEN ? "Key map read OK" : "按键映射读取成功", "PADUEX5",
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(bLanguageEN ? "No device connected." : "未连接设备。", "PADUEX5",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
             }
-            else
-            {
-                MessageBox.Show(
-                    bLanguageEN
-                        ? "Device has no keymap protocol. Flash firmware/grok1.6.bin (OTA or ISP @ 0x08004000), then retry."
-                        : "设备暂无按键映射协议。请刷入 firmware/grok1.6.bin（OTA 或 ISP 地址 0x08004000）后重试。",
-                    "PADUEX5", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            }
+            // Colour table (type 1) carries the keymap in slot key*4+1 — no new USB command needed.
+            if (Read_Config_PausingDebug(0x01, ColorBuffer, CONFIG_VALUE_COUNT) == 0)
+                return;
+            DecodeKeyMapFromColor();
+            SyncMapCombosFromBuffer();
+            Sensor_Panel_Display_ReFlash();
+            bool tagged = false;
+            for (int k = 0; k < KEY_COUNT_5KEY; k++)
+                tagged |= ((ColorBuffer[k * 4 + 1] >> 8) & 0xFF) == MAP_TAG;
+            MessageBox.Show(
+                tagged
+                    ? (bLanguageEN ? "Key map read OK." : "按键映射读取成功。")
+                    : (bLanguageEN ? "No custom key map on device — showing firmware defaults." : "设备未设置自定义映射，显示的是固件默认键位。"),
+                "PADUEX5", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void Save_KeyMapping_Config()
         {
-            byte ReportSize = 64;
-            byte ReportID = 0;
-            byte ReportIndex = 0x00;
-            byte[] SendByteBuf = new byte[64];
-            byte[] InputReportBuf = new byte[64];
-            int index = 0;
-            SendByteBuf[index++] = (byte)UserCommand.SET_MAPP;
-            SendByteBuf[index++] = 0x52; // R
-            SendByteBuf[index++] = 0x49; // I
-            SendByteBuf[index++] = 0x54; // T
-            SendByteBuf[index++] = 0x00;
-            for (int i = 0; i < KEY_COUNT_5KEY; i++)
-                SendByteBuf[index++] = (byte)KeyMappingBuffer[i];
-            // pad to 12 usages like stock keymap length
-            for (int i = KEY_COUNT_5KEY; i < 12; i++)
-                SendByteBuf[index++] = 0x00;
-            byte cs = USBCtrl.UPDATE_CRC(0, SendByteBuf, (byte)index);
-            SendByteBuf[index++] = cs;
-            USBCtrl.USBLib_DeviceCtrlOutput(mDeviceIndex, ReportID, ReportSize, SendByteBuf);
-            Thread.Sleep(100);
-            USBCtrl.USBLib_DeviceCtrlInput(mDeviceIndex, DefaultOffset, ReportID, ReportSize, InputReportBuf);
-            if (InputReportBuf[ReportIndex] == (byte)UserCommand.SET_MAPP &&
-                InputReportBuf[ReportIndex + 1] == 0x4F &&
-                InputReportBuf[ReportIndex + 2] == 0x4B)
+            WriteKeyMap(false);
+        }
+
+        private void Reset_KeyMapping_Config()
+        {
+            for (int k = 0; k < KEY_COUNT_5KEY; k++)
+                KeyMappingBuffer[k] = DefaultKeyMapping[k];
+            SyncMapCombosFromBuffer();
+            if (bDeviceStatusFG)
+                WriteKeyMap(true);
+        }
+
+        private void WriteKeyMap(bool clear)
+        {
+            if (!bDeviceStatusFG)
             {
-                MessageBox.Show(bLanguageEN ? "Key map saved" : "按键映射已保存", "PADUEX5",
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(bLanguageEN ? "No device connected." : "未连接设备。", "PADUEX5",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
             }
-            else
-            {
-                MessageBox.Show(
-                    bLanguageEN
-                        ? "Save failed — flash firmware/grok1.6.bin (see firmware/README.md)."
-                        : "保存失败：请刷入 firmware/grok1.6.bin（见 firmware/README.md）。",
-                    "PADUEX5", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            }
+            // Refresh LED colours first so we never clobber them with stale data
+            if (Read_Config_PausingDebug(0x01, ColorBuffer, CONFIG_VALUE_COUNT) == 0)
+                return;
+            EncodeKeyMapIntoColor(clear);
+            if (Write_Config_PausingDebug(0x01, ColorBuffer, CONFIG_VALUE_COUNT) == 0)
+                return;
+            MessageBox.Show(
+                clear
+                    ? (bLanguageEN ? "Key map reset to firmware default." : "按键映射已恢复固件默认。")
+                    : (bLanguageEN
+                        ? "Key map saved. Takes effect immediately in keyboard mode (needs firmware grok1.7+)."
+                        : "按键映射已保存。键盘模式下立即生效（需固件 grok1.7 及以上）。"),
+                "PADUEX5", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void Btn_ThemeToggle_Click(object sender, EventArgs e)
@@ -1525,10 +1542,11 @@ namespace ConfigAppNS
                 radioButton_HID.Text = "HID Mode";
                 if (tabPage_Map != null) tabPage_Map.Text = "Key Map";
                 if (groupBox_Map != null) groupBox_Map.Text = "Keyboard mapping";
-                if (label_MapHint != null) label_MapHint.Text = "Keyboard mode only. Requires firmware grok1.6 has no remap (grok1.0-1.5 are unsafe). Player (1P/2P) is assigned by the game by plug-in order.";
+                if (label_MapHint != null) label_MapHint.Text = "Keyboard mode only. Requires firmware grok1.7+. Stored in the colour table, so Save Colour keeps it. Player (1P/2P) is assigned by the game by plug-in order.";
                 if (label_MapKey != null) label_MapKey.Text = "Per-pad HID usage (select then Save Map):";
                 if (btn_MapRead != null) btn_MapRead.Text = "Read Map";
                 if (btn_MapSave != null) btn_MapSave.Text = "Save Map";
+                if (btn_MapDefault != null) btn_MapDefault.Text = "Default";
             }
             else
             {
@@ -1553,10 +1571,11 @@ namespace ConfigAppNS
                 radioButton_HID.Text = "手柄";
                 if (tabPage_Map != null) tabPage_Map.Text = "按键映射";
                 if (groupBox_Map != null) groupBox_Map.Text = "键盘按键映射";
-                if (label_MapHint != null) label_MapHint.Text = "仅键盘模式，需固件 grok1.6 暂无改键（grok1.0～1.5 禁止）。1P/2P 由游戏按插入顺序自动分配，无需设置。";
+                if (label_MapHint != null) label_MapHint.Text = "仅键盘模式，需固件 grok1.7 及以上。映射随灯色一起保存在板子里。1P/2P 由游戏按插入顺序自动分配，无需设置。";
                 if (label_MapKey != null) label_MapKey.Text = "五个踏板对应 HID 键值（选好后点保存映射）：";
                 if (btn_MapRead != null) btn_MapRead.Text = "读取映射";
                 if (btn_MapSave != null) btn_MapSave.Text = "保存映射";
+                if (btn_MapDefault != null) btn_MapDefault.Text = "默认设置";
             }
             UpdateDebugButtonText();
             UpdateThemeToggleText();
@@ -1976,7 +1995,7 @@ namespace ConfigAppNS
             for (int i = 0; i < CONFIG_VALUE_COUNT; i++)
             {
                 SensiBuffer[i] = DEFAULT_SENSI_TAB[i];
-                ColorBuffer[i] = DEFAULT_COLOR_TAB[i];
+                if (!IsMapSlot(i)) ColorBuffer[i] = DEFAULT_COLOR_TAB[i];   // slot +1 = keymap (grok1.7)
                 DTickBuffer[i] = DEFAULT_DTICK_TAB[i];
             }
         }
@@ -2254,13 +2273,13 @@ namespace ConfigAppNS
             else if (tabControl1.SelectedIndex == 1)
             {
                 //---------------------------------------------------------------------------------------
-                if (ColorBuffer[SensorIndex] == (byte)LED_COLOR_R) { Btn_LED.BackColor = System.Drawing.Color.Red; }
-                else if (ColorBuffer[SensorIndex] == (byte)LED_COLOR_G) { Btn_LED.BackColor = System.Drawing.Color.Green; }
-                else if (ColorBuffer[SensorIndex] == (byte)LED_COLOR_B) { Btn_LED.BackColor = System.Drawing.Color.Blue; }
-                else if (ColorBuffer[SensorIndex] == (byte)LED_COLOR_Y) { Btn_LED.BackColor = System.Drawing.Color.Yellow; }
-                else if (ColorBuffer[SensorIndex] == (byte)LED_COLOR_P) { Btn_LED.BackColor = System.Drawing.Color.Fuchsia; }
-                else if (ColorBuffer[SensorIndex] == (byte)LED_COLOR_C) { Btn_LED.BackColor = System.Drawing.Color.Cyan; }
-                else if (ColorBuffer[SensorIndex] == (byte)LED_COLOR_W) { Btn_LED.BackColor = System.Drawing.Color.White; }
+                if (ColorBuffer[(SensorIndex / 4) * 4] == (byte)LED_COLOR_R) { Btn_LED.BackColor = System.Drawing.Color.Red; }
+                else if (ColorBuffer[(SensorIndex / 4) * 4] == (byte)LED_COLOR_G) { Btn_LED.BackColor = System.Drawing.Color.Green; }
+                else if (ColorBuffer[(SensorIndex / 4) * 4] == (byte)LED_COLOR_B) { Btn_LED.BackColor = System.Drawing.Color.Blue; }
+                else if (ColorBuffer[(SensorIndex / 4) * 4] == (byte)LED_COLOR_Y) { Btn_LED.BackColor = System.Drawing.Color.Yellow; }
+                else if (ColorBuffer[(SensorIndex / 4) * 4] == (byte)LED_COLOR_P) { Btn_LED.BackColor = System.Drawing.Color.Fuchsia; }
+                else if (ColorBuffer[(SensorIndex / 4) * 4] == (byte)LED_COLOR_C) { Btn_LED.BackColor = System.Drawing.Color.Cyan; }
+                else if (ColorBuffer[(SensorIndex / 4) * 4] == (byte)LED_COLOR_W) { Btn_LED.BackColor = System.Drawing.Color.White; }
                 //---------------------------------------------------------------------------------------
             }
             else if (tabControl1.SelectedIndex == 2)
@@ -2484,7 +2503,6 @@ namespace ConfigAppNS
         private void Btn_Col_R_Click(object sender, EventArgs e)
         {
             ColorBuffer[(SensorIndex / 4) * 4 + 0] = LED_COLOR_R;
-            ColorBuffer[(SensorIndex / 4) * 4 + 1] = LED_COLOR_R;
             ColorBuffer[(SensorIndex / 4) * 4 + 2] = LED_COLOR_R;
             ColorBuffer[(SensorIndex / 4) * 4 + 3] = LED_COLOR_R;
             Sensor_Panel_Display_ReFlash(); 
@@ -2493,7 +2511,6 @@ namespace ConfigAppNS
         private void Btn_Col_G_Click(object sender, EventArgs e)
         {
             ColorBuffer[(SensorIndex / 4) * 4 + 0] = LED_COLOR_G;
-            ColorBuffer[(SensorIndex / 4) * 4 + 1] = LED_COLOR_G;
             ColorBuffer[(SensorIndex / 4) * 4 + 2] = LED_COLOR_G;
             ColorBuffer[(SensorIndex / 4) * 4 + 3] = LED_COLOR_G;
             Sensor_Panel_Display_ReFlash(); 
@@ -2502,7 +2519,6 @@ namespace ConfigAppNS
         private void Btn_Col_B_Click(object sender, EventArgs e)
         {
             ColorBuffer[(SensorIndex / 4) * 4 + 0] = LED_COLOR_B;
-            ColorBuffer[(SensorIndex / 4) * 4 + 1] = LED_COLOR_B;
             ColorBuffer[(SensorIndex / 4) * 4 + 2] = LED_COLOR_B;
             ColorBuffer[(SensorIndex / 4) * 4 + 3] = LED_COLOR_B;
             Sensor_Panel_Display_ReFlash(); 
@@ -2511,7 +2527,6 @@ namespace ConfigAppNS
         private void Btn_Col_Y_Click(object sender, EventArgs e)
         {
             ColorBuffer[(SensorIndex / 4) * 4 + 0] = LED_COLOR_Y;
-            ColorBuffer[(SensorIndex / 4) * 4 + 1] = LED_COLOR_Y;
             ColorBuffer[(SensorIndex / 4) * 4 + 2] = LED_COLOR_Y;
             ColorBuffer[(SensorIndex / 4) * 4 + 3] = LED_COLOR_Y;
             Sensor_Panel_Display_ReFlash(); 
@@ -2520,7 +2535,6 @@ namespace ConfigAppNS
         private void Btn_Col_P_Click(object sender, EventArgs e)
         {
             ColorBuffer[(SensorIndex / 4) * 4 + 0] = LED_COLOR_P;
-            ColorBuffer[(SensorIndex / 4) * 4 + 1] = LED_COLOR_P;
             ColorBuffer[(SensorIndex / 4) * 4 + 2] = LED_COLOR_P;
             ColorBuffer[(SensorIndex / 4) * 4 + 3] = LED_COLOR_P;
             Sensor_Panel_Display_ReFlash(); 
@@ -2529,7 +2543,6 @@ namespace ConfigAppNS
         private void Btn_Col_C_Click(object sender, EventArgs e)
         {
             ColorBuffer[(SensorIndex / 4) * 4 + 0] = LED_COLOR_C;
-            ColorBuffer[(SensorIndex / 4) * 4 + 1] = LED_COLOR_C;
             ColorBuffer[(SensorIndex / 4) * 4 + 2] = LED_COLOR_C;
             ColorBuffer[(SensorIndex / 4) * 4 + 3] = LED_COLOR_C;
             Sensor_Panel_Display_ReFlash(); 
@@ -2538,7 +2551,6 @@ namespace ConfigAppNS
         private void Btn_Col_W_Click(object sender, EventArgs e)
         {
             ColorBuffer[(SensorIndex / 4) * 4 + 0] = LED_COLOR_W;
-            ColorBuffer[(SensorIndex / 4) * 4 + 1] = LED_COLOR_W;
             ColorBuffer[(SensorIndex / 4) * 4 + 2] = LED_COLOR_W;
             ColorBuffer[(SensorIndex / 4) * 4 + 3] = LED_COLOR_W;
             Sensor_Panel_Display_ReFlash(); 
