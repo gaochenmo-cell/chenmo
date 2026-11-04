@@ -2,8 +2,12 @@
 
 ## 下载
 
-- [`dist/PADUEX5/`](./dist/PADUEX5/) → `PADUEX5.exe`（1.0.0.56）
+- [`dist/PADUEX5/`](./dist/PADUEX5/) → `PADUEX5.exe`（1.0.0.57）
 - [`dist/PADUEX5-win-release.zip`](./dist/PADUEX5-win-release.zip)
+
+## 上位机 1.0.0.57
+
+- grok1.7 固件上报 `FVer=2.17`，上位机标注 `(grok1.7)`；固件不支持改键时保存映射前会提醒。
 
 ## 上位机 1.0.0.56
 

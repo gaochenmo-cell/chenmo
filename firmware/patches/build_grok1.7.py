@@ -39,6 +39,11 @@ TAB_1P = [0x1A, 0x1B, 0x04, 0x07, 0x16, 0x14, 0x08, 0x1D, 0x06, 0x55]  # w x a d
 TAB_2P = [0x0B, 0x0E, 0x0D, 0x11, 0x10, 0x14, 0x08, 0x1D, 0x06, 0x55]  # h k j n m q e z c *
 MAP_TAG = 0x4B
 
+# GET_MODE reply: stock "V2.13" still hard-codes FW_VERSION_MINOR = 12 (movs r1,#0xc @ 0x0800616A),
+# so the host cannot tell stock / grok apart. grok1.7 reports 2.17.
+FW_MINOR_SITE = 0x0800616A
+FW_MINOR_NEW = 17
+
 
 def off(va: int) -> int:
     return va - BASE
@@ -130,14 +135,17 @@ def main() -> int:
 
     buf[off(LOOKUP):off(CHAIN1P_END)] = code
 
+    assert buf[off(FW_MINOR_SITE):off(FW_MINOR_SITE) + 2] == bytes([0x0C, 0x21])   # movs r1, #12
+    buf[off(FW_MINOR_SITE):off(FW_MINOR_SITE) + 2] = bytes([FW_MINOR_NEW, 0x21])     # movs r1, #17
+
     # Post-checks
     assert len(buf) == 37072
     assert buf[:0x200] == src.read_bytes()[:0x200]
     base = src.read_bytes()
     diffs = [BASE + i for i, (a, b) in enumerate(zip(base, buf)) if a != b]
     for va in diffs:
-        assert LOOKUP <= va < CHAIN1P_END, hex(va)
-    print(f"diff vs grok1.6: {len(diffs)} bytes, all inside {LOOKUP:#x}..{CHAIN1P_END:#x}")
+        assert LOOKUP <= va < CHAIN1P_END or va == FW_MINOR_SITE, hex(va)
+    print(f"diff vs grok1.6: {len(diffs)} bytes, all inside {LOOKUP:#x}..{CHAIN1P_END:#x} + FW minor byte")
 
     dst = root / "grok1.7.bin"
     dst.write_bytes(buf)

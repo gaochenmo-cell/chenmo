@@ -40,6 +40,15 @@ namespace ConfigAppNS
         // 1P/2P is fixed by firmware since V2.12 (DEFAULT_1P2P); games assign players by
         // plug-in order, so the host no longer exposes it. Echo back whatever the device reports.
         private byte mDevicePlayerBits = (byte)UserMode.DDR_2PS;
+        private int mFwMajor = 0, mFwMinor = 0;
+
+        // Stock V2.12/V2.13 and grok1.6 all report 2.12; grok1.7 reports 2.17.
+        private string FwTag()
+        {
+            if (mFwMajor == 2 && mFwMinor >= 16) return " (grok1." + (mFwMinor - 10) + ")";
+            return "";
+        }
+        private bool FwHasKeyMap() { return mFwMajor == 2 && mFwMinor >= 17; }
         private byte DefaultOffset = 0x01;			//V1.0.0.18:20241012(1)Change ADX Save Issue
         ///-------------------------------------------------------------------------------------------
         private string AppName = "DDR Config";
@@ -976,6 +985,16 @@ namespace ConfigAppNS
                 MessageBox.Show(bLanguageEN ? "No device connected." : "未连接设备。", "PADUEX5",
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
+            }
+            if (!clear && !FwHasKeyMap())
+            {
+                DialogResult r = MessageBox.Show(
+                    bLanguageEN
+                        ? "Device firmware is " + mFwMajor + "." + mFwMinor.ToString("D02") + " which does not read the key map (needs grok1.7 = 2.17).\nSave anyway? It will take effect after flashing grok1.7."
+                        : "设备固件版本 " + mFwMajor + "." + mFwMinor.ToString("D02") + " 不支持改键（需 grok1.7，显示为 2.17）。\n仍要保存吗？刷入 grok1.7 后会生效。",
+                    "PADUEX5", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                if (r != DialogResult.Yes)
+                    return;
             }
             // Refresh LED colours first so we never clobber them with stale data
             if (Read_Config_PausingDebug(0x01, ColorBuffer, CONFIG_VALUE_COUNT) == 0)
@@ -2779,9 +2798,11 @@ namespace ConfigAppNS
                 //V1.0.0.15:20240920(1)Change ADX TP Delay Config
                 if (InputReportBuf[ReportIndex + 2] == (byte)UserProID.ID_DDR)
                 {
+                    mFwMajor = InputReportBuf[ReportIndex + 4];
+                    mFwMinor = InputReportBuf[ReportIndex + 5];
                     label_Ver.Text = "UID=" + InputReportBuf[ReportIndex + 2].ToString("X02") + ", " +
                                      "HVer=" + InputReportBuf[ReportIndex + 3].ToString("X02") + ", " +
-                                     "FVer=" + InputReportBuf[ReportIndex + 4].ToString() + "." + InputReportBuf[ReportIndex + 5].ToString("D02");
+                                     "FVer=" + mFwMajor.ToString() + "." + mFwMinor.ToString("D02") + FwTag();
                 }
                 else
                 {

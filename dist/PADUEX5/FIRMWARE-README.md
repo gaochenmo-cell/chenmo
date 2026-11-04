@@ -12,7 +12,7 @@ python3 firmware/tests/emu_report_normal.py firmware/grok1.7.bin   # Unicorn 验
 python3 firmware/tests/emu_keymap_e2e.py firmware/grok1.7.bin      # 全链路：改 Q E S Z C → 存 Flash → 重启 → 按键 21/21
 ```
 
-改键原理见 [`patches/grok1.7-KeyMap.md`](./patches/grok1.7-KeyMap.md)。`grok1.6.bin` 保留作为无改键的保守版本。
+改键原理见 [`patches/grok1.7-KeyMap.md`](./patches/grok1.7-KeyMap.md)。刷入后上位机左上角应显示 **`FVer=2.17 (grok1.7)`**；显示 2.12 = 原厂或 grok1.6。`grok1.6.bin` 保留作为无改键的保守版本。
 
 ## 禁止：grok1.0 / 1.1 / 1.2 / 1.3 / 1.4 / 1.5
 
