@@ -46,8 +46,16 @@ namespace ConfigAppNS
         private bool mFwValid = false;
         private int mDevUid = 0, mDevHVer = 0;
         private int mFwMajor = 0, mFwMinor = 0;
-        private const int GET_MODE_RETRIES = 5;
-        private const int GET_MODE_RETRY_MS = 60;
+        // Why the last GET_MODE failed (resource key, "" = unknown). Shown in the label so the
+        // user sees "no reply" / "board in RAW debug mode" / "HID read failed" instead of one
+        // generic "not read".
+        private string mFwFailReasonKey = "";
+        // GET_MODE: first read 100 ms after the request (same as 1.0.0.57), then re-send and
+        // re-read a few times. A board left in RAW debug mode by a previous session overwrites
+        // every reply with "AMRAW" frames; when we see one we send NOLMD and try again.
+        private const int GET_MODE_RETRIES = 6;
+        private const int GET_MODE_WAIT_MS = 100;
+        private const int GET_SENS_RETRIES = 3;
 
         /// <summary>Firmware bytes are plain integers: major=2, minor=12 → "2.12".</summary>
         private string FwVersionText()
@@ -58,12 +66,16 @@ namespace ConfigAppNS
         // Only tag versions we actually know. Stock V2.12, stock V2.13 (its FW_VERSION_MINOR
         // constant was never bumped) and grok1.6 all report 2.12; grok1.7 is the only image
         // that reports 2.17. Anything else is shown as-is without a guess.
+        // UID / HVer that differ from the known board are annotated, never rejected.
         private string FwTag()
         {
             if (!mFwValid) return "";
-            if (mFwMajor == 2 && mFwMinor == 17) return L.Get("Ver.Tag.Grok17");
-            if (mFwMajor == 2 && mFwMinor == 12) return L.Get("Ver.Tag.Stock212");
-            return "";
+            string tag = "";
+            if (mFwMajor == 2 && mFwMinor == 17) tag = L.Get("Ver.Tag.Grok17");
+            else if (mFwMajor == 2 && mFwMinor == 12) tag = L.Get("Ver.Tag.Stock212");
+            if (mDevUid != DeviceProtocol.ID_DDR) tag += L.Get("Ver.Tag.UidMismatch");
+            if (mDevHVer != DeviceProtocol.HVER_KNOWN) tag += L.Get("Ver.Tag.HVerUnknown");
+            return tag;
         }
         private bool FwHasKeyMap() { return mFwValid && mFwMajor == 2 && mFwMinor >= 17; }
 
@@ -72,6 +84,7 @@ namespace ConfigAppNS
             mFwValid = false;
             mDevUid = mDevHVer = 0;
             mFwMajor = mFwMinor = 0;
+            mFwFailReasonKey = "";
         }
 
         private void UpdateVersionLabel()
@@ -84,7 +97,9 @@ namespace ConfigAppNS
             }
             if (!mFwValid)
             {
-                label_Ver.Text = L.Get("Ver.NotRead");
+                label_Ver.Text = mFwFailReasonKey.Length > 0
+                    ? L.F("Ver.NotReadReason", L.Get(mFwFailReasonKey))
+                    : L.Get("Ver.NotRead");
                 return;
             }
             label_Ver.Text = L.F("Ver.Label",
@@ -445,6 +460,8 @@ namespace ConfigAppNS
             ///------------------------------------------------------------------------------------------
             ReadAppConfig();
             L.LanguageChanged += (s, e) => { if (!IsDisposed) OnLanguageChanged(); };
+            DebugLog.Log("==== PADUEX5 {0} start, config={1}, lang={2}, log={3} ====",
+                HostVer, AppConfig.Path, L.Setting, DebugLog.Enabled ? "on" : "off");
             ///------------------------------------------------------------------------------------------
             USBCtrl.HIDLibraryLibChanged += HID_Event_Changed_Delegate;
             Find_USB_Deivce();
@@ -1770,7 +1787,14 @@ namespace ConfigAppNS
             SendByteBuf[index++] = b2;
             SendByteBuf[index++] = b3;
             SendByteBuf[index++] = b4;
+            DebugLog.Log("TX slot{0} SET_MRAW: {1}", mDeviceIndex, DebugLog.Hex(SendByteBuf, 0, index));
             USBCtrl.USBLib_DeviceCtrlOutput(mDeviceIndex, ReportID, ReportSize, SendByteBuf);
+        }
+
+        /// <summary>NOLMD — stop the RAW stream on the board without touching the host-side flag/button.</summary>
+        private void SendRawStreamOff()
+        {
+            SendRawModeCommand(0x4E, 0x4F, 0x4C, 0x4D, 0x44); // NOLMD
         }
 
         private void SetDeviceRawDebugMode(bool enable)
@@ -1778,9 +1802,35 @@ namespace ConfigAppNS
             if (enable)
                 SendRawModeCommand(0x52, 0x41, 0x57, 0x4D, 0x44); // RAWMD
             else
-                SendRawModeCommand(0x4E, 0x4F, 0x4C, 0x4D, 0x44); // NOLMD
+                SendRawStreamOff();
             bDebugModesFG = enable;
             UpdateDebugButtonText();
+        }
+
+        /// <summary>
+        /// Send a command, wait, read the 64-byte input report back. The buffer is pre-filled with
+        /// 0xFF so a failed HidD_GetInputReport (HIDLibrary leaves the buffer untouched) can be told
+        /// apart from a genuine all-zero reply. Everything is logged.
+        /// </summary>
+        private ReplyKind Transact(string what, byte[] txBuf, int txLen, byte expectedCmd, int waitMs, byte[] rxBuf)
+        {
+            byte ReportSize = 64;
+            byte ReportID = 0;
+            DebugLog.Log("TX slot{0} {1}: {2}", mDeviceIndex, what, DebugLog.Hex(txBuf, 0, txLen));
+            USBCtrl.USBLib_DeviceCtrlOutput(mDeviceIndex, ReportID, ReportSize, txBuf);
+            Thread.Sleep(waitMs);
+            return ReadReply(what, expectedCmd, rxBuf);
+        }
+
+        private ReplyKind ReadReply(string what, byte expectedCmd, byte[] rxBuf)
+        {
+            byte ReportSize = 64;
+            byte ReportID = 0;
+            DeviceProtocol.FillSentinel(rxBuf);
+            USBCtrl.USBLib_DeviceCtrlInput(mDeviceIndex, DefaultOffset, ReportID, ReportSize, rxBuf);
+            ReplyKind kind = DeviceProtocol.Classify(rxBuf, 0, expectedCmd);
+            DebugLog.Log("RX slot{0} {1} -> {2}: {3}", mDeviceIndex, what, kind, DebugLog.Hex(rxBuf, 0, ReportSize));
+            return kind;
         }
 
         /// <summary>FW rejects config R/W while RAW debug is active — pause and restore.</summary>
@@ -1867,6 +1917,14 @@ namespace ConfigAppNS
         ///
         private void DDR_Form_FormClosing(object sender, FormClosingEventArgs e)
         {
+            // Leaving the board in RAW mode makes every GET reply of the *next* session get
+            // overwritten by "AMRAW" frames (version / sensitivity unreadable until re-plug).
+            if (bDeviceStatusFG && bDebugModesFG)
+            {
+                try { SendRawStreamOff(); } catch { }
+                bDebugModesFG = false;
+            }
+            DebugLog.Log("==== exit ====");
             USBCtrl.USBLib_Disconnect();
             //this.Close();
             //App_Main main = new App_Main();
@@ -1914,24 +1972,26 @@ namespace ConfigAppNS
             UpdateVersionLabel();
             SetModeGroupEnabled(false);
             bool slot0 = false, slot1 = false;
+            int pid0 = 0, pid1 = 0;
             //-------------------------------------------------------------------------------------------//V1.0.0.20:20241231(1)Display OTA Device infor on App Title
             if (USBCtrl.USBLib_Connect((int)DeviceType.HID_OTA_VID, (int)DeviceType.HID_OTA_PID, (int)DeviceType.None) != (int)DeviceType.None)
             {
                 mConnState = ConnState.Ota;
                 UpdateWindowTitle();
+                DebugLog.Log("USB: OTA bootloader 0E8F:8901 connected");
                 return;
             }
             //-------------------------------------------------------------------------------------------
-            if ((USBCtrl.USBLib_Connect((int)DeviceType.DDR_KBS_VID, (int)DeviceType.DDR_KBS_PID1, (int)DeviceType.None) != (int)DeviceType.None) ||
-                (USBCtrl.USBLib_Connect((int)DeviceType.DDR_HID_VID, (int)DeviceType.DDR_HID_PID1, (int)DeviceType.None) != (int)DeviceType.None))      //V1.0.0.32:20250529(1)DDR HID Mode PID compatibility Issue
+            if (((pid0 = USBCtrl.USBLib_Connect((int)DeviceType.DDR_KBS_VID, (int)DeviceType.DDR_KBS_PID1, (int)DeviceType.None)) != (int)DeviceType.None) ||
+                ((pid0 = USBCtrl.USBLib_Connect((int)DeviceType.DDR_HID_VID, (int)DeviceType.DDR_HID_PID1, (int)DeviceType.None)) != (int)DeviceType.None))      //V1.0.0.32:20250529(1)DDR HID Mode PID compatibility Issue
             {
                 bDeviceStatusFG = true;
                 slot0 = true;
             }
             //-------------------------------------------------------------------------------------------
-            if ((USBCtrl.USBLib_Connect((int)DeviceType.DDR_KBS_VID, (int)DeviceType.None, (int)DeviceType.DDR_KBS_PID2) != (int)DeviceType.None) ||
-                (USBCtrl.USBLib_Connect((int)DeviceType.DDR_HID_VID, (int)DeviceType.None, (int)DeviceType.DDR_HID_PID2) != (int)DeviceType.None) ||    //V1.0.0.32:20250529(1)DDR HID Mode PID compatibility Issue
-                (USBCtrl.USBLib_Connect((int)DeviceType.DDR_HID_VID, (int)DeviceType.None, (int)DeviceType.DDR_HID_PID3) != (int)DeviceType.None))      //V1.0.0.32:20250529(1)DDR HID Mode PID compatibility Issue
+            if (((pid1 = USBCtrl.USBLib_Connect((int)DeviceType.DDR_KBS_VID, (int)DeviceType.None, (int)DeviceType.DDR_KBS_PID2)) != (int)DeviceType.None) ||
+                ((pid1 = USBCtrl.USBLib_Connect((int)DeviceType.DDR_HID_VID, (int)DeviceType.None, (int)DeviceType.DDR_HID_PID2)) != (int)DeviceType.None) ||    //V1.0.0.32:20250529(1)DDR HID Mode PID compatibility Issue
+                ((pid1 = USBCtrl.USBLib_Connect((int)DeviceType.DDR_HID_VID, (int)DeviceType.None, (int)DeviceType.DDR_HID_PID3)) != (int)DeviceType.None))      //V1.0.0.32:20250529(1)DDR HID Mode PID compatibility Issue
             {
                 bDeviceStatusFG = true;
                 slot1 = true;
@@ -1945,6 +2005,8 @@ namespace ConfigAppNS
                 //---------------------------------------------------------------------------------------
                 // HIDLibrary opens PID1 devices in slot 0 and PID2/PID3 devices in slot 1.
                 mDeviceIndex = (byte)(slot0 ? 0 : (slot1 ? 1 : 0));
+                DebugLog.Log("USB: connected VID 4D47, slot0 PID {0:X4}, slot1 PID {1:X4} -> using slot{2}",
+                    pid0, pid1, mDeviceIndex);
                 //---------------------------------------------------------------------------------------
                 Btn_ReadMode_Click(null, null);
                 //---------------------------------------------------------------------------------------
@@ -1952,6 +2014,7 @@ namespace ConfigAppNS
             //-------------------------------------------------------------------------------------------
             else
             {
+                DebugLog.Log("USB: no device");
                 USBCtrl.USBLib_Disconnect();
             }
             //-------------------------------------------------------------------------------------------
@@ -2154,8 +2217,6 @@ namespace ConfigAppNS
         private byte Read_Config_Value(byte ConfigType, int[] ConfigOut, int Len)
         {
             //-------------------------------------------------------------------------------------------
-            byte ReportSize = 64;
-            byte ReportID = 0;
             byte index = 0;
             byte ReportIndex = 0x00;
             byte[] SendByteBuf = new byte[64];
@@ -2171,27 +2232,26 @@ namespace ConfigAppNS
             //ConfigType:   Bit[7:4] : 0x00=WMCU,  0x10=ExChip1, 0x20=ExChip2
             //              Bit[3:0] : 0x00=Sensi, 0x01=Color,  0x020=DTick 
             SendByteBuf[index++] = (byte)(ConfigType);
-            //USBCtrl.DDR_USBDeviceCtrlOutput(mDeviceIndex, SendByteBuf, ReportSize);
-            USBCtrl.USBLib_DeviceCtrlOutput(mDeviceIndex, ReportID, ReportSize, SendByteBuf);
             //-------------------------------------------------------------------------------------------
-            Thread.Sleep(100);
-            //-------------------------------------------------------------------------------------------
-            //USBCtrl.DDR_USBDeviceCtrlInput(mDeviceIndex, InputReportBuf, ReportSize);
-            USBCtrl.USBLib_DeviceCtrlInput(mDeviceIndex, DefaultOffset, ReportID, ReportSize, InputReportBuf);//V1.0.0.18:20241012(1)Change ADX Save Issue
-            //-------------------------------------------------------------------------------------------
-            if (InputReportBuf[ReportIndex + 0] == (byte)UserCommand.GET_SENS &&
-                InputReportBuf[ReportIndex + 1] == 0x52 &&
-                InputReportBuf[ReportIndex + 2] == 0x53 &&
-                InputReportBuf[ReportIndex + 3] == 0x50 &&
-                InputReportBuf[ReportIndex + 4] == (byte)(ConfigType))
+            // Same shared reply buffer as GET_MODE: a board left in RAW mode overwrites the reply,
+            // so detect the "AMRAW" frame, stop the stream and ask again instead of failing at once.
+            ReplyKind kind = ReplyKind.NoData;
+            bool header = false;
+            for (int attempt = 1; attempt <= GET_SENS_RETRIES && !header; attempt++)
             {
-                //---------------------------------------------------------------------------------------
-                string RxStr = "GetInputReport:";
-                for (int i = 0; i < 64 - ReportIndex; i++)
+                kind = Transact("GET_SENS type " + ConfigType.ToString("X2") + " #" + attempt, SendByteBuf, index,
+                    DeviceProtocol.CMD_GET_SENS, 100, InputReportBuf);
+                header = DeviceProtocol.IsSensReplyHeader(InputReportBuf, ReportIndex, ConfigType);
+                if (!header && kind == ReplyKind.RawStream)
                 {
-                    RxStr += InputReportBuf[ReportIndex + i].ToString("X02");
+                    DebugLog.Log("GET_SENS: board is in RAW debug mode, sending NOLMD");
+                    SendRawStreamOff();
+                    Thread.Sleep(80);
                 }
-                Console.WriteLine(RxStr);
+            }
+            //-------------------------------------------------------------------------------------------
+            if (header)
+            {
                 //---------------------------------------------------------------------------------------
                 byte SyncLen = 5;
                 byte DataLen = (byte)(CONFIG_VALUE_COUNT * 2); // 5Key: 20*2 — FW DATA_LEN
@@ -2208,9 +2268,11 @@ namespace ConfigAppNS
                     {
                         ConfigOut[ConfigOutIndex + i] = ((InputReportBuf[ReportIndex + SyncLen + (i * 2 + 0)] << 8) | (InputReportBuf[ReportIndex + SyncLen + (i * 2 + 1)]));
                     }
+                    DebugLog.Log("GET_SENS type {0:X2}: OK crc={1:X2}", ConfigType, CS);
                 }
                 else
                 {
+                    DebugLog.Log("GET_SENS type {0:X2}: CRC error calc={1:X2} got={2:X2}", ConfigType, CS, InputReportBuf[ReportIndex + PktLen - 1]);
                     MessageBox.Show(L.F("Cfg.ReadCsError", CS.ToString("X02"), InputReportBuf[ReportIndex + PktLen - 1].ToString("X02")), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return 0;
                 }
@@ -2218,7 +2280,12 @@ namespace ConfigAppNS
             }
             else
             {
-                MessageBox.Show(L.F("Cfg.ReadError", HexHead(InputReportBuf, ReportIndex, 5)), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
+                DebugLog.Log("GET_SENS type {0:X2}: FAILED, last={1}", ConfigType, kind);
+                string why = kind == ReplyKind.RawStream ? L.Get("Ver.Fail.RawMode")
+                           : kind == ReplyKind.NoData ? L.Get("Ver.Fail.HidRead")
+                           : kind == ReplyKind.Empty ? L.Get("Ver.Fail.NoReply")
+                           : HexHead(InputReportBuf, ReportIndex, 5);
+                MessageBox.Show(L.F("Cfg.ReadError", why), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return 0;
             }
             //-------------------------------------------------------------------------------------------
@@ -2238,8 +2305,6 @@ namespace ConfigAppNS
         private byte Write_Config_Value(byte ConfigType, int[] ConfigOut,int Len)
         {
             //-------------------------------------------------------------------------------------------
-            byte ReportSize = 64;
-            byte ReportID = 0;
             byte index = 0;
             byte ReportIndex = 0x00;
             byte[] SendByteBuf = new byte[64];
@@ -2267,31 +2332,21 @@ namespace ConfigAppNS
             Txd_CS = USBCtrl.UPDATE_CRC(0,SendByteBuf, index);
             SendByteBuf[index++] = Txd_CS;
             //-------------------------------------------------------------------------------------------
-            //USBCtrl.DDR_USBDeviceCtrlOutput(mDeviceIndex, SendByteBuf, ReportSize);
-            USBCtrl.USBLib_DeviceCtrlOutput(mDeviceIndex, ReportID, ReportSize, SendByteBuf);
+            ReplyKind kind = Transact("SET_SENS type " + ConfigType.ToString("X2"), SendByteBuf, index,
+                DeviceProtocol.CMD_SET_SENS, 100, InputReportBuf);
             //-------------------------------------------------------------------------------------------
-            Thread.Sleep(100);
-            //-------------------------------------------------------------------------------------------
-            //USBCtrl.DDR_USBDeviceCtrlInput(mDeviceIndex, InputReportBuf, ReportSize);
-            USBCtrl.USBLib_DeviceCtrlInput(mDeviceIndex, DefaultOffset, ReportID, ReportSize, InputReportBuf);//V1.0.0.18:20241012(1)Change ADX Save Issue
-            //-------------------------------------------------------------------------------------------
-            if (InputReportBuf[ReportIndex + 0] == (byte)UserCommand.SET_SENS &&
-                InputReportBuf[ReportIndex + 1] == 0x4F &&
-                InputReportBuf[ReportIndex + 2] == 0x4B &&
-                InputReportBuf[ReportIndex + 4] == (byte)(ConfigType))
+            if (DeviceProtocol.IsSensAckHeader(InputReportBuf, ReportIndex, ConfigType))
             {
-                //---------------------------------------------------------------------------------------
-                string RxStr = "GetInputReport:";
-                for (int i = 0; i < 64-ReportIndex; i++)
-                {
-                    RxStr += InputReportBuf[ReportIndex + i].ToString("X02");
-                }
-                Console.WriteLine(RxStr);
-                //---------------------------------------------------------------------------------------
+                DebugLog.Log("SET_SENS type {0:X2}: OK (ack crc={1:X2}, sent crc={2:X2})", ConfigType, InputReportBuf[ReportIndex + 3], Txd_CS);
             }
             else
             {
-                MessageBox.Show(L.F("Cfg.WriteError", HexHead(InputReportBuf, ReportIndex, 5)), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
+                DebugLog.Log("SET_SENS type {0:X2}: FAILED, reply kind={1}", ConfigType, kind);
+                string why = kind == ReplyKind.RawStream ? L.Get("Ver.Fail.RawMode")
+                           : kind == ReplyKind.NoData ? L.Get("Ver.Fail.HidRead")
+                           : kind == ReplyKind.Empty ? L.Get("Ver.Fail.NoReply")
+                           : HexHead(InputReportBuf, ReportIndex, 5);
+                MessageBox.Show(L.F("Cfg.WriteError", why), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return 0;
             }
             //-------------------------------------------------------------------------------------------
@@ -2867,27 +2922,32 @@ namespace ConfigAppNS
         }
 
         /// <summary>
-        /// GET_MODE (0x47). Reply (64-byte input report, read with HidD_GetInputReport):
-        ///   [0]=0x47  [1]=mode  [2]=UID 0xA2  [3]=HVer  [4]=FW major  [5]=FW minor (plain integers)
-        /// The firmware does not push this reply on the interrupt endpoint — it only leaves it in
-        /// the shared reply buffer, which RAW-debug streaming and other replies overwrite. So:
-        ///   * pause RAW mode while asking,
-        ///   * poll a few times instead of a single fixed 100 ms read,
-        ///   * accept only a frame that also carries our product ID, otherwise mark the version unknown.
+        /// GET_MODE (0x47). Reply (64-byte input report, read with HidD_GetInputReport; HIDLibrary
+        /// strips the Report-ID byte, so [0] is the command):
+        ///   [0]=0x47  [1]=mode  [2]=UID 0xA2  [3]=HVer 0x13  [4]=FW major  [5]=FW minor (plain integers)
+        /// The firmware only writes this reply into its shared 64-byte reply buffer (AppUser+0x11E),
+        /// which the host fetches with GET_REPORT. While the board is in RAW debug mode it rewrites
+        /// that buffer with "AMRAW" frames on every scan, so the reply is gone before we read it —
+        /// and the board stays in RAW mode until NOLMD or re-plug, even across host restarts.
+        /// Strategy ("show something rather than nothing"):
+        ///   * accept any frame whose first byte is 0x47; UID/HVer only annotate the label,
+        ///   * on a RAW frame send NOLMD and ask again,
+        ///   * re-send GET_MODE on every retry, 100 ms apart,
+        ///   * remember *why* it failed and show that in the label; log every byte.
         /// </summary>
         private bool ReadDeviceMode()
         {
             //-------------------------------------------------------------------------------------------
-            byte ReportSize = 64;
-            byte ReportID = 0;
-            byte ReportIndex = 0x00;
             byte[] SendByteBuf = new byte[64];
             byte[] InputReportBuf = new byte[64];
             //-------------------------------------------------------------------------------------------
             ResetDeviceVersion();
             UpdateVersionLabel();
             if (!bDeviceStatusFG)
+            {
+                DebugLog.Log("GET_MODE: skipped, no device");
                 return false;
+            }
             //-------------------------------------------------------------------------------------------
             bool wasDebug = bDebugModesFG;
             if (wasDebug)
@@ -2895,20 +2955,33 @@ namespace ConfigAppNS
                 SetDeviceRawDebugMode(false);
                 Thread.Sleep(80);
             }
-            bool ok = false;
+            ModeReply reply = null;
+            ReplyKind last = ReplyKind.NoData;
+            bool sawRaw = false;
             try
             {
                 SendByteBuf[0] = (byte)UserCommand.GET_MODE;
-                USBCtrl.USBLib_DeviceCtrlOutput(mDeviceIndex, ReportID, ReportSize, SendByteBuf);
-                //---------------------------------------------------------------------------------------
-                for (int attempt = 0; attempt < GET_MODE_RETRIES && !ok; attempt++)
+                for (int attempt = 1; attempt <= GET_MODE_RETRIES && reply == null; attempt++)
                 {
-                    Thread.Sleep(attempt == 0 ? 100 : GET_MODE_RETRY_MS);
-                    Array.Clear(InputReportBuf, 0, InputReportBuf.Length);
-                    USBCtrl.USBLib_DeviceCtrlInput(mDeviceIndex, DefaultOffset, ReportID, ReportSize, InputReportBuf);//V1.0.0.18:20241012(1)Change ADX Save Issue
-                    ok = InputReportBuf[ReportIndex + 0] == (byte)UserCommand.GET_MODE &&
-                         InputReportBuf[ReportIndex + 2] == (byte)UserProID.ID_DDR;
+                    last = Transact("GET_MODE #" + attempt, SendByteBuf, 1, DeviceProtocol.CMD_GET_MODE, GET_MODE_WAIT_MS, InputReportBuf);
+                    if (last == ReplyKind.Match)
+                    {
+                        reply = DeviceProtocol.ParseModeReply(InputReportBuf, 0);
+                        break;
+                    }
+                    if (last == ReplyKind.RawStream)
+                    {
+                        // Board is streaming RAW (left over from an earlier session): stop it first.
+                        sawRaw = true;
+                        DebugLog.Log("GET_MODE: board is in RAW debug mode, sending NOLMD");
+                        SendRawStreamOff();
+                        Thread.Sleep(80);
+                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                DebugLog.Log("GET_MODE: exception {0}", ex);
             }
             finally
             {
@@ -2919,29 +2992,35 @@ namespace ConfigAppNS
                 }
             }
             //-------------------------------------------------------------------------------------------
-            string RxStr = "GetInputReport:";
-            for (int i = 0; i < ReportSize - ReportIndex; i++)
-                RxStr += InputReportBuf[ReportIndex + i].ToString("X02");
-            Console.WriteLine(RxStr);
-            //-------------------------------------------------------------------------------------------
-            if (!ok)
+            if (reply == null)
             {
-                UpdateVersionLabel();   // shows "version not read" instead of a stale value
+                switch (last)
+                {
+                    case ReplyKind.NoData: mFwFailReasonKey = "Ver.Fail.HidRead"; break;
+                    case ReplyKind.Empty: mFwFailReasonKey = "Ver.Fail.NoReply"; break;
+                    case ReplyKind.RawStream: mFwFailReasonKey = "Ver.Fail.RawMode"; break;
+                    default: mFwFailReasonKey = "Ver.Fail.BadFrame"; break;
+                }
+                DebugLog.Log("GET_MODE: FAILED after {0} attempts, last={1}, reason={2}", GET_MODE_RETRIES, last, mFwFailReasonKey);
+                UpdateVersionLabel();   // shows the reason instead of a stale value
                 return false;
             }
             //-------------------------------------------------------------------------------------------
-            byte mode = InputReportBuf[ReportIndex + 1];
+            byte mode = reply.Mode;
             mDevicePlayerBits = (byte)(mode & (byte)UserMode.MSEL_MAK);
             byte usbMode = (byte)(mode & (byte)UserMode.MODE_MAK);
             radioButton_KBS.Checked = usbMode == (byte)UserMode.DDR_KBS;
             radioButton_HID.Checked = usbMode == (byte)UserMode.DDR_HID;
             radioButton_IO4.Checked = usbMode == (byte)UserMode.DDR_IO4;
             //-------------------------------------------------------------------------------------------
-            mDevUid = InputReportBuf[ReportIndex + 2];
-            mDevHVer = InputReportBuf[ReportIndex + 3];
-            mFwMajor = InputReportBuf[ReportIndex + 4];
-            mFwMinor = InputReportBuf[ReportIndex + 5];
+            mDevUid = reply.Uid;
+            mDevHVer = reply.HVer;
+            mFwMajor = reply.FwMajor;
+            mFwMinor = reply.FwMinor;
             mFwValid = true;
+            DebugLog.Log("GET_MODE: OK mode=0x{0:X2} UID={1:X2}{2} HVer={3:X2}{4} FVer={5}{6}",
+                mode, mDevUid, reply.UidMismatch ? "(!)" : "", mDevHVer, reply.HVerUnknown ? "(!)" : "",
+                FwVersionText(), sawRaw ? " (recovered from RAW mode)" : "");
             UpdateVersionLabel();
             return true;
         }
@@ -2975,7 +3054,7 @@ namespace ConfigAppNS
             SendByteBuf[index++] = (byte)(UserCommand.SET_MODE);
             SendByteBuf[index++] = (byte)(WorkMode);
             //-------------------------------------------------------------------------------------------
-            //USBCtrl.DDR_USBDeviceCtrlOutput(mDeviceIndex, SendByteBuf, ReportSize);
+            DebugLog.Log("TX slot{0} SET_MODE: {1} (MCU reboots)", mDeviceIndex, DebugLog.Hex(SendByteBuf, 0, index));
             USBCtrl.USBLib_DeviceCtrlOutput(mDeviceIndex, ReportID, ReportSize, SendByteBuf);
             //-------------------------------------------------------------------------------------------
             Thread.Sleep(100);

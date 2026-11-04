@@ -70,14 +70,16 @@ python3 firmware/tests/emu_keymap_e2e.py firmware/grok1.7.bin    # Unicorn 全�
 ```
 `emu_*` 只给 Flash 外设和 printf 打桩，其余全是镜像里的原字节；在 grok1.6 上跑 e2e 应有 5 项失败（对照组）。
 
-## 上位机现状（1.0.0.58）
+## 上位机现状（1.0.0.60）
 
 - 多语言：所有文案在 `ConfigApp/HIDDevice/Strings.resx`（en，中性）和 `Strings.zh-CN.resx`，代码里用 `L.Get("Key")` / `L.F("Key", args)`（`Localization.cs`）。新增文案必须两个 resx 都加。`Config.ini` `LANGUAGE=AUTO|CN|EN`（`AppConfig.cs` 读写），`AUTO` 跟随系统；切换走 `App_DDR.SetLanguage()` → `L.LanguageChanged` → `ApplyUiLanguage()`。
-- 固件版本：`ReadDeviceMode()` 是唯一的 GET_MODE 入口（暂停 RAW、重试、校验 UID=0xA2）；`mFwValid` 为 false 时任何地方都不能使用 `mFwMajor/mFwMinor`。GET_MODE 回包固件只写进共享回复缓冲区（`AppUser+0x11E`），不走中断 IN 端点，靠 `HidD_GetInputReport` 取。
+- 固件版本：`ReadDeviceMode()` 是唯一的 GET_MODE 入口；`mFwValid` 为 false 时任何地方都不能使用 `mFwMajor/mFwMinor`。GET_MODE 回包固件只写进共享回复缓冲区（`AppUser+0x11E`），不走中断 IN 端点，靠 `HidD_GetInputReport` 取。
+- **"读不到版本/灵敏度全 0" 的真正原因（1.0.0.60 修复）**：板子处于 RAW 调试模式（`RAWMD`）时固件主循环每次扫描都把共享回复缓冲区改写成 `41 'M' 'R' 'A' 'W' … AA`，GET_MODE/GET_SENS 的回包在主机读取之前就被覆盖。RAW 标志在 MCU 里一直保留到 `NOLMD` 或重新插拔，而 1.0.0.59 之前的上位机退出时不发 `NOLMD`，所以上次点过"调试模式"再关程序，下次启动就全部读不到（1.0.0.57 同样会复现，只是当时板子没卡在 RAW）。1.0.0.60：`DeviceProtocol.Classify` 识别 AMRAW 帧 → 发 `NOLMD` → 重发；窗口关闭时若调试开着也发 `NOLMD`；只要首字节是命令字就接受（UID≠A2 / HVer≠13 只在标签上加注，不拒收）；失败时显示具体原因。
+- 诊断日志：`DebugLog.cs`，`Config.ini` `DEBUGLOG=1`（默认开，0/NO/OFF 关）→ exe 同目录 `PADUEX5.log`（2 MB 轮转到 `.1`），记录 USB 连接、每笔 TX 字节、RX 64 字节原始 hex、判定结果（Match/NoData/Empty/RawStream/Other）和最终状态。真机排障先看这个文件。
 
 - 白天 Laverita 配色（`#F3F4F6/#FFFFFF/#2F6FED`，选中键琥珀 `#F59E0B`，默认按钮红 `#DC2626`）；黑夜自 1.0.0.59 起为霓虹紫（背景 `#0D0A1F`、卡片 `#171233/#241D4A`、主色 `#7C3AED`、标题 `#C084FC`、选中键 `#7C3AED→#EC4899` 渐变 + `#A855F7` 外发光、默认按钮粉 `#EC4899`）。`Palette` 类 + 递归 `ApplyTheme`，GroupBox/Tab/进度条自绘；`Palette.Glow/SelectedGradientEnd/AccentGradientEnd` 为 `Color.Empty` 时（白天）`PadKeyPainter` 不画渐变/发光，白天模式像素级不变。
 - 窗口标题显示上位机版本；左上角显示 `UID/HVer/FVer (grokX.Y)`。
-- 无设备时在 Linux 下可用 mono + Xvfb 跑起来截图（需用 dllmap 把 hid.dll/setupapi.dll 等映射到空桩）。
+- 无设备时在 Linux 下可用 mono + Xvfb 跑起来截图。mono 6 不读 `.config` 里的 dllmap，直接把桩 `.so` 复制成 `hid.dll`/`setupapi.dll`/`kernel32.dll`/`Kernel32.dll`/`user32.dll` 放到 exe 目录即可；桩的 `CreateFile` 必须返回 mono 自己打开过的 fd（先用托管 FileStream 打开 FIFO 再把 fd 交给桩），否则 `FileStream(SafeFileHandle)` 报 Invalid handle。
 
 ## 未完成 / 可继续的方向
 

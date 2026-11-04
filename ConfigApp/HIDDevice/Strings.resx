@@ -472,4 +472,25 @@ Keep USB connected, close this message and press "Start Upgrade" again. It norma
   <data name="Ota.BusyCloseForm" xml:space="preserve">
     <value>Upgrade in progress — please do not close. Interrupting may require a new upgrade (Bootloader stays reachable).</value>
   </data>
+  <data name="Ver.NotReadReason" xml:space="preserve">
+    <value>Device version not read ({0}) — click "Read Mode" to retry. Details: PADUEX5.log</value>
+  </data>
+  <data name="Ver.Fail.HidRead" xml:space="preserve">
+    <value>HID read failed, GetInputReport returned no data</value>
+  </data>
+  <data name="Ver.Fail.NoReply" xml:space="preserve">
+    <value>no reply from board, report is all zero</value>
+  </data>
+  <data name="Ver.Fail.RawMode" xml:space="preserve">
+    <value>board is streaming RAW debug data and overwrites replies</value>
+  </data>
+  <data name="Ver.Fail.BadFrame" xml:space="preserve">
+    <value>unexpected reply frame</value>
+  </data>
+  <data name="Ver.Tag.UidMismatch" xml:space="preserve">
+    <value> [UID is not A2]</value>
+  </data>
+  <data name="Ver.Tag.HVerUnknown" xml:space="preserve">
+    <value> [unknown HVer]</value>
+  </data>
 </root>
