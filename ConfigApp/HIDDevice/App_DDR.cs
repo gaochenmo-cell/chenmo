@@ -238,45 +238,62 @@ namespace ConfigAppNS
                 base.Size = new Size(200, 15);
             }
      
+             public Color TrackColor = Color.FromArgb(229, 231, 235);
+             public Color FillColor = Color.FromArgb(47, 111, 237);
+             public Color TextColor = Color.FromArgb(31, 41, 55);
+             public Color FrameColor = Color.FromArgb(209, 213, 219);
+
+             protected override void OnPaintBackground(PaintEventArgs e)
+             {
+                 Color behind = Parent != null ? Parent.BackColor : BackColor;
+                 e.Graphics.Clear(behind);
+             }
+
              protected override void OnPaint(PaintEventArgs e)
              {
                  Rectangle rect = ClientRectangle;
                  Graphics g = e.Graphics;
-                 if (direction == ProgressBarDirection.Horizontal)
-                     ProgressBarRenderer.DrawHorizontalBar(g, rect);
-                 else
-                     ProgressBarRenderer.DrawVerticalBar(g, rect);
-                 rect.Inflate(-3, -3);
-                 if (Value > 0)
+                 g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                 Rectangle outer = new Rectangle(rect.X, rect.Y, rect.Width - 1, rect.Height - 1);
+                 int radius = Math.Max(3, Math.Min(outer.Width, outer.Height) / 4);
+                 using (System.Drawing.Drawing2D.GraphicsPath track = PadKeyPainter.RoundedRect(outer, radius))
                  {
+                     using (SolidBrush b = new SolidBrush(TrackColor))
+                         g.FillPath(b, track);
+                     using (Pen p = new Pen(FrameColor, 1f))
+                         g.DrawPath(p, track);
+                 }
+                 if (Value > 0 && Maximum > 0)
+                 {
+                     Rectangle fill;
                      if (direction == ProgressBarDirection.Horizontal)
                      {
-                         Rectangle clip = new Rectangle(rect.X, rect.Y, (int)Math.Round(((float)Value / Maximum) * rect.Width), rect.Height);
-                         ProgressBarRenderer.DrawHorizontalChunks(g, clip);
+                         int w = (int)Math.Round(((float)Value / Maximum) * outer.Width);
+                         fill = new Rectangle(outer.X, outer.Y, Math.Max(w, radius * 2 + 1), outer.Height);
                      }
                      else
                      {
-                         int height = (int)Math.Round(((float)Value / Maximum) * rect.Height);
-                         Rectangle clip = new Rectangle(rect.X, rect.Y + (rect.Height - height), rect.Width, height);
-                         ProgressBarRenderer.DrawVerticalChunks(g, clip);
+                         int h = (int)Math.Round(((float)Value / Maximum) * outer.Height);
+                         h = Math.Max(h, radius * 2 + 1);
+                         fill = new Rectangle(outer.X, outer.Bottom - h, outer.Width, h);
                      }
+                     fill.Intersect(outer);
+                     using (System.Drawing.Drawing2D.GraphicsPath fp = PadKeyPainter.RoundedRect(fill, radius))
+                     using (SolidBrush b = new SolidBrush(FillColor))
+                         g.FillPath(b, fp);
                  }
-     
-                 //string text = showPercent ? (Value.ToString() + '%') : CustomText;
-                 //float per = (float)((float)Value * 100) / (float)Maximum;
-                 //string text = per.ToString("F1") + '%' +"\r\n("+ Value.ToString()+")";
-                 string text =  Value.ToString() ;
-     
-                 if (!string.IsNullOrEmpty(text))
-                     using (Font f = new Font(FontFamily.GenericSerif, 10))
-                     {
-                         SizeF len = g.MeasureString(text, f);
-                         Point location = new Point(Convert.ToInt32((Width / 2) - len.Width / 2), Convert.ToInt32((Height / 2) - len.Height / 2));
-                         g.DrawString(text, f, Brushes.Black, location);
-                     }
+
+                 string text = Value.ToString();
+                 using (Font f = new Font("Segoe UI", 9f, FontStyle.Bold))
+                 using (SolidBrush tb = new SolidBrush(TextColor))
+                 {
+                     SizeF len = g.MeasureString(text, f);
+                     PointF location = new PointF(rect.Width / 2f - len.Width / 2f, rect.Height / 2f - len.Height / 2f);
+                     g.DrawString(text, f, tb, location);
+                 }
              }
-     
-     
+
+
              /// <summary>
              /// 进度条方向，水平或者垂直
              /// </summary>
@@ -595,8 +612,9 @@ namespace ConfigAppNS
                 {
                     Panel p = new Panel();
                     p.BackColor = Color.FromArgb(245, 245, 245);
-                    p.BorderStyle = BorderStyle.FixedSingle;
+                    p.BorderStyle = BorderStyle.None;
                     p.Enabled = false;
+                    p.Paint += FillerPanel_Paint;
                     this.Controls.Add(p);
                     p.SendToBack();
                     fiveKeyFillers[i] = p;
@@ -625,6 +643,8 @@ namespace ConfigAppNS
             int tabH = (y2 + cell) - oy + S(10) + groupBox_Button.Height;
             tabControl1.Location = new Point(tabX, oy);
             tabControl1.Size = new Size(tabW, tabH);
+            if (tabControl1.DrawMode == TabDrawMode.OwnerDrawFixed && tabControl1.TabPages.Count > 0)
+                tabControl1.ItemSize = new Size(Math.Max(S(80), (tabW - S(6)) / tabControl1.TabPages.Count), S(32));
 
             // Mode full width under content
             int modeY = Math.Max(groupBox_Button.Bottom, tabControl1.Bottom) + S(10);
@@ -967,7 +987,7 @@ namespace ConfigAppNS
             if (bLanguageEN)
                 btnThemeToggle.Text = bDarkMode ? "Light" : "Dark";
             else
-                btnThemeToggle.Text = bDarkMode ? "白天" : "夜间";
+                btnThemeToggle.Text = bDarkMode ? "白天" : "黑夜";
         }
 
         private void WriteThemeToConfig()
@@ -998,43 +1018,348 @@ namespace ConfigAppNS
             catch { }
         }
 
+        /// <summary>Laverita palette (Tailwind gray scale + blue / amber / red accents).</summary>
+        private sealed class Palette
+        {
+            public Color FormBg, PanelBg, CardBg, Border, BorderStrong, Text, MutedText, Title;
+            public Color Accent, AccentText, Danger, Neutral, NeutralText, Selected, BarTrack, BarFill;
+
+            public static Palette Light()
+            {
+                Palette p = new Palette();
+                p.FormBg = Color.FromArgb(243, 244, 246);
+                p.PanelBg = Color.White;
+                p.CardBg = Color.FromArgb(249, 250, 251);
+                p.Border = Color.FromArgb(229, 231, 235);
+                p.BorderStrong = Color.FromArgb(209, 213, 219);
+                p.Text = Color.FromArgb(31, 41, 55);
+                p.MutedText = Color.FromArgb(107, 114, 128);
+                p.Title = Color.FromArgb(47, 111, 237);
+                p.Accent = Color.FromArgb(47, 111, 237);
+                p.AccentText = Color.White;
+                p.Danger = Color.FromArgb(220, 38, 38);
+                p.Neutral = Color.FromArgb(229, 231, 235);
+                p.NeutralText = Color.FromArgb(31, 41, 55);
+                p.Selected = Color.FromArgb(245, 158, 11);
+                p.BarTrack = Color.FromArgb(229, 231, 235);
+                p.BarFill = Color.FromArgb(200, 220, 245);
+                return p;
+            }
+
+            public static Palette Dark()
+            {
+                Palette p = new Palette();
+                p.FormBg = Color.FromArgb(17, 24, 39);
+                p.PanelBg = Color.FromArgb(31, 41, 55);
+                p.CardBg = Color.FromArgb(55, 65, 81);
+                p.Border = Color.FromArgb(75, 85, 99);
+                p.BorderStrong = Color.FromArgb(107, 114, 128);
+                p.Text = Color.FromArgb(249, 250, 251);
+                p.MutedText = Color.FromArgb(156, 163, 175);
+                p.Title = Color.FromArgb(96, 165, 250);
+                p.Accent = Color.FromArgb(96, 165, 250);
+                p.AccentText = Color.White;
+                p.Danger = Color.FromArgb(220, 38, 38);
+                p.Neutral = Color.FromArgb(55, 65, 81);
+                p.NeutralText = Color.FromArgb(249, 250, 251);
+                p.Selected = Color.FromArgb(245, 158, 11);
+                p.BarTrack = Color.FromArgb(55, 65, 81);
+                p.BarFill = Color.FromArgb(75, 85, 99);
+                return p;
+            }
+        }
+
+        private Palette pal = Palette.Light();
+        private bool themeHooksWired = false;
+
         private void ApplyTheme()
         {
-            Color formBg = bDarkMode ? Color.FromArgb(45, 45, 48) : SystemColors.Control;
-            Color panelBg = bDarkMode ? Color.FromArgb(55, 55, 58) : SystemColors.Control;
-            Color text = bDarkMode ? Color.FromArgb(240, 240, 240) : SystemColors.ControlText;
-            Color filler = bDarkMode ? Color.FromArgb(50, 50, 52) : Color.FromArgb(245, 245, 245);
+            pal = bDarkMode ? Palette.Dark() : Palette.Light();
+            WireThemeHooks();
 
-            this.BackColor = formBg;
-            tabControl1.BackColor = panelBg;
-            tabPage_Sensi.BackColor = tabPage_Color.BackColor = tabPage_DTick.BackColor = panelBg;
-            groupBox_Button.BackColor = groupBox_Mode.BackColor = groupBox_Sensi.BackColor =
-                groupBox_Color.BackColor = groupBox_DTick.BackColor = groupBox_USBMode.BackColor =
-                groupBox2.BackColor = panelBg;
-            groupBox_Button.ForeColor = groupBox_Mode.ForeColor = groupBox_Sensi.ForeColor =
-                groupBox_Color.ForeColor = groupBox_DTick.ForeColor = groupBox_USBMode.ForeColor =
-                groupBox2.ForeColor = text;
-            tabControl1.ForeColor = text;
+            this.BackColor = pal.FormBg;
+            this.ForeColor = pal.Text;
+            ThemeChildren(this);
 
+            // Form-level widgets sit directly on the page background
             if (fiveKeyFillers != null)
             {
-                for (int i = 0; i < fiveKeyFillers.Length; i++)
-                    fiveKeyFillers[i].BackColor = filler;
+                foreach (Panel p in fiveKeyFillers)
+                {
+                    p.BackColor = pal.CardBg;
+                    p.BorderStyle = BorderStyle.None;
+                }
+            }
+            StyleButton(btnLangToggle, pal.Neutral, pal.NeutralText);
+            StyleButton(btnThemeToggle, pal.Accent, pal.AccentText);
+            if (label_Ver != null)
+            {
+                label_Ver.BackColor = pal.FormBg;
+                label_Ver.ForeColor = pal.MutedText;
             }
 
-            if (btnLangToggle != null)
-            {
-                btnLangToggle.ForeColor = text;
-                btnLangToggle.BackColor = panelBg;
-            }
-            if (btnThemeToggle != null)
-            {
-                btnThemeToggle.ForeColor = text;
-                btnThemeToggle.BackColor = panelBg;
-            }
-
+            ApplyModeGroupColors();
             UpdateThemeToggleText();
             InvalidatePadKeyButtons();
+            this.Invalidate(true);
+        }
+
+        private bool modeGroupEnabled = true;
+
+        /// <summary>Disabling the GroupBox itself paints every label with the system gray-text colour,
+        /// which is unreadable on the dark palette; disable the children instead.</summary>
+        private void SetModeGroupEnabled(bool enabled)
+        {
+            modeGroupEnabled = enabled;
+            Btn_ReadMode.Enabled = Btn_SaveMode.Enabled = enabled;
+            if (btnFirmwareUpgrade != null) btnFirmwareUpgrade.Enabled = enabled;
+            foreach (RadioButton rb in new RadioButton[] { radioButton_KBS, radioButton_HID, radioButton_IO4, radioButton_1P, radioButton_2P })
+            {
+                rb.AutoCheck = enabled;
+                rb.Cursor = enabled ? Cursors.Default : Cursors.No;
+            }
+            ApplyModeGroupColors();
+        }
+
+        private void ApplyModeGroupColors()
+        {
+            Color fore = modeGroupEnabled ? pal.Text : pal.MutedText;
+            foreach (RadioButton rb in new RadioButton[] { radioButton_KBS, radioButton_HID, radioButton_IO4, radioButton_1P, radioButton_2P })
+                rb.ForeColor = fore;
+            foreach (Button b in new Button[] { Btn_ReadMode, Btn_SaveMode, btnFirmwareUpgrade })
+            {
+                if (b == null) continue;
+                b.BackColor = modeGroupEnabled ? pal.Accent : pal.Neutral;
+                b.ForeColor = modeGroupEnabled ? pal.AccentText : pal.MutedText;
+            }
+        }
+
+        private void WireThemeHooks()
+        {
+            if (themeHooksWired)
+                return;
+            themeHooksWired = true;
+            tabControl1.DrawMode = TabDrawMode.OwnerDrawFixed;
+            tabControl1.SizeMode = TabSizeMode.Fixed;
+            tabControl1.ItemSize = new Size(Math.Max(S(80), (tabControl1.Width - S(6)) / Math.Max(1, tabControl1.TabPages.Count)), S(32));
+            tabControl1.Padding = new Point(12, 4);
+            tabControl1.DrawItem += TabControl_DrawItem;
+        }
+
+        private void ThemeChildren(Control parent)
+        {
+            foreach (Control c in parent.Controls)
+            {
+                ThemeControl(c);
+                if (c.HasChildren)
+                    ThemeChildren(c);
+            }
+        }
+
+        private void ThemeControl(Control c)
+        {
+            if (c is GroupBox gb)
+            {
+                gb.BackColor = pal.PanelBg;
+                gb.ForeColor = pal.Title;
+                gb.Paint -= GroupBox_Paint;
+                gb.Paint += GroupBox_Paint;
+                return;
+            }
+            if (c is TabControl tc)
+            {
+                tc.BackColor = pal.FormBg;
+                tc.ForeColor = pal.Text;
+                return;
+            }
+            if (c is TabPage tp)
+            {
+                tp.UseVisualStyleBackColor = false;
+                tp.BackColor = pal.PanelBg;
+                tp.ForeColor = pal.Text;
+                tp.BorderStyle = BorderStyle.None;
+                return;
+            }
+            if (c is Button b)
+            {
+                ThemeButton(b);
+                return;
+            }
+            if (c is ProgressBarWithValue pb)
+            {
+                pb.TrackColor = pal.BarTrack;
+                pb.FillColor = pal.Accent;
+                pb.FrameColor = pal.Border;
+                pb.TextColor = pal.Text;
+                pb.BackColor = pal.PanelBg;
+                pb.Invalidate();
+                return;
+            }
+            if (c is TrackBar tb)
+            {
+                tb.BackColor = pal.PanelBg;
+                return;
+            }
+            if (c is TextBox tx)
+            {
+                tx.BorderStyle = BorderStyle.FixedSingle;
+                tx.BackColor = pal.CardBg;
+                tx.ForeColor = pal.Text;
+                return;
+            }
+            if (c is ComboBox cb)
+            {
+                cb.FlatStyle = FlatStyle.Flat;
+                cb.BackColor = pal.CardBg;
+                cb.ForeColor = pal.Text;
+                return;
+            }
+            if (c is RadioButton || c is CheckBox)
+            {
+                c.BackColor = pal.PanelBg;
+                c.ForeColor = pal.Text;
+                return;
+            }
+            if (c is Label lb)
+            {
+                lb.BackColor = Color.Transparent;
+                lb.ForeColor = (lb == label_MapHint) ? pal.MutedText : pal.Text;
+                return;
+            }
+            if (c is PictureBox)
+            {
+                c.BackColor = pal.PanelBg;
+                return;
+            }
+            if (c is Panel)
+            {
+                c.BackColor = pal.CardBg;
+                return;
+            }
+        }
+
+        private void ThemeButton(Button b)
+        {
+            // Pad keys and LED colour swatches keep their own paint / colour
+            if (b.Tag is PadKeyPainter.PadKeyKind)
+                return;
+            if (b == Btn_Col_R || b == Btn_Col_G || b == Btn_Col_B || b == Btn_Col_Y ||
+                b == Btn_Col_P || b == Btn_Col_C || b == Btn_Col_W || b == Btn_LED)
+            {
+                b.FlatStyle = FlatStyle.Flat;
+                b.FlatAppearance.BorderSize = 1;
+                b.FlatAppearance.BorderColor = pal.BorderStrong;
+                return;
+            }
+            if (b == btnLangToggle)
+            {
+                StyleButton(b, pal.Neutral, pal.NeutralText);
+                return;
+            }
+            // "Default / reset" actions are red like Laverita; everything else is the blue accent
+            if (b == btn_default || b == button2 || (b.Name != null && b.Name.IndexOf("Default", StringComparison.OrdinalIgnoreCase) >= 0))
+            {
+                StyleButton(b, pal.Danger, Color.White);
+                return;
+            }
+            StyleButton(b, pal.Accent, pal.AccentText);
+        }
+
+        private void StyleButton(Button b, Color back, Color fore)
+        {
+            if (b == null)
+                return;
+            b.FlatStyle = FlatStyle.Flat;
+            b.FlatAppearance.BorderSize = 0;
+            b.FlatAppearance.MouseOverBackColor = Lighten(back, bDarkMode ? 0.12f : -0.08f);
+            b.FlatAppearance.MouseDownBackColor = Lighten(back, bDarkMode ? 0.2f : -0.16f);
+            b.UseVisualStyleBackColor = false;
+            b.BackColor = back;
+            b.ForeColor = fore;
+            if (b.Font == null || !b.Font.Bold || b.Font.Name != "Microsoft YaHei UI")
+                b.Font = new Font("Microsoft YaHei UI", Math.Max(9f, Math.Min(b.Font.Size, 11f)), FontStyle.Bold);
+        }
+
+        private static Color Lighten(Color c, float amount)
+        {
+            // amount > 0 lightens, < 0 darkens
+            float r = c.R, g = c.G, b = c.B;
+            if (amount >= 0)
+            {
+                r += (255 - r) * amount; g += (255 - g) * amount; b += (255 - b) * amount;
+            }
+            else
+            {
+                r *= 1 + amount; g *= 1 + amount; b *= 1 + amount;
+            }
+            return Color.FromArgb(c.A, (int)r, (int)g, (int)b);
+        }
+
+        /// <summary>Card look: rounded panel, 1px border, blue bold title (no system GroupBox frame).</summary>
+        private void GroupBox_Paint(object sender, PaintEventArgs e)
+        {
+            GroupBox gb = sender as GroupBox;
+            if (gb == null)
+                return;
+            Graphics g = e.Graphics;
+            Color behind = gb.Parent != null ? gb.Parent.BackColor : pal.FormBg;
+            g.Clear(behind);
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            Rectangle r = new Rectangle(0, 0, gb.Width - 1, gb.Height - 1);
+            using (System.Drawing.Drawing2D.GraphicsPath path = PadKeyPainter.RoundedRect(r, S(8)))
+            {
+                using (SolidBrush fill = new SolidBrush(pal.PanelBg))
+                    g.FillPath(fill, path);
+                using (Pen pen = new Pen(pal.Border, 1f))
+                    g.DrawPath(pen, path);
+            }
+            if (!string.IsNullOrEmpty(gb.Text))
+            {
+                using (Font f = new Font("Microsoft YaHei UI", Math.Max(9f, gb.Font.Size), FontStyle.Bold))
+                using (SolidBrush tb = new SolidBrush(pal.Title))
+                    g.DrawString(gb.Text, f, tb, S(10), S(4));
+            }
+        }
+
+        private void FillerPanel_Paint(object sender, PaintEventArgs e)
+        {
+            Panel p = sender as Panel;
+            if (p == null)
+                return;
+            e.Graphics.Clear(pal.FormBg);
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            Rectangle r = new Rectangle(1, 1, p.Width - 3, p.Height - 3);
+            using (System.Drawing.Drawing2D.GraphicsPath path = PadKeyPainter.RoundedRect(r, Math.Max(4, p.Width / 14)))
+            {
+                using (SolidBrush fill = new SolidBrush(pal.CardBg))
+                    e.Graphics.FillPath(fill, path);
+                using (Pen pen = new Pen(pal.Border, 1f))
+                    e.Graphics.DrawPath(pen, path);
+            }
+        }
+
+        private void TabControl_DrawItem(object sender, DrawItemEventArgs e)
+        {
+            TabControl tc = sender as TabControl;
+            if (tc == null || e.Index < 0 || e.Index >= tc.TabPages.Count)
+                return;
+            bool selected = e.Index == tc.SelectedIndex;
+            Rectangle r = e.Bounds;
+            using (SolidBrush bg = new SolidBrush(selected ? pal.PanelBg : pal.FormBg))
+                e.Graphics.FillRectangle(bg, r);
+            if (selected)
+            {
+                using (SolidBrush underline = new SolidBrush(pal.Accent))
+                    e.Graphics.FillRectangle(underline, r.X + 2, r.Bottom - 3, r.Width - 4, 3);
+            }
+            using (Font f = new Font("Microsoft YaHei UI", 9f, selected ? FontStyle.Bold : FontStyle.Regular))
+            using (SolidBrush tb = new SolidBrush(selected ? pal.Title : pal.MutedText))
+            {
+                StringFormat sf = new StringFormat();
+                sf.Alignment = StringAlignment.Center;
+                sf.LineAlignment = StringAlignment.Center;
+                e.Graphics.DrawString(tc.TabPages[e.Index].Text, f, tb, r, sf);
+            }
         }
 
         private void EnsurePadKeyVectorPaint()
@@ -1053,8 +1378,8 @@ namespace ConfigAppNS
         {
             int key = (int)kind;
             int selected = SensorIndex / SENSORS_PER_KEY;
-            Color cellBg = bDarkMode ? Color.FromArgb(64, 64, 64) : SystemColors.ButtonFace;
-            Color outline = bDarkMode ? Color.FromArgb(230, 230, 230) : Color.Black;
+            Color cellBg = pal.CardBg;
+            Color outline = bDarkMode ? Color.FromArgb(249, 250, 251) : Color.FromArgb(31, 41, 55);
             bool triggered = key >= 0 && key < padKeyActive.Length && padKeyActive[key];
             Color triggerFill = GetPadLedColor(key);
             if (triggered)
@@ -1062,7 +1387,9 @@ namespace ConfigAppNS
             return new PadKeyPainter.PadKeyPaintArgs
             {
                 CellBackground = cellBg,
-                OutlineColor = outline,
+                OutlineColor = (key == selected) ? Color.White : outline,
+                SelectedFill = pal.Selected,
+                BorderColor = pal.Border,
                 Selected = key == selected,
                 Triggered = triggered,
                 TriggerFill = triggerFill
@@ -1212,7 +1539,7 @@ namespace ConfigAppNS
                 Btn_ReadMode.Text = "读取模式";
                 Btn_SaveMode.Text = "保存模式";
                 if (btnFirmwareUpgrade != null) btnFirmwareUpgrade.Text = "固件升级";
-                groupBox_Button.Text = "Edit";
+                groupBox_Button.Text = "编辑";
                 groupBox_Mode.Text = "模式";
                 groupBox_Sensi.Text = "灵敏度";
                 groupBox_Color.Text = "调色";
@@ -1434,7 +1761,7 @@ namespace ConfigAppNS
             //-------------------------------------------------------------------------------------------
             this.Text = AppName;
             label_Ver.Text = "";
-            groupBox_Mode.Enabled = false;
+            SetModeGroupEnabled(false);
             bool slot0 = false, slot1 = false;
             bDeviceStatusFG = false;
             //-------------------------------------------------------------------------------------------//V1.0.0.20:20241231(1)Display OTA Device infor on App Title
@@ -1462,7 +1789,7 @@ namespace ConfigAppNS
             if (bDeviceStatusFG == true)
             {
                 this.Text = AppName + " (Device Connected)";
-                groupBox_Mode.Enabled = true;
+                SetModeGroupEnabled(true);
                 //---------------------------------------------------------------------------------------
                 // HIDLibrary opens PID1 devices in slot 0 and PID2/PID3 devices in slot 1.
                 mDeviceIndex = (byte)(slot0 ? 0 : (slot1 ? 1 : 0));

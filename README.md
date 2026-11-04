@@ -2,10 +2,12 @@
 
 ## 下载
 
-- [`dist/PADUEX5/`](./dist/PADUEX5/) → `PADUEX5.exe`（1.0.0.53）
+- [`dist/PADUEX5/`](./dist/PADUEX5/) → `PADUEX5.exe`（1.0.0.54）
 - [`dist/PADUEX5-win-release.zip`](./dist/PADUEX5-win-release.zip)
 
-## 上位机 1.0.0.53
+## 上位机 1.0.0.54
+
+- 白天/黑夜配色改为 Laverita 同款（灰阶底 + 蓝色主按钮 + 红色「默认」+ 琥珀色选中键），分组卡片、标签页、进度条全部扁平化。
 
 - 去掉「Num 1P/2P」选择：1P/2P 由游戏按插入顺序自动分配，固件自 V2.12 起也不再接受上位机设定的 1P/2P 位。
 - 升级前校验固件 USB 中断向量（0x14C），拒绝 grok1.0～1.5。

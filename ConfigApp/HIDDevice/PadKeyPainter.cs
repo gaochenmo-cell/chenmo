@@ -28,6 +28,8 @@ namespace ConfigAppNS
             public bool Selected;
             public bool Triggered;
             public Color TriggerFill;
+            public Color SelectedFill;
+            public Color BorderColor;
         }
 
         internal static void WireButton(Button btn, PadKeyKind kind)
@@ -63,13 +65,18 @@ namespace ConfigAppNS
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
             g.CompositingQuality = CompositingQuality.HighQuality;
 
-            using (SolidBrush backBrush = new SolidBrush(args.CellBackground))
-                g.FillRectangle(backBrush, bounds);
-
-            if (args.Selected)
+            // Laverita card: rounded cell, amber when selected, thin border otherwise
+            Color cardFill = args.Selected && !args.SelectedFill.IsEmpty ? args.SelectedFill : args.CellBackground;
+            Rectangle card = new Rectangle(bounds.X + 1, bounds.Y + 1, bounds.Width - 3, bounds.Height - 3);
+            using (GraphicsPath cardPath = RoundedRect(card, Math.Max(4, bounds.Width / 14)))
             {
-                using (Pen sel = new Pen(Color.FromArgb(120, 100, 149, 237), Math.Max(2f, bounds.Width * 0.02f)))
-                    g.DrawRectangle(sel, 1, 1, bounds.Width - 2, bounds.Height - 2);
+                using (SolidBrush backBrush = new SolidBrush(cardFill))
+                    g.FillPath(backBrush, cardPath);
+                Color border = args.BorderColor.IsEmpty ? Color.FromArgb(209, 213, 219) : args.BorderColor;
+                if (args.Selected && !args.SelectedFill.IsEmpty)
+                    border = args.SelectedFill;
+                using (Pen borderPen = new Pen(border, 1f))
+                    g.DrawPath(borderPen, cardPath);
             }
 
             Rectangle inner = bounds;
@@ -101,6 +108,23 @@ namespace ConfigAppNS
             }
         }
 
+        internal static GraphicsPath RoundedRect(Rectangle r, int radius)
+        {
+            GraphicsPath path = new GraphicsPath();
+            int d = radius * 2;
+            if (d <= 0 || r.Width <= d || r.Height <= d)
+            {
+                path.AddRectangle(r);
+                return path;
+            }
+            path.AddArc(r.X, r.Y, d, d, 180, 90);
+            path.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+            path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+            path.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+            path.CloseFigure();
+            return path;
+        }
+
         private static void PadKeyButton_Paint(object sender, PaintEventArgs e)
         {
             Button btn = sender as Button;
@@ -118,7 +142,8 @@ namespace ConfigAppNS
                 args.OutlineColor = Color.Black;
             }
 
-            e.Graphics.Clear(args.CellBackground);
+            Color behind = btn.Parent != null ? btn.Parent.BackColor : args.CellBackground;
+            e.Graphics.Clear(behind);
             PaintKey(e.Graphics, btn.ClientRectangle, (PadKeyKind)btn.Tag, args);
         }
 
