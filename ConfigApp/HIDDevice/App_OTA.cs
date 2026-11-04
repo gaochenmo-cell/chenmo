@@ -57,7 +57,10 @@ namespace ConfigAppNS
 
             // Fixed pixel layout — avoid Font autoscaling which garbles this dialog on high DPI
             this.AutoScaleMode = AutoScaleMode.None;
-            this.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
+            // Same family / fallback chain as the main window; designer sizes stay, 9pt rows grow to body size.
+            Font logFont = textLog.Font;
+            UiFont.Refamily(this, UiFont.Status);
+            textLog.Font = logFont;   // the hex log stays monospace
             ApplyUiLanguage();
             progressBar.Minimum = 0;
             progressBar.Maximum = 100;
@@ -91,21 +94,26 @@ namespace ConfigAppNS
             labelTips.Visible = true;
             labelTitle.Location = new Point(20, 16);
             labelTips.Location = new Point(20, 56);
-            int y = 156;
+            // The three tips wrap to up to 7 lines at the larger body font: give the block
+            // room for that and shift the rows below it by the same amount.
+            const int tipsExtra = 64;
+            labelTips.Size = new Size(520, 88 + tipsExtra);
+            int y = 156 + tipsExtra;
             labelAddr.Location = new Point(20, y);
-            labelLimit.Location = new Point(280, y);
-            y = 188;
+            labelLimit.Location = new Point(270, y);
+            labelLimit.Size = new Size(270, labelLimit.Height);
+            y = 188 + tipsExtra;
             textFile.Location = new Point(20, y);
             btnBrowse.Location = new Point(430, y - 2);
-            labelFileInfo.Location = new Point(20, 224);
-            progressBar.Location = new Point(20, 258);
-            labelPercent.Location = new Point(480, 258);
-            labelStatus.Location = new Point(20, 296);
-            textLog.Location = new Point(20, 328);
+            labelFileInfo.Location = new Point(20, 224 + tipsExtra);
+            progressBar.Location = new Point(20, 258 + tipsExtra);
+            labelPercent.Location = new Point(480, 258 + tipsExtra);
+            labelStatus.Location = new Point(20, 296 + tipsExtra);
+            textLog.Location = new Point(20, 328 + tipsExtra);
             textLog.Size = new Size(520, 140);
-            btnStart.Location = new Point(20, 484);
-            btnClose.Location = new Point(430, 484);
-            this.ClientSize = new Size(560, 540);
+            btnStart.Location = new Point(20, 484 + tipsExtra);
+            btnClose.Location = new Point(430, 484 + tipsExtra);
+            this.ClientSize = new Size(560, 540 + tipsExtra);
             this.BackColor = Color.FromArgb(250, 250, 250);
         }
 
@@ -119,7 +127,8 @@ namespace ConfigAppNS
             labelTips.Visible = false;
             int y = 68;
             labelAddr.Location = new Point(20, y);
-            labelLimit.Location = new Point(280, y);
+            labelLimit.Location = new Point(270, y);
+            labelLimit.Size = new Size(270, labelLimit.Height);
             y = 100;
             textFile.Location = new Point(20, y);
             btnBrowse.Location = new Point(430, y - 2);

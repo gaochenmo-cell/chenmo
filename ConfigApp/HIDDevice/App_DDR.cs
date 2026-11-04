@@ -364,7 +364,7 @@ namespace ConfigAppNS
                  }
 
                  string text = Value.ToString();
-                 using (Font f = new Font("Segoe UI", 9f, FontStyle.Bold))
+                 using (Font f = UiFont.Get(UiFont.BarValue, FontStyle.Bold))
                  using (SolidBrush tb = new SolidBrush(TextColor))
                  {
                      SizeF len = g.MeasureString(text, f);
@@ -520,6 +520,7 @@ namespace ConfigAppNS
         // Design canvas at 96 DPI — all layout math uses S(designPx)
         private const int DesignW = 1040;
         private const int DesignH = 780;
+        private const int TabStripH = 36;   // tab header height (design px) — fits the 11pt tab caption
         private float layoutScale = 1f;
         private bool layoutBusy = false;
         private bool layoutReady = false;
@@ -755,7 +756,7 @@ namespace ConfigAppNS
             tabControl1.Location = new Point(tabX, oy);
             tabControl1.Size = new Size(tabW, tabH);
             if (tabControl1.DrawMode == TabDrawMode.OwnerDrawFixed && tabControl1.TabPages.Count > 0)
-                tabControl1.ItemSize = new Size(Math.Max(S(80), (tabW - S(6)) / tabControl1.TabPages.Count), S(32));
+                tabControl1.ItemSize = new Size(Math.Max(S(80), (tabW - S(6)) / tabControl1.TabPages.Count), S(TabStripH));
 
             // Mode full width under content
             int modeY = Math.Max(groupBox_Button.Bottom, tabControl1.Bottom) + S(10);
@@ -964,12 +965,12 @@ namespace ConfigAppNS
             label_MapHint = new Label();
             label_MapHint.AutoSize = false;
             label_MapHint.Location = new Point(S(16), S(28));
-            label_MapHint.Size = new Size(S(440), S(48));
+            label_MapHint.Size = new Size(S(440), S(62));   // three lines of body text (English hint wraps to 3)
             groupBox_Map.Controls.Add(label_MapHint);
 
             label_MapKey = new Label();
             label_MapKey.AutoSize = false;
-            label_MapKey.Location = new Point(S(16), S(84));
+            label_MapKey.Location = new Point(S(16), S(96));
             label_MapKey.Size = new Size(S(440), S(24));
             groupBox_Map.Controls.Add(label_MapKey);
 
@@ -979,14 +980,14 @@ namespace ConfigAppNS
             {
                 Label lb = new Label();
                 lb.Text = L.Get(MapPadKeys[i]);
-                lb.Location = new Point(S(16), S(120) + i * S(42));
+                lb.Location = new Point(S(16), S(128) + i * S(42));
                 lb.Size = new Size(S(100), S(28));
                 groupBox_Map.Controls.Add(lb);
                 mapKeyLabels[i] = lb;
 
                 ComboBox cb = new ComboBox();
                 cb.DropDownStyle = ComboBoxStyle.DropDownList;
-                cb.Location = new Point(S(130), S(118) + i * S(42));
+                cb.Location = new Point(S(130), S(126) + i * S(42));
                 cb.Size = new Size(S(200), S(28));
                 FillHidUsageCombo(cb);
                 int captured = i;
@@ -1222,6 +1223,7 @@ namespace ConfigAppNS
             public Color SelectedGradientEnd; // second stop of the selected pad key fill (Empty = solid)
             public Color AccentGradientEnd;   // second stop of the tab underline (Empty = solid)
             public Color Glow;                // outer glow around selected / pressed pad keys (Empty = none)
+            public Color ArrowTip, ArrowMid, ArrowBack, ArrowGlow; // chevron / ring cyan gradient + halo
 
             public static Palette Light()
             {
@@ -1246,6 +1248,11 @@ namespace ConfigAppNS
                 p.SelectedGradientEnd = Color.Empty;
                 p.AccentGradientEnd = Color.Empty;
                 p.Glow = Color.Empty;
+                // Same chevron shape as dark mode, one step deeper so it reads on the light card
+                p.ArrowTip = Color.FromArgb(0x06, 0xB6, 0xD4);   // #06B6D4
+                p.ArrowMid = Color.FromArgb(0x08, 0x91, 0xB2);   // #0891B2
+                p.ArrowBack = Color.FromArgb(0x15, 0x5E, 0x75);  // #155E75
+                p.ArrowGlow = Color.FromArgb(0x0E, 0x74, 0x90);  // #0E7490
                 return p;
             }
 
@@ -1272,6 +1279,10 @@ namespace ConfigAppNS
                 p.SelectedGradientEnd = Color.FromArgb(236, 72, 153); // #EC4899
                 p.AccentGradientEnd = Color.FromArgb(96, 165, 250);   // #60A5FA
                 p.Glow = Color.FromArgb(168, 85, 247);          // #A855F7
+                p.ArrowTip = Color.FromArgb(0x22, 0xD3, 0xEE);   // #22D3EE
+                p.ArrowMid = Color.FromArgb(0x06, 0xB6, 0xD4);   // #06B6D4
+                p.ArrowBack = Color.FromArgb(0x0E, 0x74, 0x90);  // #0E7490
+                p.ArrowGlow = Color.FromArgb(0x22, 0xD3, 0xEE);  // #22D3EE
                 return p;
             }
         }
@@ -1284,6 +1295,9 @@ namespace ConfigAppNS
             pal = bDarkMode ? Palette.Dark() : Palette.Light();
             WireThemeHooks();
 
+            // Typography is applied in the same recursive pass as colours (see ThemeControl):
+            // the form carries the body font so any control without its own size inherits it.
+            UiFont.Set(this, UiFont.Body);
             this.BackColor = pal.FormBg;
             this.ForeColor = pal.Text;
             ThemeChildren(this);
@@ -1303,7 +1317,10 @@ namespace ConfigAppNS
             {
                 label_Ver.BackColor = pal.FormBg;
                 label_Ver.ForeColor = pal.MutedText;
+                UiFont.Set(label_Ver, UiFont.Status);
             }
+            if (menuLanguage != null)
+                UiFont.Set(menuLanguage, UiFont.Body);
 
             ApplyModeGroupColors();
             UpdateThemeToggleText();
@@ -1348,7 +1365,7 @@ namespace ConfigAppNS
             themeHooksWired = true;
             tabControl1.DrawMode = TabDrawMode.OwnerDrawFixed;
             tabControl1.SizeMode = TabSizeMode.Fixed;
-            tabControl1.ItemSize = new Size(Math.Max(S(80), (tabControl1.Width - S(6)) / Math.Max(1, tabControl1.TabPages.Count)), S(32));
+            tabControl1.ItemSize = new Size(Math.Max(S(80), (tabControl1.Width - S(6)) / Math.Max(1, tabControl1.TabPages.Count)), S(TabStripH));
             tabControl1.Padding = new Point(12, 4);
             tabControl1.DrawItem += TabControl_DrawItem;
         }
@@ -1369,6 +1386,7 @@ namespace ConfigAppNS
             {
                 gb.BackColor = pal.PanelBg;
                 gb.ForeColor = pal.Title;
+                UiFont.Set(gb, UiFont.Body);   // children inherit body; the bold title is drawn in GroupBox_Paint
                 gb.Paint -= GroupBox_Paint;
                 gb.Paint += GroupBox_Paint;
                 return;
@@ -1377,6 +1395,7 @@ namespace ConfigAppNS
             {
                 tc.BackColor = pal.FormBg;
                 tc.ForeColor = pal.Text;
+                UiFont.Set(tc, UiFont.Tab);
                 return;
             }
             if (c is TabPage tp)
@@ -1385,6 +1404,7 @@ namespace ConfigAppNS
                 tp.BackColor = pal.PanelBg;
                 tp.ForeColor = pal.Text;
                 tp.BorderStyle = BorderStyle.None;
+                UiFont.Set(tp, UiFont.Body);
                 return;
             }
             if (c is Button b)
@@ -1412,6 +1432,7 @@ namespace ConfigAppNS
                 tx.BorderStyle = BorderStyle.FixedSingle;
                 tx.BackColor = pal.CardBg;
                 tx.ForeColor = pal.Text;
+                UiFont.Set(tx, IsValueControl(tx) ? UiFont.Value : UiFont.Body);
                 return;
             }
             if (c is ComboBox cb)
@@ -1419,18 +1440,24 @@ namespace ConfigAppNS
                 cb.FlatStyle = FlatStyle.Flat;
                 cb.BackColor = pal.CardBg;
                 cb.ForeColor = pal.Text;
+                UiFont.Set(cb, UiFont.Body);
                 return;
             }
             if (c is RadioButton || c is CheckBox)
             {
                 c.BackColor = pal.PanelBg;
                 c.ForeColor = pal.Text;
+                UiFont.Set(c, UiFont.Body);
                 return;
             }
             if (c is Label lb)
             {
                 lb.BackColor = Color.Transparent;
                 lb.ForeColor = (lb == label_MapHint) ? pal.MutedText : pal.Text;
+                if (lb == label_Ver)
+                    UiFont.Set(lb, UiFont.Status);
+                else
+                    UiFont.Set(lb, IsValueControl(lb) ? UiFont.Value : UiFont.Body);
                 return;
             }
             if (c is PictureBox)
@@ -1443,6 +1470,13 @@ namespace ConfigAppNS
                 c.BackColor = pal.CardBg;
                 return;
             }
+        }
+
+        /// <summary>Sensitivity / debounce numbers and their A–D column captions use the larger value font.</summary>
+        private bool IsValueControl(Control c)
+        {
+            return c == textBox_V1 || c == textBox_V2 || c == textBox_V3 || c == textBox_V4 || c == textBox_DTick
+                || c == label1 || c == label2 || c == label3 || c == label4 || c == label_DTick;
         }
 
         private void ThemeButton(Button b)
@@ -1483,8 +1517,7 @@ namespace ConfigAppNS
             b.UseVisualStyleBackColor = false;
             b.BackColor = back;
             b.ForeColor = fore;
-            if (b.Font == null || !b.Font.Bold || b.Font.Name != "Microsoft YaHei UI")
-                b.Font = new Font("Microsoft YaHei UI", Math.Max(9f, Math.Min(b.Font.Size, 11f)), FontStyle.Bold);
+            UiFont.Set(b, UiFont.Body, FontStyle.Bold);
         }
 
         private static Color Lighten(Color c, float amount)
@@ -1522,7 +1555,7 @@ namespace ConfigAppNS
             }
             if (!string.IsNullOrEmpty(gb.Text))
             {
-                using (Font f = new Font("Microsoft YaHei UI", Math.Max(9f, gb.Font.Size), FontStyle.Bold))
+                using (Font f = UiFont.Get(UiFont.GroupTitle, FontStyle.Bold))
                 using (SolidBrush tb = new SolidBrush(pal.Title))
                     g.DrawString(gb.Text, f, tb, S(10), S(4));
             }
@@ -1569,7 +1602,7 @@ namespace ConfigAppNS
                         e.Graphics.FillRectangle(underline, ul);
                 }
             }
-            using (Font f = new Font("Microsoft YaHei UI", 9f, selected ? FontStyle.Bold : FontStyle.Regular))
+            using (Font f = UiFont.Get(UiFont.Tab, selected ? FontStyle.Bold : FontStyle.Regular))
             using (SolidBrush tb = new SolidBrush(selected ? pal.Title : pal.MutedText))
             {
                 StringFormat sf = new StringFormat();
@@ -1608,6 +1641,10 @@ namespace ConfigAppNS
                 SelectedFill = pal.Selected,
                 SelectedGradientEnd = pal.SelectedGradientEnd,
                 GlowColor = pal.Glow,
+                ArrowTip = pal.ArrowTip,
+                ArrowMid = pal.ArrowMid,
+                ArrowBack = pal.ArrowBack,
+                ArrowGlow = pal.ArrowGlow,
                 BorderColor = pal.Border,
                 Selected = key == selected,
                 Triggered = triggered,
