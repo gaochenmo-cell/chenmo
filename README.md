@@ -2,8 +2,13 @@
 
 ## 下载
 
-- [`dist/PADUEX5/`](./dist/PADUEX5/) → `PADUEX5.exe`（1.0.0.52）
+- [`dist/PADUEX5/`](./dist/PADUEX5/) → `PADUEX5.exe`（1.0.0.53）
 - [`dist/PADUEX5-win-release.zip`](./dist/PADUEX5-win-release.zip)
+
+## 上位机 1.0.0.53
+
+- 去掉「Num 1P/2P」选择：1P/2P 由游戏按插入顺序自动分配，固件自 V2.12 起也不再接受上位机设定的 1P/2P 位。
+- 升级前校验固件 USB 中断向量（0x14C），拒绝 grok1.0～1.5。
 
 ## 固件
 

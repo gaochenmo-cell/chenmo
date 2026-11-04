@@ -831,6 +831,7 @@
             this.groupBox2.TabIndex = 173;
             this.groupBox2.TabStop = false;
             this.groupBox2.Text = "Num";
+            this.groupBox2.Visible = false;
             // 
             // radioButton_1P
             // 

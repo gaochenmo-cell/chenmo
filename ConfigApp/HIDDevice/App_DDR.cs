@@ -37,6 +37,9 @@ namespace ConfigAppNS
         private bool bDebugModesFG = false;
         private readonly bool[] padKeyActive = new bool[5];
         private byte mDeviceIndex = 0;
+        // 1P/2P is fixed by firmware since V2.12 (DEFAULT_1P2P); games assign players by
+        // plug-in order, so the host no longer exposes it. Echo back whatever the device reports.
+        private byte mDevicePlayerBits = (byte)UserMode.DDR_2PS;
         private byte DefaultOffset = 0x01;			//V1.0.0.18:20241012(1)Change ADX Save Issue
         ///-------------------------------------------------------------------------------------------
         private string AppName = "DDR Config";
@@ -866,9 +869,8 @@ namespace ConfigAppNS
 
         private void UpdatePlayerVisibilityForMode()
         {
-            // Keyboard remapping replaces 1P/2P keymap tables; HID mode still needs player.
             bool kbs = radioButton_KBS.Checked;
-            groupBox2.Visible = !kbs;
+            groupBox2.Visible = false;
             if (tabPage_Map != null)
                 tabPage_Map.Enabled = kbs;
         }
@@ -1196,7 +1198,7 @@ namespace ConfigAppNS
                 radioButton_HID.Text = "HID Mode";
                 if (tabPage_Map != null) tabPage_Map.Text = "Key Map";
                 if (groupBox_Map != null) groupBox_Map.Text = "Keyboard mapping";
-                if (label_MapHint != null) label_MapHint.Text = "Keyboard mode only. Requires firmware grok1.6 has no remap (grok1.0-1.5 are unsafe). Remap replaces 1P/2P; HID mode still uses 1P/2P.";
+                if (label_MapHint != null) label_MapHint.Text = "Keyboard mode only. Requires firmware grok1.6 has no remap (grok1.0-1.5 are unsafe). Player (1P/2P) is assigned by the game by plug-in order.";
                 if (label_MapKey != null) label_MapKey.Text = "Per-pad HID usage (select then Save Map):";
                 if (btn_MapRead != null) btn_MapRead.Text = "Read Map";
                 if (btn_MapSave != null) btn_MapSave.Text = "Save Map";
@@ -1224,7 +1226,7 @@ namespace ConfigAppNS
                 radioButton_HID.Text = "手柄";
                 if (tabPage_Map != null) tabPage_Map.Text = "按键映射";
                 if (groupBox_Map != null) groupBox_Map.Text = "键盘按键映射";
-                if (label_MapHint != null) label_MapHint.Text = "仅键盘模式，需固件 grok1.6 暂无改键（grok1.0～1.5 禁止）。改键后不必再分 1P/2P；手柄模式仍用 1P/2P。";
+                if (label_MapHint != null) label_MapHint.Text = "仅键盘模式，需固件 grok1.6 暂无改键（grok1.0～1.5 禁止）。1P/2P 由游戏按插入顺序自动分配，无需设置。";
                 if (label_MapKey != null) label_MapKey.Text = "五个踏板对应 HID 键值（选好后点保存映射）：";
                 if (btn_MapRead != null) btn_MapRead.Text = "读取映射";
                 if (btn_MapSave != null) btn_MapSave.Text = "保存映射";
@@ -1433,10 +1435,7 @@ namespace ConfigAppNS
             this.Text = AppName;
             label_Ver.Text = "";
             groupBox_Mode.Enabled = false;
-            radioButton_1P.Checked = false;
-            radioButton_1P.Enabled = false;  //V1.0.0.25:20250402(1)DDR Game Pad Mode
-            radioButton_2P.Checked = false;
-            radioButton_2P.Enabled = false;  //V1.0.0.25:20250402(1)DDR Game Pad Mode
+            bool slot0 = false, slot1 = false;
             bDeviceStatusFG = false;
             //-------------------------------------------------------------------------------------------//V1.0.0.20:20241231(1)Display OTA Device infor on App Title
             if (USBCtrl.USBLib_Connect((int)DeviceType.HID_OTA_VID, (int)DeviceType.HID_OTA_PID, (int)DeviceType.None) != (int)DeviceType.None)
@@ -1449,7 +1448,7 @@ namespace ConfigAppNS
                 (USBCtrl.USBLib_Connect((int)DeviceType.DDR_HID_VID, (int)DeviceType.DDR_HID_PID1, (int)DeviceType.None) != (int)DeviceType.None))      //V1.0.0.32:20250529(1)DDR HID Mode PID compatibility Issue
             {
                 bDeviceStatusFG = true;
-                radioButton_1P.Enabled = true;
+                slot0 = true;
             }
             //-------------------------------------------------------------------------------------------
             if ((USBCtrl.USBLib_Connect((int)DeviceType.DDR_KBS_VID, (int)DeviceType.None, (int)DeviceType.DDR_KBS_PID2) != (int)DeviceType.None) ||
@@ -1457,7 +1456,7 @@ namespace ConfigAppNS
                 (USBCtrl.USBLib_Connect((int)DeviceType.DDR_HID_VID, (int)DeviceType.None, (int)DeviceType.DDR_HID_PID3) != (int)DeviceType.None))      //V1.0.0.32:20250529(1)DDR HID Mode PID compatibility Issue
             {
                 bDeviceStatusFG = true;
-                radioButton_2P.Enabled = true;
+                slot1 = true;
             }
             //-------------------------------------------------------------------------------------------
             if (bDeviceStatusFG == true)
@@ -1465,24 +1464,8 @@ namespace ConfigAppNS
                 this.Text = AppName + " (Device Connected)";
                 groupBox_Mode.Enabled = true;
                 //---------------------------------------------------------------------------------------
-                if (radioButton_1P.Enabled == true)
-                {
-                    mDeviceIndex = 0;
-                    radioButton_1P.Checked = true;
-                    radioButton_2P.Checked = false;
-                }
-                else if (radioButton_2P.Enabled == true)
-                {
-                    mDeviceIndex = 1;
-                    radioButton_1P.Checked = false;
-                    radioButton_2P.Checked = true;
-                }
-                else
-                {
-                    mDeviceIndex = 0;
-                    radioButton_1P.Checked = false;
-                    radioButton_2P.Checked = false;
-                }
+                // HIDLibrary opens PID1 devices in slot 0 and PID2/PID3 devices in slot 1.
+                mDeviceIndex = (byte)(slot0 ? 0 : (slot1 ? 1 : 0));
                 //---------------------------------------------------------------------------------------
                 Btn_ReadMode_Click(null, null);
                 //---------------------------------------------------------------------------------------
@@ -2430,16 +2413,7 @@ namespace ConfigAppNS
             //-------------------------------------------------------------------------------------------
             if (InputReportBuf[ReportIndex + 0] == (byte)UserCommand.GET_MODE)
             {
-                if ((InputReportBuf[ReportIndex + 1] & (byte)UserMode.MSEL_MAK) == (byte)UserMode.DDR_1PS)
-                {
-                    radioButton_1P.Checked = true;
-                    radioButton_2P.Checked = false;
-                }
-                else
-                {
-                    radioButton_1P.Checked = false;
-                    radioButton_2P.Checked = true;
-                }
+                mDevicePlayerBits = (byte)(InputReportBuf[ReportIndex + 1] & (byte)UserMode.MSEL_MAK);
 
                 if ((InputReportBuf[ReportIndex + 1] & (byte)UserMode.MODE_MAK) == (byte)UserMode.DDR_KBS)
                 {
@@ -2463,15 +2437,7 @@ namespace ConfigAppNS
                 //V1.0.0.15:20240920(1)Change ADX TP Delay Config
                 if (InputReportBuf[ReportIndex + 2] == (byte)UserProID.ID_DDR)
                 {
-                    if ((InputReportBuf[ReportIndex + 1] & (byte)UserMode.MSEL_MAK) == (byte)UserMode.DDR_1PS)
-                    {
-                        label_Ver.Text = "1P : ";
-                    }
-                    else
-                    {
-                        label_Ver.Text = "2P : ";
-                    }
-                    label_Ver.Text += "UID=" + InputReportBuf[ReportIndex + 2].ToString("X02") + ", " +
+                    label_Ver.Text = "UID=" + InputReportBuf[ReportIndex + 2].ToString("X02") + ", " +
                                      "HVer=" + InputReportBuf[ReportIndex + 3].ToString("X02") + ", " +
                                      "FVer=" + InputReportBuf[ReportIndex + 4].ToString() + "." + InputReportBuf[ReportIndex + 5].ToString("D02");
                 }
@@ -2502,15 +2468,7 @@ namespace ConfigAppNS
             byte[] InputReportBuf = new byte[64];
             //byte Txd_CS = 0;
             //-------------------------------------------------------------------------------------------
-            byte WorkMode = 0;
-            if (radioButton_1P.Checked == true)
-            {
-                WorkMode = (byte)UserMode.DDR_1PS;
-            }
-            else
-            {
-                WorkMode = (byte)UserMode.DDR_2PS;
-            }
+            byte WorkMode = mDevicePlayerBits;
             if(radioButton_KBS.Checked == true)
             {
                 WorkMode |= (byte)UserMode.DDR_KBS;
