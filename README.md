@@ -5,6 +5,11 @@
 - [`dist/PADUEX5/`](./dist/PADUEX5/) → `PADUEX5.exe`（1.0.0.57）
 - [`dist/PADUEX5-win-release.zip`](./dist/PADUEX5-win-release.zip)
 
+## 上位机 1.0.0.58
+
+- 界面国际化：全部文案抽到 `ConfigApp/HIDDevice/Strings.resx`（英文）/ `Strings.zh-CN.resx`（简体中文），编译后生成 `zh-CN\PADUEX5.resources.dll` 语言文件。`Config.ini` 的 `LANGUAGE=AUTO|CN|EN`，默认 `AUTO` 跟随 Windows 显示语言；右上角「语言」菜单可切换（跟随系统 / 简体中文 / English），立即生效并写回 `Config.ini`。白天/黑夜主题下文案一致。
+- 固件版本显示修正：不再残留上一块板子 / 读取失败前的旧版本；读 GET_MODE 时先暂停 RAW 调试流、多次重试并校验 UID；只对已知版本加标注（2.17 = grok1.7；2.12 = 原厂 V2.12/V2.13 或 grok1.6），不再把 2.16 误标成 grok1.6；窗口标题不再拼接 `Config.ini` 里过期的 `NAME=PADUEX5 V1.0.0.44`。
+
 ## 上位机 1.0.0.57
 
 - grok1.7 固件上报 `FVer=2.17`，上位机标注 `(grok1.7)`；固件不支持改键时保存映射前会提醒。

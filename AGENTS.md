@@ -70,7 +70,10 @@ python3 firmware/tests/emu_keymap_e2e.py firmware/grok1.7.bin    # Unicorn 全�
 ```
 `emu_*` 只给 Flash 外设和 printf 打桩，其余全是镜像里的原字节；在 grok1.6 上跑 e2e 应有 5 项失败（对照组）。
 
-## 上位机现状（1.0.0.57）
+## 上位机现状（1.0.0.58）
+
+- 多语言：所有文案在 `ConfigApp/HIDDevice/Strings.resx`（en，中性）和 `Strings.zh-CN.resx`，代码里用 `L.Get("Key")` / `L.F("Key", args)`（`Localization.cs`）。新增文案必须两个 resx 都加。`Config.ini` `LANGUAGE=AUTO|CN|EN`（`AppConfig.cs` 读写），`AUTO` 跟随系统；切换走 `App_DDR.SetLanguage()` → `L.LanguageChanged` → `ApplyUiLanguage()`。
+- 固件版本：`ReadDeviceMode()` 是唯一的 GET_MODE 入口（暂停 RAW、重试、校验 UID=0xA2）；`mFwValid` 为 false 时任何地方都不能使用 `mFwMajor/mFwMinor`。GET_MODE 回包固件只写进共享回复缓冲区（`AppUser+0x11E`），不走中断 IN 端点，靠 `HidD_GetInputReport` 取。
 
 - Laverita 配色（白天 `#F3F4F6/#FFFFFF/#2F6FED`，黑夜 `#111827/#1F2937/#60A5FA`，选中键琥珀 `#F59E0B`，默认按钮红 `#DC2626`），`Palette` 类 + 递归 `ApplyTheme`，GroupBox/Tab/进度条自绘。
 - 窗口标题显示上位机版本；左上角显示 `UID/HVer/FVer (grokX.Y)`。

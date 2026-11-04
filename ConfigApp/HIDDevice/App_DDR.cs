@@ -32,7 +32,6 @@ namespace ConfigAppNS
         ///-------------------------------------------------------------------------------------------
         private bool bDeviceStatusFG = false;
         //private bool bTouchTestMode = false;
-        private bool bLanguageEN = false;
         private bool bDarkMode = false;
         private bool bDebugModesFG = false;
         private readonly bool[] padKeyActive = new bool[5];
@@ -40,19 +39,75 @@ namespace ConfigAppNS
         // 1P/2P is fixed by firmware since V2.12 (DEFAULT_1P2P); games assign players by
         // plug-in order, so the host no longer exposes it. Echo back whatever the device reports.
         private byte mDevicePlayerBits = (byte)UserMode.DDR_2PS;
-        private int mFwMajor = 0, mFwMinor = 0;
 
-        // Stock V2.12/V2.13 and grok1.6 all report 2.12; grok1.7 reports 2.17.
+        // Device identity from the last *successful* GET_MODE. mFwValid is false until a reply
+        // has been parsed and is cleared again on disconnect / OTA / failed read, so a previous
+        // board's version can never be shown or used for the key-map capability check.
+        private bool mFwValid = false;
+        private int mDevUid = 0, mDevHVer = 0;
+        private int mFwMajor = 0, mFwMinor = 0;
+        private const int GET_MODE_RETRIES = 5;
+        private const int GET_MODE_RETRY_MS = 60;
+
+        /// <summary>Firmware bytes are plain integers: major=2, minor=12 → "2.12".</summary>
+        private string FwVersionText()
+        {
+            return mFwMajor.ToString() + "." + mFwMinor.ToString("D02");
+        }
+
+        // Only tag versions we actually know. Stock V2.12, stock V2.13 (its FW_VERSION_MINOR
+        // constant was never bumped) and grok1.6 all report 2.12; grok1.7 is the only image
+        // that reports 2.17. Anything else is shown as-is without a guess.
         private string FwTag()
         {
-            if (mFwMajor == 2 && mFwMinor >= 16) return " (grok1." + (mFwMinor - 10) + ")";
+            if (!mFwValid) return "";
+            if (mFwMajor == 2 && mFwMinor == 17) return L.Get("Ver.Tag.Grok17");
+            if (mFwMajor == 2 && mFwMinor == 12) return L.Get("Ver.Tag.Stock212");
             return "";
         }
-        private bool FwHasKeyMap() { return mFwMajor == 2 && mFwMinor >= 17; }
+        private bool FwHasKeyMap() { return mFwValid && mFwMajor == 2 && mFwMinor >= 17; }
+
+        private void ResetDeviceVersion()
+        {
+            mFwValid = false;
+            mDevUid = mDevHVer = 0;
+            mFwMajor = mFwMinor = 0;
+        }
+
+        private void UpdateVersionLabel()
+        {
+            if (label_Ver == null) return;
+            if (!bDeviceStatusFG)
+            {
+                label_Ver.Text = "";
+                return;
+            }
+            if (!mFwValid)
+            {
+                label_Ver.Text = L.Get("Ver.NotRead");
+                return;
+            }
+            label_Ver.Text = L.F("Ver.Label",
+                mDevUid.ToString("X02"),
+                mDevHVer.ToString("X02"),
+                FwVersionText(),
+                FwTag());
+        }
+
         private byte DefaultOffset = 0x01;			//V1.0.0.18:20241012(1)Change ADX Save Issue
         ///-------------------------------------------------------------------------------------------
-        private string AppName = "DDR Config";
+        private const string AppName = "PADUEX5";
         private static readonly string HostVer = "v" + System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString();
+        private enum ConnState { None, Device, Ota }
+        private ConnState mConnState = ConnState.None;
+
+        private void UpdateWindowTitle()
+        {
+            string suffix = "";
+            if (mConnState == ConnState.Device) suffix = " " + L.Get("Title.Connected");
+            else if (mConnState == ConnState.Ota) suffix = " " + L.Get("Title.OtaConnected");
+            this.Text = AppName + " " + HostVer + suffix;
+        }
 
         ///-------------------------------------------------------------------------------------------
         //System.IO.FileInfo[] files;
@@ -389,6 +444,7 @@ namespace ConfigAppNS
             ApplyAppIcon();
             ///------------------------------------------------------------------------------------------
             ReadAppConfig();
+            L.LanguageChanged += (s, e) => { if (!IsDisposed) OnLanguageChanged(); };
             ///------------------------------------------------------------------------------------------
             USBCtrl.HIDLibraryLibChanged += HID_Event_Changed_Delegate;
             Find_USB_Deivce();
@@ -459,6 +515,8 @@ namespace ConfigAppNS
         private Label label_MapHint;
         private Label label_MapKey;
         private ComboBox[] mapKeyCombos;
+        private Label[] mapKeyLabels;
+        private static readonly string[] MapPadKeys = new string[] { "Map.Pad.UL", "Map.Pad.UR", "Map.Pad.C", "Map.Pad.DL", "Map.Pad.DR" };
         private Button btn_MapRead;
         private Button btn_MapSave;
         private readonly int[] KeyMappingBuffer = new int[KEY_COUNT_5KEY];
@@ -513,7 +571,7 @@ namespace ConfigAppNS
 
         private void ApplyFiveKeyLayoutOnly()
         {
-            this.Text = "PADUEX5 " + HostVer;
+            UpdateWindowTitle();
             this.AutoScaleMode = AutoScaleMode.None;
             this.FormBorderStyle = FormBorderStyle.Sizable;
             this.MaximizeBox = true;
@@ -773,6 +831,9 @@ namespace ConfigAppNS
             this.Controls.Add(btnFirmwareUpgrade);
         }
 
+        private ContextMenuStrip menuLanguage;
+        private ToolStripMenuItem menuLangAuto, menuLangZh, menuLangEn;
+
         private void EnsureLanguageToggleButton()
         {
             if (btnLangToggle != null)
@@ -783,6 +844,77 @@ namespace ConfigAppNS
             btnLangToggle.UseVisualStyleBackColor = false;
             btnLangToggle.Click += new EventHandler(this.Btn_LangToggle_Click);
             this.Controls.Add(btnLangToggle);
+
+            menuLanguage = new ContextMenuStrip();
+            menuLanguage.ShowImageMargin = false;
+            menuLangAuto = new ToolStripMenuItem();
+            menuLangZh = new ToolStripMenuItem();
+            menuLangEn = new ToolStripMenuItem();
+            menuLangAuto.Click += (s, e) => SetLanguage(L.SettingAuto);
+            menuLangZh.Click += (s, e) => SetLanguage(L.SettingChinese);
+            menuLangEn.Click += (s, e) => SetLanguage(L.SettingEnglish);
+            menuLanguage.Items.Add(menuLangAuto);
+            menuLanguage.Items.Add(new ToolStripSeparator());
+            menuLanguage.Items.Add(menuLangZh);
+            menuLanguage.Items.Add(menuLangEn);
+            menuLanguage.Opening += (s, e) => RefreshLanguageMenu();
+        }
+
+        private void RefreshLanguageMenu()
+        {
+            if (menuLanguage == null) return;
+            menuLangAuto.Text = L.Get("Lang.Auto");
+            menuLangZh.Text = L.Get("Lang.zhCN");
+            menuLangEn.Text = L.Get("Lang.en");
+            menuLangAuto.Checked = L.Setting == L.SettingAuto;
+            menuLangZh.Checked = L.Setting == L.SettingChinese;
+            menuLangEn.Checked = L.Setting == L.SettingEnglish;
+            // Match the active theme so the menu is readable in dark mode too
+            menuLanguage.Renderer = new ToolStripProfessionalRenderer(new MenuColors(pal));
+            menuLanguage.BackColor = pal.PanelBg;
+            menuLanguage.ForeColor = pal.Text;
+            foreach (ToolStripItem it in menuLanguage.Items)
+            {
+                it.BackColor = pal.PanelBg;
+                it.ForeColor = pal.Text;
+            }
+        }
+
+        private void SetLanguage(string setting)
+        {
+            L.Apply(setting);                 // raises LanguageChanged → OnLanguageChanged()
+            AppConfig.Write("LANGUAGE", L.Setting);
+        }
+
+        /// <summary>Re-apply every localized caption and repaint owner-drawn chrome (tabs, group titles).</summary>
+        private void OnLanguageChanged()
+        {
+            ApplyUiLanguage();
+            if (layoutReady && !layoutBusy)
+                RebuildScaledLayout();
+            this.Invalidate(true);
+        }
+
+        private sealed class MenuColors : ProfessionalColorTable
+        {
+            private readonly Palette p;
+            public MenuColors(Palette pal) { p = pal; }
+            public override Color MenuBorder { get { return p.Border; } }
+            public override Color MenuItemBorder { get { return p.Accent; } }
+            public override Color MenuItemSelected { get { return p.CardBg; } }
+            public override Color MenuItemSelectedGradientBegin { get { return p.CardBg; } }
+            public override Color MenuItemSelectedGradientEnd { get { return p.CardBg; } }
+            public override Color MenuItemPressedGradientBegin { get { return p.CardBg; } }
+            public override Color MenuItemPressedGradientEnd { get { return p.CardBg; } }
+            public override Color ToolStripDropDownBackground { get { return p.PanelBg; } }
+            public override Color ImageMarginGradientBegin { get { return p.PanelBg; } }
+            public override Color ImageMarginGradientMiddle { get { return p.PanelBg; } }
+            public override Color ImageMarginGradientEnd { get { return p.PanelBg; } }
+            public override Color SeparatorDark { get { return p.Border; } }
+            public override Color SeparatorLight { get { return p.PanelBg; } }
+            public override Color CheckBackground { get { return p.Accent; } }
+            public override Color CheckSelectedBackground { get { return p.Accent; } }
+            public override Color CheckPressedBackground { get { return p.Accent; } }
         }
 
         private void EnsureThemeToggleButton()
@@ -824,15 +956,16 @@ namespace ConfigAppNS
             label_MapKey.Size = new Size(S(440), S(24));
             groupBox_Map.Controls.Add(label_MapKey);
 
-            string[] names = new string[] { "↖ UL", "↗ UR", "● Center", "↙ DL", "↘ DR" };
             mapKeyCombos = new ComboBox[KEY_COUNT_5KEY];
+            mapKeyLabels = new Label[KEY_COUNT_5KEY];
             for (int i = 0; i < KEY_COUNT_5KEY; i++)
             {
                 Label lb = new Label();
-                lb.Text = names[i];
+                lb.Text = L.Get(MapPadKeys[i]);
                 lb.Location = new Point(S(16), S(120) + i * S(42));
                 lb.Size = new Size(S(100), S(28));
                 groupBox_Map.Controls.Add(lb);
+                mapKeyLabels[i] = lb;
 
                 ComboBox cb = new ComboBox();
                 cb.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -881,33 +1014,67 @@ namespace ConfigAppNS
             public override string ToString() { return Name; }
         }
 
+        // Common NKRO usages (HID keyboard page). Names starting with '@' are resource keys.
+        private static readonly string[][] HidUsageTable = new string[][] {
+            new[]{"04","A"}, new[]{"05","B"}, new[]{"06","C"}, new[]{"07","D"},
+            new[]{"08","E"}, new[]{"09","F"}, new[]{"0A","G"}, new[]{"0B","H"},
+            new[]{"0C","I"}, new[]{"0D","J"}, new[]{"0E","K"}, new[]{"0F","L"},
+            new[]{"10","M"}, new[]{"11","N"}, new[]{"12","O"}, new[]{"13","P"},
+            new[]{"14","Q"}, new[]{"15","R"}, new[]{"16","S"}, new[]{"17","T"},
+            new[]{"18","U"}, new[]{"19","V"}, new[]{"1A","W"}, new[]{"1B","X"},
+            new[]{"1C","Y"}, new[]{"1D","Z"},
+            new[]{"1E","1"}, new[]{"1F","2"}, new[]{"20","3"}, new[]{"21","4"},
+            new[]{"22","5"}, new[]{"23","6"}, new[]{"24","7"}, new[]{"25","8"},
+            new[]{"26","9"}, new[]{"27","0"},
+            new[]{"2C","@Hid.Space"}, new[]{"28","@Hid.Enter"}, new[]{"2A","@Hid.Backspace"},
+            new[]{"50","@Hid.Left"}, new[]{"4F","@Hid.Right"}, new[]{"52","@Hid.Up"}, new[]{"51","@Hid.Down"},
+            new[]{"3A","F1"}, new[]{"3B","F2"}, new[]{"3C","F3"},
+            new[]{"59","@Hid.Numpad|1"}, new[]{"5A","@Hid.Numpad|2"}, new[]{"5B","@Hid.Numpad|3"}, new[]{"5C","@Hid.Numpad|4"},
+            new[]{"5D","@Hid.Numpad|5"}, new[]{"5E","@Hid.Numpad|6"}, new[]{"5F","@Hid.Numpad|7"}, new[]{"60","@Hid.Numpad|8"},
+            new[]{"61","@Hid.Numpad|9"}, new[]{"62","@Hid.Numpad|0"},
+        };
+
+        private static string HidUsageDisplayName(string[] row)
+        {
+            string name = row[1];
+            if (name.StartsWith("@"))
+            {
+                int bar = name.IndexOf('|');
+                name = bar > 0 ? L.F(name.Substring(1, bar - 1), name.Substring(bar + 1)) : L.Get(name.Substring(1));
+            }
+            return name + " (0x" + row[0] + ")";
+        }
+
         private void FillHidUsageCombo(ComboBox cb)
         {
             cb.Items.Clear();
-            // Common NKRO usages (HID keyboard page)
-            string[][] table = new string[][] {
-                new[]{"04","A"}, new[]{"05","B"}, new[]{"06","C"}, new[]{"07","D"},
-                new[]{"08","E"}, new[]{"09","F"}, new[]{"0A","G"}, new[]{"0B","H"},
-                new[]{"0C","I"}, new[]{"0D","J"}, new[]{"0E","K"}, new[]{"0F","L"},
-                new[]{"10","M"}, new[]{"11","N"}, new[]{"12","O"}, new[]{"13","P"},
-                new[]{"14","Q"}, new[]{"15","R"}, new[]{"16","S"}, new[]{"17","T"},
-                new[]{"18","U"}, new[]{"19","V"}, new[]{"1A","W"}, new[]{"1B","X"},
-                new[]{"1C","Y"}, new[]{"1D","Z"},
-                new[]{"1E","1"}, new[]{"1F","2"}, new[]{"20","3"}, new[]{"21","4"},
-                new[]{"22","5"}, new[]{"23","6"}, new[]{"24","7"}, new[]{"25","8"},
-                new[]{"26","9"}, new[]{"27","0"},
-                new[]{"2C","Space"}, new[]{"28","Enter"}, new[]{"2A","Backspace"},
-                new[]{"50","Left"}, new[]{"4F","Right"}, new[]{"52","Up"}, new[]{"51","Down"},
-                new[]{"3A","F1"}, new[]{"3B","F2"}, new[]{"3C","F3"},
-                new[]{"59","N1"}, new[]{"5A","N2"}, new[]{"5B","N3"}, new[]{"5C","N4"},
-                new[]{"5D","N5"}, new[]{"5E","N6"}, new[]{"5F","N7"}, new[]{"60","N8"},
-                new[]{"61","N9"}, new[]{"62","N0"},
-            };
-            foreach (string[] row in table)
+            foreach (string[] row in HidUsageTable)
             {
                 int u = Convert.ToInt32(row[0], 16);
-                cb.Items.Add(new HidUsageItem { Usage = u, Name = row[1] + " (0x" + row[0] + ")" });
+                cb.Items.Add(new HidUsageItem { Usage = u, Name = HidUsageDisplayName(row) });
             }
+        }
+
+        /// <summary>Language switch: rebuild the combo item captions without losing the selection.</summary>
+        private void RelocalizeHidUsageCombos()
+        {
+            if (mapKeyCombos == null) return;
+            foreach (ComboBox cb in mapKeyCombos)
+            {
+                int keep = cb.SelectedItem is HidUsageItem sel ? sel.Usage : -1;
+                cb.BeginUpdate();
+                FillHidUsageCombo(cb);
+                cb.EndUpdate();
+                if (keep >= 0)
+                {
+                    for (int j = 0; j < cb.Items.Count; j++)
+                    {
+                        HidUsageItem it = cb.Items[j] as HidUsageItem;
+                        if (it != null && it.Usage == keep) { cb.SelectedIndex = j; break; }
+                    }
+                }
+            }
+            SyncMapCombosFromBuffer();
         }
 
         private void SyncMapCombosFromBuffer()
@@ -944,8 +1111,7 @@ namespace ConfigAppNS
         {
             if (!bDeviceStatusFG)
             {
-                MessageBox.Show(bLanguageEN ? "No device connected." : "未连接设备。", "PADUEX5",
-                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(L.Get("Map.NoDevice"), AppName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             // Colour table (type 1) carries the keymap in slot key*4+1 — no new USB command needed.
@@ -957,11 +1123,8 @@ namespace ConfigAppNS
             bool tagged = false;
             for (int k = 0; k < KEY_COUNT_5KEY; k++)
                 tagged |= ((ColorBuffer[k * 4 + 1] >> 8) & 0xFF) == MAP_TAG;
-            MessageBox.Show(
-                tagged
-                    ? (bLanguageEN ? "Key map read OK." : "按键映射读取成功。")
-                    : (bLanguageEN ? "No custom key map on device — showing firmware defaults." : "设备未设置自定义映射，显示的是固件默认键位。"),
-                "PADUEX5", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(L.Get(tagged ? "Map.ReadOk" : "Map.ReadDefault"),
+                AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void Save_KeyMapping_Config()
@@ -982,19 +1145,21 @@ namespace ConfigAppNS
         {
             if (!bDeviceStatusFG)
             {
-                MessageBox.Show(bLanguageEN ? "No device connected." : "未连接设备。", "PADUEX5",
-                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(L.Get("Map.NoDevice"), AppName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             if (!clear && !FwHasKeyMap())
             {
-                DialogResult r = MessageBox.Show(
-                    bLanguageEN
-                        ? "Device firmware is " + mFwMajor + "." + mFwMinor.ToString("D02") + " which does not read the key map (needs grok1.7 = 2.17).\nSave anyway? It will take effect after flashing grok1.7."
-                        : "设备固件版本 " + mFwMajor + "." + mFwMinor.ToString("D02") + " 不支持改键（需 grok1.7，显示为 2.17）。\n仍要保存吗？刷入 grok1.7 后会生效。",
-                    "PADUEX5", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-                if (r != DialogResult.Yes)
-                    return;
+                // Version may be stale/unknown: re-read it right now instead of trusting a cached value
+                if (!mFwValid) ReadDeviceMode();
+                if (!FwHasKeyMap())
+                {
+                    string ver = mFwValid ? FwVersionText() : "?";
+                    DialogResult r = MessageBox.Show(L.F("Map.FwNoSupport", ver),
+                        AppName, MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                    if (r != DialogResult.Yes)
+                        return;
+                }
             }
             // Refresh LED colours first so we never clobber them with stale data
             if (Read_Config_PausingDebug(0x01, ColorBuffer, CONFIG_VALUE_COUNT) == 0)
@@ -1002,13 +1167,8 @@ namespace ConfigAppNS
             EncodeKeyMapIntoColor(clear);
             if (Write_Config_PausingDebug(0x01, ColorBuffer, CONFIG_VALUE_COUNT) == 0)
                 return;
-            MessageBox.Show(
-                clear
-                    ? (bLanguageEN ? "Key map reset to firmware default." : "按键映射已恢复固件默认。")
-                    : (bLanguageEN
-                        ? "Key map saved. Takes effect immediately in keyboard mode (needs firmware grok1.7+)."
-                        : "按键映射已保存。键盘模式下立即生效（需固件 grok1.7 及以上）。"),
-                "PADUEX5", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(L.Get(clear ? "Map.ResetOk" : "Map.SaveOk"),
+                AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void Btn_ThemeToggle_Click(object sender, EventArgs e)
@@ -1023,38 +1183,13 @@ namespace ConfigAppNS
         {
             if (btnThemeToggle == null)
                 return;
-            if (bLanguageEN)
-                btnThemeToggle.Text = bDarkMode ? "Light" : "Dark";
-            else
-                btnThemeToggle.Text = bDarkMode ? "白天" : "黑夜";
+            // Caption names the theme you will switch TO
+            btnThemeToggle.Text = L.Get(bDarkMode ? "Btn.ThemeLight" : "Btn.ThemeDark");
         }
 
         private void WriteThemeToConfig()
         {
-            try
-            {
-                string path = Directory.GetCurrentDirectory() + "\\Config.ini";
-                if (!File.Exists(path))
-                    return;
-                string[] lines = File.ReadAllLines(path);
-                bool found = false;
-                for (int i = 0; i < lines.Length; i++)
-                {
-                    if (lines[i].StartsWith("THEME=", StringComparison.OrdinalIgnoreCase))
-                    {
-                        lines[i] = "THEME=" + (bDarkMode ? "DARK" : "LIGHT");
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found)
-                {
-                    Array.Resize(ref lines, lines.Length + 1);
-                    lines[lines.Length - 1] = "THEME=" + (bDarkMode ? "DARK" : "LIGHT");
-                }
-                File.WriteAllLines(path, lines);
-            }
-            catch { }
+            AppConfig.Write("THEME", bDarkMode ? "DARK" : "LIGHT");
         }
 
         /// <summary>Laverita palette (Tailwind gray scale + blue / amber / red accents).</summary>
@@ -1534,81 +1669,65 @@ namespace ConfigAppNS
 
         private void Btn_LangToggle_Click(object sender, EventArgs e)
         {
-            bLanguageEN = !bLanguageEN;
-            ApplyUiLanguage();
+            if (menuLanguage == null || btnLangToggle == null)
+                return;
+            RefreshLanguageMenu();
+            menuLanguage.Show(btnLangToggle, new Point(0, btnLangToggle.Height));
         }
 
+        /// <summary>
+        /// Every user-visible caption of the main window. All text comes from Strings*.resx via L;
+        /// called at start-up and again whenever the language changes (theme-independent, so the
+        /// dark palette simply recolours the same strings).
+        /// </summary>
         private void ApplyUiLanguage()
         {
-            if (bLanguageEN)
-            {
-                if (btnLangToggle != null) btnLangToggle.Text = "中文";
-                btn_default.Text = "Default";
-                btn_Read.Text = "Read";
-                btn_Save.Text = "Save";
-                Btn_ADJ.Text = "Debug";
-                Btn_ReadMode.Text = "Read Mode";
-                Btn_SaveMode.Text = "Save Mode";
-                if (btnFirmwareUpgrade != null) btnFirmwareUpgrade.Text = "FW Upgrade";
-                groupBox_Button.Text = "Edit";
-                groupBox_Mode.Text = "Mode";
-                groupBox_Sensi.Text = "Sensitivity";
-                groupBox_Color.Text = "Color";
-                groupBox_DTick.Text = "Debounce (0~1000 ms)";
-                label_DTick.Text = "Hold (ms) =";
-                tabPage_Sensi.Text = "Sensitivity";
-                tabPage_Color.Text = "Color";
-                tabPage_DTick.Text = "Debounce";
-                groupBox_USBMode.Text = "USB";
-                radioButton_KBS.Text = "KeyBoard";
-                radioButton_HID.Text = "HID Mode";
-                if (tabPage_Map != null) tabPage_Map.Text = "Key Map";
-                if (groupBox_Map != null) groupBox_Map.Text = "Keyboard mapping";
-                if (label_MapHint != null) label_MapHint.Text = "Keyboard mode only. Requires firmware grok1.7+. Stored in the colour table, so Save Colour keeps it. Player (1P/2P) is assigned by the game by plug-in order.";
-                if (label_MapKey != null) label_MapKey.Text = "Per-pad HID usage (select then Save Map):";
-                if (btn_MapRead != null) btn_MapRead.Text = "Read Map";
-                if (btn_MapSave != null) btn_MapSave.Text = "Save Map";
-                if (btn_MapDefault != null) btn_MapDefault.Text = "Default";
-            }
-            else
-            {
-                if (btnLangToggle != null) btnLangToggle.Text = "English";
-                btn_default.Text = "默认设置";
-                btn_Read.Text = "读取设置";
-                btn_Save.Text = "保存设置";
-                Btn_ReadMode.Text = "读取模式";
-                Btn_SaveMode.Text = "保存模式";
-                if (btnFirmwareUpgrade != null) btnFirmwareUpgrade.Text = "固件升级";
-                groupBox_Button.Text = "编辑";
-                groupBox_Mode.Text = "模式";
-                groupBox_Sensi.Text = "灵敏度";
-                groupBox_Color.Text = "调色";
-                groupBox_DTick.Text = "延迟释放 (0~1000 ms)";
-                label_DTick.Text = "松开保持(ms) =";
-                tabPage_Sensi.Text = "灵敏度";
-                tabPage_Color.Text = "调色";
-                tabPage_DTick.Text = "延迟释放";
-                groupBox_USBMode.Text = "USB";
-                radioButton_KBS.Text = "键盘";
-                radioButton_HID.Text = "手柄";
-                if (tabPage_Map != null) tabPage_Map.Text = "按键映射";
-                if (groupBox_Map != null) groupBox_Map.Text = "键盘按键映射";
-                if (label_MapHint != null) label_MapHint.Text = "仅键盘模式，需固件 grok1.7 及以上。映射随灯色一起保存在板子里。1P/2P 由游戏按插入顺序自动分配，无需设置。";
-                if (label_MapKey != null) label_MapKey.Text = "五个踏板对应 HID 键值（选好后点保存映射）：";
-                if (btn_MapRead != null) btn_MapRead.Text = "读取映射";
-                if (btn_MapSave != null) btn_MapSave.Text = "保存映射";
-                if (btn_MapDefault != null) btn_MapDefault.Text = "默认设置";
-            }
+            if (btnLangToggle != null) btnLangToggle.Text = L.Get("Btn.Language");
+            btn_default.Text = L.Get("Btn.Default");
+            btn_Read.Text = L.Get("Btn.Read");
+            btn_Save.Text = L.Get("Btn.Save");
+            Btn_ReadMode.Text = L.Get("Btn.ReadMode");
+            Btn_SaveMode.Text = L.Get("Btn.SaveMode");
+            button1.Text = L.Get("Btn.RawRead");
+            button2.Text = L.Get("Btn.RawClear");
+            if (btnFirmwareUpgrade != null) btnFirmwareUpgrade.Text = L.Get("Btn.FwUpgrade");
+            groupBox_Button.Text = L.Get("Group.Edit");
+            groupBox_Mode.Text = L.Get("Group.Mode");
+            groupBox_Sensi.Text = L.Get("Group.Sensitivity");
+            groupBox_Color.Text = L.Get("Group.Color");
+            groupBox_DTick.Text = L.Get("Group.Debounce");
+            groupBox2.Text = L.Get("Group.PlayerNum");
+            label_DTick.Text = L.Get("Label.Hold");
+            tabPage_Sensi.Text = L.Get("Tab.Sensitivity");
+            tabPage_Color.Text = L.Get("Tab.Color");
+            tabPage_DTick.Text = L.Get("Tab.Debounce");
+            groupBox_USBMode.Text = L.Get("Group.USB");
+            radioButton_KBS.Text = L.Get("Radio.Keyboard");
+            radioButton_HID.Text = L.Get("Radio.Gamepad");
+            radioButton_IO4.Text = L.Get("Radio.IO");
+            radioButton_1P.Text = L.Get("Radio.1P");
+            radioButton_2P.Text = L.Get("Radio.2P");
+            if (tabPage_Map != null) tabPage_Map.Text = L.Get("Tab.KeyMap");
+            if (groupBox_Map != null) groupBox_Map.Text = L.Get("Map.Group");
+            if (label_MapHint != null) label_MapHint.Text = L.Get("Map.Hint");
+            if (label_MapKey != null) label_MapKey.Text = L.Get("Map.KeyLabel");
+            if (btn_MapRead != null) btn_MapRead.Text = L.Get("Map.Read");
+            if (btn_MapSave != null) btn_MapSave.Text = L.Get("Map.Save");
+            if (btn_MapDefault != null) btn_MapDefault.Text = L.Get("Map.Default");
+            if (mapKeyLabels != null)
+                for (int i = 0; i < mapKeyLabels.Length; i++)
+                    mapKeyLabels[i].Text = L.Get(MapPadKeys[i]);
+            RelocalizeHidUsageCombos();
             UpdateDebugButtonText();
             UpdateThemeToggleText();
+            UpdateWindowTitle();
+            UpdateVersionLabel();
+            RefreshLanguageMenu();
         }
 
         private void UpdateDebugButtonText()
         {
-            if (bLanguageEN)
-                Btn_ADJ.Text = bDebugModesFG ? "Stop" : "Debug";
-            else
-                Btn_ADJ.Text = bDebugModesFG ? "停止" : "调试模式";
+            Btn_ADJ.Text = L.Get(bDebugModesFG ? "Btn.Stop" : "Btn.Debug");
         }
 
         private void SendRawModeCommand(byte b0, byte b1, byte b2, byte b3, byte b4)
@@ -1695,54 +1814,13 @@ namespace ConfigAppNS
         private void ReadAppConfig()
         {
             ///------------------------------------------------------------------------------------------
-            string Currentpath = Directory.GetCurrentDirectory() + "\\Config.ini";
-            string Str = "";
+            // LANGUAGE is applied in Program.Main (before any form exists); THEME is read here.
+            // NAME from Config.ini is no longer used for the title: it carried a stale version
+            // string ("PADUEX5 V1.0.0.44") that was shown next to the real assembly version.
+            string theme = AppConfig.Read("THEME");
+            bDarkMode = theme != null && theme.Trim().Equals("DARK", StringComparison.OrdinalIgnoreCase);
             ///------------------------------------------------------------------------------------------
-            AppName = "DDR Config";
-            ///------------------------------------------------------------------------------------------
-            using (StreamReader Rhandle = File.OpenText(Currentpath))         // Create a file to write to.
-            {
-                for (byte i = 0; i < 5; i++)
-                {
-                    Str = Rhandle.ReadLine();
-                    if (Str == "[APP Config]")
-                    {
-                        for (byte j = 0; j < 50; j++)
-                        {
-                            Str = Rhandle.ReadLine();
-                            string[] S = Str.Split(';');
-                            Str = S[0];
-                            string[] StrTab = Str.Split('=');
-                            Str = StrTab[0];
-                            if (Str == "")
-                            {
-                                break;
-                            }
-                            else if (Str == "NAME")
-                            {
-                                AppName = StrTab[1];
-                            }
-                            else if (Str == "LANGUAGE")
-                            {
-                                bLanguageEN = (StrTab[1] == "EN");
-                            }
-                            else if (Str == "THEME")
-                            {
-                                bDarkMode = (StrTab[1] == "DARK");
-                            }
-                            else if (Str == "UPDATE")
-                            {
-                            }
-                            else if (Str == "CONFIGEND")
-                            {
-                                if (StrTab[1] == "YES") break;
-                            }
-                        }
-                    }
-                }
-            }
-            ///------------------------------------------------------------------------------------------
-            this.Text = AppName + " " + HostVer;
+            UpdateWindowTitle();
             ///------------------------------------------------------------------------------------------
         }
 
@@ -1800,15 +1878,19 @@ namespace ConfigAppNS
             //-------------------------------------------------------------------------------------------
             //USBCtrl.HIDLibraryLibChanged += HID_Event_Changed_Delegate;
             //-------------------------------------------------------------------------------------------
-            this.Text = AppName + " " + HostVer;
-            label_Ver.Text = "";
+            // Forget the previous board completely: version, connection state, label.
+            bDeviceStatusFG = false;
+            mConnState = ConnState.None;
+            ResetDeviceVersion();
+            UpdateWindowTitle();
+            UpdateVersionLabel();
             SetModeGroupEnabled(false);
             bool slot0 = false, slot1 = false;
-            bDeviceStatusFG = false;
             //-------------------------------------------------------------------------------------------//V1.0.0.20:20241231(1)Display OTA Device infor on App Title
             if (USBCtrl.USBLib_Connect((int)DeviceType.HID_OTA_VID, (int)DeviceType.HID_OTA_PID, (int)DeviceType.None) != (int)DeviceType.None)
             {
-                this.Text = AppName + " " + HostVer + " ( OTA Device Connected)";
+                mConnState = ConnState.Ota;
+                UpdateWindowTitle();
                 return;
             }
             //-------------------------------------------------------------------------------------------
@@ -1829,7 +1911,8 @@ namespace ConfigAppNS
             //-------------------------------------------------------------------------------------------
             if (bDeviceStatusFG == true)
             {
-                this.Text = AppName + " " + HostVer + " (Device Connected)";
+                mConnState = ConnState.Device;
+                UpdateWindowTitle();
                 SetModeGroupEnabled(true);
                 //---------------------------------------------------------------------------------------
                 // HIDLibrary opens PID1 devices in slot 0 and PID2/PID3 devices in slot 1.
@@ -2029,6 +2112,17 @@ namespace ConfigAppNS
         //RSP : 52 52 53 50 00
         //Data: 03 E8 03 E8 03 E8 03E8 03E8 03E8 03E8 03E8 03E8 03E8 03E8 03E8 03E8 03E8 03E8 03E8 
         //CS  : 66
+        private static string HexHead(byte[] buf, int start, int count)
+        {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < count; i++)
+            {
+                if (i > 0) sb.Append(' ');
+                sb.Append(buf[start + i].ToString("X02"));
+            }
+            return sb.ToString();
+        }
+
         private byte Read_Config_Value(byte ConfigType, int[] ConfigOut, int Len)
         {
             //-------------------------------------------------------------------------------------------
@@ -2089,23 +2183,18 @@ namespace ConfigAppNS
                 }
                 else
                 {
-                    MessageBox.Show("Read Config CS Error !!! (" + CS.ToString("X02") +","+ InputReportBuf[ReportIndex + PktLen - 1].ToString("X02") + ")", "System Message", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show(L.F("Cfg.ReadCsError", CS.ToString("X02"), InputReportBuf[ReportIndex + PktLen - 1].ToString("X02")), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return 0;
                 }
                 //---------------------------------------------------------------------------------------
             }
             else
             {
-                MessageBox.Show("Read Config Error !!!(" 
-                    + InputReportBuf[ReportIndex + 0].ToString("X02")
-                    + InputReportBuf[ReportIndex + 1].ToString("X02")
-                    + InputReportBuf[ReportIndex + 2].ToString("X02")
-                    + InputReportBuf[ReportIndex + 3].ToString("X02")
-                    + InputReportBuf[ReportIndex + 4].ToString("X02")+")", "System Message", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(L.F("Cfg.ReadError", HexHead(InputReportBuf, ReportIndex, 5)), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return 0;
             }
             //-------------------------------------------------------------------------------------------
-            MessageBox.Show("Read Complete !!!", "System Message", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(L.Get("Cfg.ReadOk"), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
             return 1;
             //-------------------------------------------------------------------------------------------
         }
@@ -2174,16 +2263,11 @@ namespace ConfigAppNS
             }
             else
             {
-                MessageBox.Show("Write Config Error !!!("
-                    + InputReportBuf[ReportIndex + 0].ToString("X02")
-                    + InputReportBuf[ReportIndex + 1].ToString("X02")
-                    + InputReportBuf[ReportIndex + 2].ToString("X02")
-                    + InputReportBuf[ReportIndex + 3].ToString("X02")
-                    + InputReportBuf[ReportIndex + 4].ToString("X02") + ")", "System Message", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(L.F("Cfg.WriteError", HexHead(InputReportBuf, ReportIndex, 5)), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return 0;
             }
             //-------------------------------------------------------------------------------------------
-            MessageBox.Show("Write Config Complete !!!", "System Message", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(L.Get("Cfg.WriteOk"), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
             return 1;
             //-------------------------------------------------------------------------------------------
         }
@@ -2451,7 +2535,7 @@ namespace ConfigAppNS
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Input Error \r\n" + ex.Message, "Error Message", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(L.F("Msg.InputError", ex.Message), L.Get("Msg.ErrorTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
         private void textBox_V2_TextChanged(object sender, EventArgs e)
@@ -2471,7 +2555,7 @@ namespace ConfigAppNS
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Input Error \r\n" + ex.Message, "Error Message", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(L.F("Msg.InputError", ex.Message), L.Get("Msg.ErrorTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -2492,7 +2576,7 @@ namespace ConfigAppNS
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Input Error \r\n" + ex.Message, "Error Message", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(L.F("Msg.InputError", ex.Message), L.Get("Msg.ErrorTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -2513,7 +2597,7 @@ namespace ConfigAppNS
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Input Error \r\n" + ex.Message, "Error Message", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(L.F("Msg.InputError", ex.Message), L.Get("Msg.ErrorTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -2607,7 +2691,7 @@ namespace ConfigAppNS
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Input Error \r\n" + ex.Message, "Error Message", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(L.F("Msg.InputError", ex.Message), L.Get("Msg.ErrorTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -2751,73 +2835,87 @@ namespace ConfigAppNS
         /////V1.0.0.16:20240921(1)Change DDR 1P and 2P Mode
         private void Btn_ReadMode_Click(object sender, EventArgs e)
         {
+            ReadDeviceMode();
+        }
+
+        /// <summary>
+        /// GET_MODE (0x47). Reply (64-byte input report, read with HidD_GetInputReport):
+        ///   [0]=0x47  [1]=mode  [2]=UID 0xA2  [3]=HVer  [4]=FW major  [5]=FW minor (plain integers)
+        /// The firmware does not push this reply on the interrupt endpoint — it only leaves it in
+        /// the shared reply buffer, which RAW-debug streaming and other replies overwrite. So:
+        ///   * pause RAW mode while asking,
+        ///   * poll a few times instead of a single fixed 100 ms read,
+        ///   * accept only a frame that also carries our product ID, otherwise mark the version unknown.
+        /// </summary>
+        private bool ReadDeviceMode()
+        {
             //-------------------------------------------------------------------------------------------
             byte ReportSize = 64;
             byte ReportID = 0;
-            byte index = 0;
             byte ReportIndex = 0x00;
             byte[] SendByteBuf = new byte[64];
             byte[] InputReportBuf = new byte[64];
-            //byte CS = 0x00;
             //-------------------------------------------------------------------------------------------
-            label_Ver.Text = "";
+            ResetDeviceVersion();
+            UpdateVersionLabel();
+            if (!bDeviceStatusFG)
+                return false;
             //-------------------------------------------------------------------------------------------
-            index = 0;
-            SendByteBuf[index++] = (byte)UserCommand.GET_MODE;
-            //USBCtrl.DDR_USBDeviceCtrlOutput(mDeviceIndex, SendByteBuf, ReportSize);
-            USBCtrl.USBLib_DeviceCtrlOutput(mDeviceIndex, ReportID, ReportSize, SendByteBuf);
-            //-------------------------------------------------------------------------------------------
-            Thread.Sleep(100);
-            //-------------------------------------------------------------------------------------------
-            //USBCtrl.DDR_USBDeviceCtrlInput(mDeviceIndex, InputReportBuf, ReportSize);
-            USBCtrl.USBLib_DeviceCtrlInput(mDeviceIndex, DefaultOffset, ReportID, ReportSize, InputReportBuf);//V1.0.0.18:20241012(1)Change ADX Save Issue
-            //-------------------------------------------------------------------------------------------
-            if (InputReportBuf[ReportIndex + 0] == (byte)UserCommand.GET_MODE)
+            bool wasDebug = bDebugModesFG;
+            if (wasDebug)
             {
-                mDevicePlayerBits = (byte)(InputReportBuf[ReportIndex + 1] & (byte)UserMode.MSEL_MAK);
-
-                if ((InputReportBuf[ReportIndex + 1] & (byte)UserMode.MODE_MAK) == (byte)UserMode.DDR_KBS)
+                SetDeviceRawDebugMode(false);
+                Thread.Sleep(80);
+            }
+            bool ok = false;
+            try
+            {
+                SendByteBuf[0] = (byte)UserCommand.GET_MODE;
+                USBCtrl.USBLib_DeviceCtrlOutput(mDeviceIndex, ReportID, ReportSize, SendByteBuf);
+                //---------------------------------------------------------------------------------------
+                for (int attempt = 0; attempt < GET_MODE_RETRIES && !ok; attempt++)
                 {
-                    radioButton_KBS.Checked = true;
-                    radioButton_HID.Checked = false;
-                    radioButton_IO4.Checked = false;
+                    Thread.Sleep(attempt == 0 ? 100 : GET_MODE_RETRY_MS);
+                    Array.Clear(InputReportBuf, 0, InputReportBuf.Length);
+                    USBCtrl.USBLib_DeviceCtrlInput(mDeviceIndex, DefaultOffset, ReportID, ReportSize, InputReportBuf);//V1.0.0.18:20241012(1)Change ADX Save Issue
+                    ok = InputReportBuf[ReportIndex + 0] == (byte)UserCommand.GET_MODE &&
+                         InputReportBuf[ReportIndex + 2] == (byte)UserProID.ID_DDR;
                 }
-                else if ((InputReportBuf[ReportIndex + 1] & (byte)UserMode.MODE_MAK) == (byte)UserMode.DDR_HID)
+            }
+            finally
+            {
+                if (wasDebug)
                 {
-                    radioButton_KBS.Checked = false;
-                    radioButton_HID.Checked = true;
-                    radioButton_IO4.Checked = false;
-                }
-                else if ((InputReportBuf[ReportIndex + 1] & (byte)UserMode.MODE_MAK) == (byte)UserMode.DDR_IO4)
-                {
-                    radioButton_KBS.Checked = false;
-                    radioButton_HID.Checked = false;
-                    radioButton_IO4.Checked = true;
-                }
-
-                //V1.0.0.15:20240920(1)Change ADX TP Delay Config
-                if (InputReportBuf[ReportIndex + 2] == (byte)UserProID.ID_DDR)
-                {
-                    mFwMajor = InputReportBuf[ReportIndex + 4];
-                    mFwMinor = InputReportBuf[ReportIndex + 5];
-                    label_Ver.Text = "UID=" + InputReportBuf[ReportIndex + 2].ToString("X02") + ", " +
-                                     "HVer=" + InputReportBuf[ReportIndex + 3].ToString("X02") + ", " +
-                                     "FVer=" + mFwMajor.ToString() + "." + mFwMinor.ToString("D02") + FwTag();
-                }
-                else
-                {
-                    label_Ver.Text = "";
+                    Thread.Sleep(80);
+                    SetDeviceRawDebugMode(true);
                 }
             }
             //-------------------------------------------------------------------------------------------
             string RxStr = "GetInputReport:";
             for (int i = 0; i < ReportSize - ReportIndex; i++)
-            {
                 RxStr += InputReportBuf[ReportIndex + i].ToString("X02");
-            }
             Console.WriteLine(RxStr);
-            //Console.Write("GetInputReport:" + ex.Message);
             //-------------------------------------------------------------------------------------------
+            if (!ok)
+            {
+                UpdateVersionLabel();   // shows "version not read" instead of a stale value
+                return false;
+            }
+            //-------------------------------------------------------------------------------------------
+            byte mode = InputReportBuf[ReportIndex + 1];
+            mDevicePlayerBits = (byte)(mode & (byte)UserMode.MSEL_MAK);
+            byte usbMode = (byte)(mode & (byte)UserMode.MODE_MAK);
+            radioButton_KBS.Checked = usbMode == (byte)UserMode.DDR_KBS;
+            radioButton_HID.Checked = usbMode == (byte)UserMode.DDR_HID;
+            radioButton_IO4.Checked = usbMode == (byte)UserMode.DDR_IO4;
+            //-------------------------------------------------------------------------------------------
+            mDevUid = InputReportBuf[ReportIndex + 2];
+            mDevHVer = InputReportBuf[ReportIndex + 3];
+            mFwMajor = InputReportBuf[ReportIndex + 4];
+            mFwMinor = InputReportBuf[ReportIndex + 5];
+            mFwValid = true;
+            UpdateVersionLabel();
+            return true;
         }
 
         private void Btn_SaveMode_Click(object sender, EventArgs e)

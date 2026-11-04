@@ -49,7 +49,7 @@ namespace ConfigAppNS
             this.labelWarn.Name = "labelWarn";
             this.labelWarn.Size = new System.Drawing.Size(560, 56);
             this.labelWarn.TabIndex = 0;
-            this.labelWarn.Text = "升级中，请勿关机！";
+            this.labelWarn.Text = "";
             this.labelWarn.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             // 
             // labelTitle
@@ -61,7 +61,7 @@ namespace ConfigAppNS
             this.labelTitle.Name = "labelTitle";
             this.labelTitle.Size = new System.Drawing.Size(400, 32);
             this.labelTitle.TabIndex = 1;
-            this.labelTitle.Text = "PADUEX5 固件升级";
+            this.labelTitle.Text = "";
             this.labelTitle.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
             // 
             // labelTips
@@ -76,7 +76,7 @@ namespace ConfigAppNS
             this.labelTips.Padding = new System.Windows.Forms.Padding(10, 8, 10, 8);
             this.labelTips.Size = new System.Drawing.Size(520, 88);
             this.labelTips.TabIndex = 2;
-            this.labelTips.Text = "操作提示：\r\n1. 选择 firmware\\grok1.7.bin（原厂 V2.13 + 防粘键 + 键盘改键；勿用 grok1.0～1.5）\r\n2. 保持 USB 连接，升级中勿拔线、勿关机、勿关闭本窗口\r\n3. 失败留在 Bootloader 可重试；ISP 请用 grok1.7 或官方 V2.13（grok1.0～1.5 全部禁止）";
+            this.labelTips.Text = "";
             // 
             // labelAddr
             // 
@@ -86,7 +86,7 @@ namespace ConfigAppNS
             this.labelAddr.Name = "labelAddr";
             this.labelAddr.Size = new System.Drawing.Size(250, 22);
             this.labelAddr.TabIndex = 3;
-            this.labelAddr.Text = "APP 地址: 0x08004000";
+            this.labelAddr.Text = "";
             this.labelAddr.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
             // 
             // labelLimit
@@ -97,7 +97,7 @@ namespace ConfigAppNS
             this.labelLimit.Name = "labelLimit";
             this.labelLimit.Size = new System.Drawing.Size(260, 22);
             this.labelLimit.TabIndex = 4;
-            this.labelLimit.Text = "最大允许: 47104 字节（保护配置区）";
+            this.labelLimit.Text = "";
             this.labelLimit.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
             // 
             // textFile
@@ -116,7 +116,7 @@ namespace ConfigAppNS
             this.btnBrowse.Name = "btnBrowse";
             this.btnBrowse.Size = new System.Drawing.Size(110, 32);
             this.btnBrowse.TabIndex = 6;
-            this.btnBrowse.Text = "选择固件";
+            this.btnBrowse.Text = "";
             this.btnBrowse.UseVisualStyleBackColor = true;
             this.btnBrowse.Click += new System.EventHandler(this.btnBrowse_Click);
             // 
@@ -129,7 +129,7 @@ namespace ConfigAppNS
             this.labelFileInfo.Name = "labelFileInfo";
             this.labelFileInfo.Size = new System.Drawing.Size(520, 22);
             this.labelFileInfo.TabIndex = 7;
-            this.labelFileInfo.Text = "尚未选择文件";
+            this.labelFileInfo.Text = "";
             this.labelFileInfo.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
             // 
             // progressBar
@@ -160,7 +160,7 @@ namespace ConfigAppNS
             this.labelStatus.Name = "labelStatus";
             this.labelStatus.Size = new System.Drawing.Size(520, 24);
             this.labelStatus.TabIndex = 10;
-            this.labelStatus.Text = "请选择固件 .bin，然后开始升级。";
+            this.labelStatus.Text = "";
             this.labelStatus.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
             // 
             // textLog
@@ -182,7 +182,7 @@ namespace ConfigAppNS
             this.btnStart.Name = "btnStart";
             this.btnStart.Size = new System.Drawing.Size(180, 40);
             this.btnStart.TabIndex = 12;
-            this.btnStart.Text = "开始升级";
+            this.btnStart.Text = "";
             this.btnStart.UseVisualStyleBackColor = true;
             this.btnStart.Click += new System.EventHandler(this.btnStart_Click);
             // 
@@ -193,7 +193,7 @@ namespace ConfigAppNS
             this.btnClose.Name = "btnClose";
             this.btnClose.Size = new System.Drawing.Size(110, 40);
             this.btnClose.TabIndex = 13;
-            this.btnClose.Text = "关闭";
+            this.btnClose.Text = "";
             this.btnClose.UseVisualStyleBackColor = true;
             this.btnClose.Click += new System.EventHandler(this.btnClose_Click);
             // 
@@ -223,7 +223,7 @@ namespace ConfigAppNS
             this.Name = "App_OTA";
             this.ShowInTaskbar = false;
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
-            this.Text = "PADUEX5 固件升级";
+            this.Text = "PADUEX5";
             this.panelBanner.ResumeLayout(false);
             this.ResumeLayout(false);
             this.PerformLayout();

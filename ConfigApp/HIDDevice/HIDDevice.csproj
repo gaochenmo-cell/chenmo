@@ -96,6 +96,8 @@
     <Compile Include="App_OTA.Designer.cs">
       <DependentUpon>App_OTA.cs</DependentUpon>
     </Compile>
+    <Compile Include="AppConfig.cs" />
+    <Compile Include="Localization.cs" />
     <Compile Include="PadKeyPainter.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -114,6 +116,8 @@
     <EmbeddedResource Include="App_Main.resx">
       <DependentUpon>App_Main.cs</DependentUpon>
     </EmbeddedResource>
+    <EmbeddedResource Include="Strings.resx" />
+    <EmbeddedResource Include="Strings.zh-CN.resx" />
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <SubType>Designer</SubType>
