@@ -70,7 +70,7 @@ python3 firmware/tests/emu_keymap_e2e.py firmware/paduex3_1.7.bin    # Unicorn �
 ```
 `emu_*` 只给 Flash 外设和 printf 打桩，其余全是镜像里的原字节；在 paduex3_1.6 上跑 e2e 应有 5 项失败（对照组）。
 
-## 上位机现状（1.0.0.60）
+## 上位机现状（1.0.0.61）
 
 - 多语言：所有文案在 `ConfigApp/HIDDevice/Strings.resx`（en，中性）和 `Strings.zh-CN.resx`，代码里用 `L.Get("Key")` / `L.F("Key", args)`（`Localization.cs`）。新增文案必须两个 resx 都加。`Config.ini` `LANGUAGE=AUTO|CN|EN`（`AppConfig.cs` 读写），`AUTO` 跟随系统；切换走 `App_DDR.SetLanguage()` → `L.LanguageChanged` → `ApplyUiLanguage()`。
 - 固件版本：`ReadDeviceMode()` 是唯一的 GET_MODE 入口；`mFwValid` 为 false 时任何地方都不能使用 `mFwMajor/mFwMinor`。GET_MODE 回包固件只写进共享回复缓冲区（`AppUser+0x11E`），不走中断 IN 端点，靠 `HidD_GetInputReport` 取。
@@ -79,6 +79,9 @@ python3 firmware/tests/emu_keymap_e2e.py firmware/paduex3_1.7.bin    # Unicorn �
 
 - 白天 Laverita 配色（`#F3F4F6/#FFFFFF/#2F6FED`，选中键琥珀 `#F59E0B`，默认按钮红 `#DC2626`）；黑夜自 1.0.0.59 起为霓虹紫（背景 `#0D0A1F`、卡片 `#171233/#241D4A`、主色 `#7C3AED`、标题 `#C084FC`、选中键 `#7C3AED→#EC4899` 渐变 + `#A855F7` 外发光、默认按钮粉 `#EC4899`）。`Palette` 类 + 递归 `ApplyTheme`，GroupBox/Tab/进度条自绘；`Palette.Glow/SelectedGradientEnd/AccentGradientEnd` 为 `Color.Empty` 时（白天）`PadKeyPainter` 不画渐变/发光，白天模式像素级不变。
 - 窗口标题显示上位机版本；左上角显示 `UID/HVer/FVer (paduex3_X.Y)`。
+- 字体（1.0.0.61）：`UiFont.cs` 是唯一的字体来源，族回退链 Microsoft YaHei UI → Microsoft YaHei → 系统默认；字号常量 Body 10.5 / Tab 11 / GroupTitle 11 / Status 10（左上角版本行）/ Value 12（灵敏度、消抖数值与 A–D 标注）/ BarValue 9.5（柱状图内数值）。字体在 `ApplyTheme → ThemeControl` 递归里随配色一起下发，不要在控件上硬编码 `new Font(...)`。OTA 对话框用 `UiFont.Refamily` 换族并把 9pt 提到 10pt。
+- 五键箭头（1.0.0.61）：`PadKeyPainter.DrawChevronStack` 画三层 V 形 chevron（前层亮、后层渐暗渐透明、前层带外发光和亮边），在单位坐标系里朝 +x 构建后按键位旋转 45°/135°/225°/315°；中心键 `DrawCenterRing` 为同色系霓虹圆环。颜色来自 `Palette.ArrowTip/ArrowMid/ArrowBack/ArrowGlow`（黑夜 `#22D3EE→#06B6D4→#0E7490`，白天略深 `#06B6D4→#0891B2→#155E75`）；踩踏时三层改用该键灯色（亮→暗），选中时前层描白边。
+- 固件命名（1.0.0.61 起）：所有 `grok*` 一律叫 `paduex3_*`（文件名、脚本、文档、resx 文案、`Ver.Tag.Paduex3_17`），bin 内容与版本字节不变。
 - 无设备时在 Linux 下可用 mono + Xvfb 跑起来截图。mono 6 不读 `.config` 里的 dllmap，直接把桩 `.so` 复制成 `hid.dll`/`setupapi.dll`/`kernel32.dll`/`Kernel32.dll`/`user32.dll` 放到 exe 目录即可；桩的 `CreateFile` 必须返回 mono 自己打开过的 fd（先用托管 FileStream 打开 FIFO 再把 fd 交给桩），否则 `FileStream(SafeFileHandle)` 报 Invalid handle。
 
 ## 未完成 / 可继续的方向

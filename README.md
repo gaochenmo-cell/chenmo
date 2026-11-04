@@ -2,8 +2,15 @@
 
 ## 下载
 
-- [`dist/PADUEX5/`](./dist/PADUEX5/) → `PADUEX5.exe`（1.0.0.60）
+- [`dist/PADUEX5/`](./dist/PADUEX5/) → `PADUEX5.exe`（1.0.0.61）
 - [`dist/PADUEX5-win-release.zip`](./dist/PADUEX5-win-release.zip)
+
+## 上位机 1.0.0.61
+
+- 字体：全部界面统一为「微软雅黑」（Microsoft YaHei UI → Microsoft YaHei → 系统默认回退）并整体放大：正文/按钮/标签 10.5pt、Tab 标题 11pt、分组标题 11pt 加粗、左上角版本行 10pt、灵敏度/消抖数值 12pt。字体在主题应用处集中设置（`UiFont.cs`），不再逐控件硬编码。
+- 五键箭头：四个斜角键改为三层叠加的 V 形 chevron「速度感」箭头，青色/蓝青渐变（`#22D3EE → #06B6D4 → #0E7490`）带外发光，前层亮、后层渐暗渐透明，按键位旋转到对应方向；中心键改为同风格青色霓虹圆环。白天模式同一造型、颜色略深。选中/踩踏高亮逻辑不变（踩踏时按该键灯色着色）。
+- 固件命名：`grok` 统一改为 `paduex3`：`firmware/paduex3_1.6.bin`、`firmware/paduex3_1.7.bin`（内容与版本号不变，SHA-256 与原 `grok1.7.bin` 一致），补丁脚本/文档/界面文案同步；上位机对 FVer 2.17 标注 `(paduex3_1.7)`。
+- 微调：按键映射页提示文字留出三行高度；固件升级对话框提示区加高、「最大允许」标签加宽，避免放大字体后截断。
 
 ## 上位机 1.0.0.60
 
