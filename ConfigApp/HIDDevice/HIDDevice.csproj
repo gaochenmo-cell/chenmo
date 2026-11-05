@@ -97,6 +97,8 @@
       <DependentUpon>App_OTA.cs</DependentUpon>
     </Compile>
     <Compile Include="AppConfig.cs" />
+    <Compile Include="DebugLog.cs" />
+    <Compile Include="DeviceProtocol.cs" />
     <Compile Include="Localization.cs" />
     <Compile Include="PadKeyPainter.cs" />
     <Compile Include="Program.cs" />

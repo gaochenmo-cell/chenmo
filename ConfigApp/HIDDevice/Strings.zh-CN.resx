@@ -472,4 +472,25 @@
   <data name="Ota.BusyCloseForm" xml:space="preserve">
     <value>升级进行中，请勿关闭。中断可能导致需重新升级（Bootloader 仍可进入）。</value>
   </data>
+  <data name="Ver.NotReadReason" xml:space="preserve">
+    <value>未读到设备版本（{0}）——点击「读取模式」重试。详情见 PADUEX5.log</value>
+  </data>
+  <data name="Ver.Fail.HidRead" xml:space="preserve">
+    <value>HID 读取失败，GetInputReport 无数据</value>
+  </data>
+  <data name="Ver.Fail.NoReply" xml:space="preserve">
+    <value>设备无应答，回包全 0</value>
+  </data>
+  <data name="Ver.Fail.RawMode" xml:space="preserve">
+    <value>设备仍在调试(RAW)模式，回包被覆盖</value>
+  </data>
+  <data name="Ver.Fail.BadFrame" xml:space="preserve">
+    <value>回包格式不符</value>
+  </data>
+  <data name="Ver.Tag.UidMismatch" xml:space="preserve">
+    <value> [UID 非 A2]</value>
+  </data>
+  <data name="Ver.Tag.HVerUnknown" xml:space="preserve">
+    <value> [HVer 未知]</value>
+  </data>
 </root>
