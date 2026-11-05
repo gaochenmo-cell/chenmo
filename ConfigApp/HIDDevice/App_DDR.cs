@@ -40,45 +40,54 @@ namespace ConfigAppNS
         // plug-in order, so the host no longer exposes it. Echo back whatever the device reports.
         private byte mDevicePlayerBits = (byte)UserMode.DDR_2PS;
 
-        // Device identity from the last *successful* GET_MODE. mFwValid is false until a reply
-        // has been parsed and is cleared again on disconnect / OTA / failed read, so a previous
-        // board's version can never be shown or used for the key-map capability check.
+        // Device identity from the last successful GET_MODE. mFwValid is cleared on
+        // disconnect / OTA / failed read so a stale version is never shown or used.
         private bool mFwValid = false;
         private int mDevUid = 0, mDevHVer = 0;
         private int mFwMajor = 0, mFwMinor = 0;
-        // Why the last GET_MODE failed (resource key, "" = unknown). Shown in the label so the
-        // user sees "no reply" / "board in RAW debug mode" / "HID read failed" instead of one
-        // generic "not read".
+        // Resource key describing why the last GET_MODE failed ("" = unknown).
         private string mFwFailReasonKey = "";
-        // GET_MODE: first read 100 ms after the request (same as 1.0.0.57), then re-send and
-        // re-read a few times. A board left in RAW debug mode by a previous session overwrites
-        // every reply with "AMRAW" frames; when we see one we send NOLMD and try again.
+        // GET_MODE is re-sent a few times, 100 ms apart. A board left in RAW debug mode
+        // overwrites every reply with "AMRAW" frames; on such a frame NOLMD is sent first.
         private const int GET_MODE_RETRIES = 6;
         private const int GET_MODE_WAIT_MS = 100;
         private const int GET_SENS_RETRIES = 3;
 
-        /// <summary>Firmware bytes are plain integers: major=2, minor=12 → "2.12".</summary>
+        /// <summary>
+        /// Firmware version bytes are plain integers. V3.0 and later are shown as "V3.0";
+        /// the older 2.x images keep their original two-digit minor ("2.12", "2.17").
+        /// </summary>
         private string FwVersionText()
         {
+            if (mFwMajor >= 3) return "V" + mFwMajor + "." + mFwMinor;
             return mFwMajor.ToString() + "." + mFwMinor.ToString("D02");
         }
 
-        // Only tag versions we actually know. Stock V2.12, stock V2.13 (its FW_VERSION_MINOR
-        // constant was never bumped) and paduex5_1.6 all report 2.12; paduex5_1.7 is the only image
-        // that reports 2.17. Anything else is shown as-is without a guess.
-        // UID / HVer that differ from the known board are annotated, never rejected.
+        // Known firmware versions:
+        //   3.0  current release (HVer 0x13 = 5-key PADUEX5, 0x14 = 4-key PADUEX4)
+        //   2.17 previous 5-key image, 2.18 previous 4-key image
+        //   2.12 stock V2.12 / V2.13 (stock never bumped its minor constant)
+        // Anything else is shown as-is. UID / HVer mismatches are annotated, never rejected.
         private string FwTag()
         {
             if (!mFwValid) return "";
             string tag = "";
-            if (mFwMajor == 2 && mFwMinor == 17) tag = L.Get("Ver.Tag.Paduex5_17");
+            if (mFwMajor >= 3)
+            {
+                if (mDevHVer == DeviceProtocol.HVER_4KEY) tag = L.Get("Ver.Tag.Board4");
+                else if (mDevHVer == DeviceProtocol.HVER_5KEY) tag = L.Get("Ver.Tag.Board5");
+            }
+            else if (mFwMajor == 2 && mFwMinor == 17) tag = L.Get("Ver.Tag.Paduex5_17");
             else if (mFwMajor == 2 && mFwMinor == 18) tag = L.Get("Ver.Tag.Paduex4_10");
             else if (mFwMajor == 2 && mFwMinor == 12) tag = L.Get("Ver.Tag.Stock212");
             if (mDevUid != DeviceProtocol.ID_DDR) tag += L.Get("Ver.Tag.UidMismatch");
-            if (mDevHVer != DeviceProtocol.HVER_KNOWN) tag += L.Get("Ver.Tag.HVerUnknown");
+            if (!DeviceProtocol.IsKnownHVer(mDevHVer)) tag += L.Get("Ver.Tag.HVerUnknown");
             return tag;
         }
-        private bool FwHasKeyMap() { return mFwValid && mFwMajor == 2 && mFwMinor >= 17; }
+        private bool FwHasKeyMap()
+        {
+            return mFwValid && (mFwMajor >= 3 || (mFwMajor == 2 && mFwMinor >= 17));
+        }
 
         private void ResetDeviceVersion()
         {
@@ -117,7 +126,7 @@ namespace ConfigAppNS
         private static int KeyCount = KEY_COUNT_5KEY;
         private static bool FourKeyMode { get { return KeyCount == 4; } }
         private static string AppName { get { return FourKeyMode ? "PADUEX4" : "PADUEX5"; } }
-        private static readonly string HostVer = "v" + System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString();
+        private static readonly string HostVer = "V" + System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString(3);
         private enum ConnState { None, Device, Ota }
         private ConnState mConnState = ConnState.None;
 
@@ -626,10 +635,10 @@ namespace ConfigAppNS
         private Button btn_MapRead;
         private Button btn_MapSave;
         private readonly int[] KeyMappingBuffer = new int[KEY_COUNT_5KEY];
-        // Stock Report_Normal tables. 1P: W X A D S   2P: H K J N M (firmware fixes 2P since V2.12)
+        // Firmware default tables. 1P: W X A D S   2P: H K J N M
         private readonly int[] DefaultKeyMapping1P = new int[] { 0x1A, 0x1B, 0x04, 0x07, 0x16 };
         private readonly int[] DefaultKeyMapping2P = new int[] { 0x0B, 0x0E, 0x0D, 0x11, 0x10 };
-        // paduex5_1.7 keymap lives in the unused Color[key*4+1] slot, tagged 0x4B00 ("K") | usage.
+        // Key map lives in the otherwise unused Color[key*4+1] slot, encoded 0x4B00 ("K") | usage.
         private const int MAP_TAG = 0x4B;
         private Button btn_MapDefault;
 
@@ -2091,8 +2100,6 @@ namespace ConfigAppNS
         {
             ///------------------------------------------------------------------------------------------
             // LANGUAGE is applied in Program.Main (before any form exists); THEME is read here.
-            // NAME from Config.ini is no longer used for the title: it carried a stale version
-            // string ("PADUEX5 V1.0.0.44") that was shown next to the real assembly version.
             string theme = AppConfig.Read("THEME");
             bDarkMode = theme != null && theme.Trim().Equals("DARK", StringComparison.OrdinalIgnoreCase);
             // KEYCOUNT=4 → 4-key cross layout (PADUEX4); anything else → 5-key (PADUEX5)
@@ -2119,8 +2126,7 @@ namespace ConfigAppNS
         ///
         private void DDR_Form_FormClosing(object sender, FormClosingEventArgs e)
         {
-            // Leaving the board in RAW mode makes every GET reply of the *next* session get
-            // overwritten by "AMRAW" frames (version / sensitivity unreadable until re-plug).
+            // Leave RAW mode, otherwise the next session cannot read anything until re-plug.
             if (bDeviceStatusFG && bDebugModesFG)
             {
                 try { SendRawStreamOff(); } catch { }
@@ -2324,10 +2330,8 @@ namespace ConfigAppNS
         private int[] DTickBuffer = new int[CONFIG_VALUE_COUNT];
 
         /// <summary>
-        /// FW V2.12 (and current tree) applies debounce as DTick[key] via:
-        ///   Tck[i/4] = DTick[i/4]
-        /// NOT DTick[key*4]. Host mirrors that layout so save/feel match on V2.12.
-        /// When firmware is fixed to DTick[(i/4)*4], switch GetDebounceKeyIndex back.
+        /// Firmware applies debounce as DTick[key] (Tck[i/4] = DTick[i/4]), not DTick[key*4].
+        /// The host mirrors that layout.
         /// </summary>
         private int GetDebounceKeyIndex()
         {
@@ -2347,8 +2351,7 @@ namespace ConfigAppNS
             if (ms < 0) ms = 0;
             if (ms > 1000) ms = 1000;
             int key = GetDebounceKeyIndex();
-            // paduex5_1.0.bin + fixed source: DTick[(i/4)*4]; V2.12 quirk: DTick[key].
-            // Write both layouts so save works on either firmware.
+            // Firmware reads DTick[key]; write DTick[key*4] as well so both layouts stay in sync.
             DTickBuffer[key] = ms;
             int packed = key * SENSORS_PER_KEY;
             if (packed >= 0 && packed < CONFIG_VALUE_COUNT)
@@ -2399,7 +2402,7 @@ namespace ConfigAppNS
             {
                 if (!startup && !IsVisibleKey(i / SENSORS_PER_KEY)) continue;
                 SensiBuffer[i] = DEFAULT_SENSI_TAB[i];
-                if (!IsMapSlot(i)) ColorBuffer[i] = DEFAULT_COLOR_TAB[i];   // slot +1 = keymap (paduex5_1.7)
+                if (!IsMapSlot(i)) ColorBuffer[i] = DEFAULT_COLOR_TAB[i];   // slot +1 = key map
                 if (startup || IsVisibleKey(i)) DTickBuffer[i] = DEFAULT_DTICK_TAB[i];
             }
         }
@@ -3049,7 +3052,7 @@ namespace ConfigAppNS
         ///
         private void Btn_OTA_Click(object sender, EventArgs e)
         {
-            // Open PADUEX5 upgrade tool (progress + anti-brick). It can enter OTA itself.
+            // Firmware upgrade dialog; it switches the board into OTA mode itself.
             App_OTA ota = new App_OTA();
             ota.ShowDialog(this);
             // Refresh device state after upgrade window closes
@@ -3099,18 +3102,12 @@ namespace ConfigAppNS
         }
 
         /// <summary>
-        /// GET_MODE (0x47). Reply (64-byte input report, read with HidD_GetInputReport; HIDLibrary
-        /// strips the Report-ID byte, so [0] is the command):
-        ///   [0]=0x47  [1]=mode  [2]=UID 0xA2  [3]=HVer 0x13  [4]=FW major  [5]=FW minor (plain integers)
-        /// The firmware only writes this reply into its shared 64-byte reply buffer (AppUser+0x11E),
-        /// which the host fetches with GET_REPORT. While the board is in RAW debug mode it rewrites
-        /// that buffer with "AMRAW" frames on every scan, so the reply is gone before we read it —
-        /// and the board stays in RAW mode until NOLMD or re-plug, even across host restarts.
-        /// Strategy ("show something rather than nothing"):
-        ///   * accept any frame whose first byte is 0x47; UID/HVer only annotate the label,
-        ///   * on a RAW frame send NOLMD and ask again,
-        ///   * re-send GET_MODE on every retry, 100 ms apart,
-        ///   * remember *why* it failed and show that in the label; log every byte.
+        /// GET_MODE (0x47). Reply (64-byte input report, Report-ID byte already stripped):
+        ///   [0]=0x47  [1]=mode  [2]=UID 0xA2  [3]=HVer (0x13 5-key / 0x14 4-key)  [4]=FW major  [5]=FW minor
+        /// The firmware writes this reply into its shared reply buffer (AppUser+0x11E). While the
+        /// board is in RAW debug mode that buffer is overwritten with "AMRAW" frames on every scan,
+        /// and the board stays in RAW mode until NOLMD or re-plug. On a RAW frame NOLMD is sent and
+        /// GET_MODE is re-sent; the failure reason is kept for the label and every byte is logged.
         /// </summary>
         private bool ReadDeviceMode()
         {
@@ -3148,7 +3145,7 @@ namespace ConfigAppNS
                     }
                     if (last == ReplyKind.RawStream)
                     {
-                        // Board is streaming RAW (left over from an earlier session): stop it first.
+                        // Board is still streaming RAW frames: stop it first.
                         sawRaw = true;
                         DebugLog.Log("GET_MODE: board is in RAW debug mode, sending NOLMD");
                         SendRawStreamOff();

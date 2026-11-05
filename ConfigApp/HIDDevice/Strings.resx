@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <root>
   <!--
-    UI strings for PADUEX5 ConfigApp. Keys are shared across cultures; see Localization.cs (class L).
+    UI strings for the PADUEX5 / PADUEX4 configuration tool. Keys are shared across cultures; see Localization.cs (class L).
     Neutral / English (NeutralResourcesLanguage = en).
   -->
   <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
@@ -190,7 +190,7 @@
     <value>Keyboard mapping</value>
   </data>
   <data name="Map.Hint" xml:space="preserve">
-    <value>Keyboard mode only. Requires firmware paduex5_1.7+. Stored in the colour table, so Save Colour keeps it. Player (1P/2P) is assigned by the game by plug-in order.</value>
+    <value>Keyboard mode only. Requires firmware V3.0 or later. Stored in the colour table, so Save Colour keeps it. Player (1P/2P) is assigned by the game by plug-in order.</value>
   </data>
   <data name="Map.KeyLabel" xml:space="preserve">
     <value>Per-pad HID usage (select then Save Map):</value>
@@ -244,14 +244,14 @@
     <value>No custom key map on device — showing firmware defaults.</value>
   </data>
   <data name="Map.FwNoSupport" xml:space="preserve">
-    <value>Device firmware is {0} which does not read the key map (needs paduex5_1.7 = 2.17).
-Save anyway? It will take effect after flashing paduex5_1.7.</value>
+    <value>Device firmware is {0}, which does not read the key map (needs V3.0 or later).
+Save anyway? It will take effect after upgrading the firmware.</value>
   </data>
   <data name="Map.ResetOk" xml:space="preserve">
     <value>Key map reset to firmware default.</value>
   </data>
   <data name="Map.SaveOk" xml:space="preserve">
-    <value>Key map saved. Takes effect immediately in keyboard mode (needs firmware paduex5_1.7+).</value>
+    <value>Key map saved. Takes effect immediately in keyboard mode (needs firmware V3.0 or later).</value>
   </data>
   <data name="Hid.Space" xml:space="preserve">
     <value>Space</value>
@@ -284,13 +284,19 @@ Save anyway? It will take effect after flashing paduex5_1.7.</value>
     <value>Device version not read — click "Read Mode" to retry.</value>
   </data>
   <data name="Ver.Tag.Paduex5_17" xml:space="preserve">
-    <value> (paduex5_1.7)</value>
+    <value> (previous 5-key firmware, upgrade to V3.0)</value>
   </data>
   <data name="Ver.Tag.Paduex4_10" xml:space="preserve">
-    <value> (paduex4_1.0)</value>
+    <value> (previous 4-key firmware, upgrade to V3.0)</value>
   </data>
   <data name="Ver.Tag.Stock212" xml:space="preserve">
-    <value> (stock V2.12/V2.13 or paduex5_1.6)</value>
+    <value> (stock V2.12/V2.13, upgrade to V3.0)</value>
+  </data>
+  <data name="Ver.Tag.Board5" xml:space="preserve">
+    <value> (PADUEX5)</value>
+  </data>
+  <data name="Ver.Tag.Board4" xml:space="preserve">
+    <value> (PADUEX4)</value>
   </data>
   <data name="Cfg.ReadOk" xml:space="preserve">
     <value>Read complete.</value>
@@ -312,9 +318,9 @@ Save anyway? It will take effect after flashing paduex5_1.7.</value>
   </data>
   <data name="Ota.Tips" xml:space="preserve">
     <value>How to:
-1. Pick firmware\paduex5_1.7.bin (stock V2.13 + anti-stuck-key + key remap; never paduex5_1.0~1.5)
+1. Pick PADUEX5_V3.0.bin for the 5-key pad or PADUEX4_V3.0.bin for the 4-key pad
 2. Keep USB connected; do not unplug, power off or close this window while upgrading
-3. On failure the board stays in Bootloader — just retry. ISP: paduex5_1.7 or stock V2.13 only</value>
+3. On failure the board stays in Bootloader - just retry. ISP: PADUEX5_V3.0.bin / PADUEX4_V3.0.bin or stock V2.13 only</value>
   </data>
   <data name="Ota.Addr" xml:space="preserve">
     <value>APP address: 0x{0}</value>
@@ -356,7 +362,7 @@ Save anyway? It will take effect after flashing paduex5_1.7.</value>
     <value>This image is longer than the stock image ({0} &gt; {1} bytes).
 
 This OTA window writes the whole image and is normally fine.
-If you use the vendor ISP/IPS tool instead: flash paduex5_1.7.bin or stock V2.13 (paduex5_1.0~1.5 are forbidden) at 0x08004000, otherwise the tail may be truncated and USB will stop enumerating.</value>
+If you use the vendor ISP/IPS tool instead: flash PADUEX5_V3.0.bin / PADUEX4_V3.0.bin or stock V2.13 at 0x08004000, otherwise the tail may be truncated and USB will stop enumerating.</value>
   </data>
   <data name="Ota.SizeWarnTitle" xml:space="preserve">
     <value>PADUEX5 Size Notice</value>
@@ -377,7 +383,7 @@ If you use the vendor ISP/IPS tool instead: flash paduex5_1.7.bin or stock V2.13
     <value>Reset vector is outside the APP region (0x08004000~0x0800F800). Rejected to prevent bricking.</value>
   </data>
   <data name="Ota.V.BadUsbVector" xml:space="preserve">
-    <value>USB interrupt vector (0x14C) has been overwritten (the known fatal bug of paduex5_1.0~1.5). Rejected. Use paduex5_1.7 or stock V2.13.</value>
+    <value>USB interrupt vector (0x14C) of this image has been overwritten. Rejected. Use PADUEX5_V3.0.bin / PADUEX4_V3.0.bin or stock V2.13.</value>
   </data>
   <data name="Ota.SelectFirst" xml:space="preserve">
     <value>Please select a firmware file first.</value>
@@ -390,10 +396,9 @@ Size: {1} bytes
 Address: 0x{2}
 
 Please note:
-· Do not unplug USB, power off or close this window while upgrading
-· The board jumps to the APP only after the write and CRC pass; on failure it stays in Bootloader and you can retry
-· Recommended image: paduex5_1.7.bin (stock base + anti-stuck-key + key remap, vector table untouched; paduex5_1.0~1.5 are all forbidden)
-· Never ISP-flash paduex5_1.1.bin again (longer tail, easily truncated and bricked)
+- Do not unplug USB, power off or close this window while upgrading
+- The board jumps to the new image only after the write and CRC pass; on failure it stays in Bootloader and you can retry
+- Use PADUEX5_V3.0.bin (5-key) or PADUEX4_V3.0.bin (4-key)
 
 Start now?</value>
   </data>

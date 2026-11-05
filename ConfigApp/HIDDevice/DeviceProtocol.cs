@@ -27,14 +27,13 @@ namespace ConfigAppNS
         public byte FwMinor;
         /// <summary>UID is not 0xA2 (ID_DDR). Shown as a tag, never a reason to reject the frame.</summary>
         public bool UidMismatch { get { return Uid != DeviceProtocol.ID_DDR; } }
-        /// <summary>HVer is not 0x13 (the only hardware revision seen so far).</summary>
-        public bool HVerUnknown { get { return HVer != DeviceProtocol.HVER_KNOWN; } }
+        /// <summary>HVer is neither the 5-key (0x13) nor the 4-key (0x14) board.</summary>
+        public bool HVerUnknown { get { return !DeviceProtocol.IsKnownHVer(HVer); } }
         public string VersionText { get { return FwMajor.ToString() + "." + FwMinor.ToString("D02"); } }
     }
 
     /// <summary>
-    /// Pure byte-level view of the HID protocol (no USB, no UI) so the parsing can be unit-tested
-    /// and so App_DDR only has to decide what to do with a verdict.
+    /// Byte-level view of the HID protocol (no USB, no UI).
     ///
     /// Input reports are fetched with HidD_GetInputReport through HIDLibrary.USBLib_DeviceCtrlInput
     /// (Offset = 1 strips the leading Report-ID byte), therefore buf[0] is already the command byte:
@@ -49,7 +48,14 @@ namespace ConfigAppNS
         public const byte CMD_SET_SENS = 0x57;
         public const byte CMD_SET_MRAW = 0x41;
         public const byte ID_DDR = 0xA2;
-        public const byte HVER_KNOWN = 0x13;
+        /// <summary>HVer byte of the GET_MODE reply: 0x13 = 5-key board, 0x14 = 4-key board (firmware V3.0+).</summary>
+        public const byte HVER_5KEY = 0x13;
+        public const byte HVER_4KEY = 0x14;
+
+        public static bool IsKnownHVer(int hver)
+        {
+            return hver == HVER_5KEY || hver == HVER_4KEY;
+        }
         /// <summary>Written into the read buffer before HidD_GetInputReport; survives only if the read failed.</summary>
         public const byte SENTINEL = 0xFF;
 
@@ -85,8 +91,8 @@ namespace ConfigAppNS
         }
 
         /// <summary>
-        /// Lenient GET_MODE decode: accept any frame whose first byte is 0x47. UID / HVer are
-        /// reported back for annotation but never cause a rejection ("show something rather than nothing").
+        /// GET_MODE decode: accept any frame whose first byte is 0x47. UID / HVer are
+        /// reported back for annotation but never cause a rejection.
         /// </summary>
         public static ModeReply ParseModeReply(byte[] buf, int offset)
         {
@@ -98,13 +104,6 @@ namespace ConfigAppNS
             r.FwMajor = buf[offset + 4];
             r.FwMinor = buf[offset + 5];
             return r;
-        }
-
-        /// <summary>Strict 1.0.0.58/1.0.0.59 rule, kept only for the test harness / release notes comparison.</summary>
-        public static bool LegacyStrictAccept(byte[] buf, int offset)
-        {
-            return buf != null && buf.Length >= offset + 3 &&
-                   buf[offset] == CMD_GET_MODE && buf[offset + 2] == ID_DDR;
         }
 
         /// <summary>GET_SENS reply header check: 52 52 53 50 type.</summary>
