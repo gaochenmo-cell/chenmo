@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-Build grok1.6.bin = OFFICIAL 5KEY_2P_V2.13.bin + ONLY the SendPacket timeout.
+Build paduex3_1.6.bin = OFFICIAL 5KEY_2P_V2.13.bin + ONLY the SendPacket timeout.
 
-Why start from stock instead of grok1.x:
-  grok1.0 (and every image derived from it: 1.1–1.5) placed a code cave at
+Why start from stock instead of paduex3_1.x:
+  paduex3_1.0 (and every image derived from it: 1.1–1.5) placed a code cave at
   0x08004130..0x0800415F — which is INSIDE the vector table. Offset 0x14C is
   IRQ67 = OTGFS1_IRQn (USB). The real handler 0x080084A5 was replaced by
   0x0000BD5B, so the first USB interrupt jumps into junk → no enumeration,
   no plug-in sound. That is the brick seen after every "successful" OTA.
 
-What grok1.6 changes (and nothing else):
+What paduex3_1.6 changes (and nothing else):
   * App_USB_KBS_SendPacket / App_USB_HID_SendPacket: bounded wait on
     g_*_tx_completed (~0x80000 spins) instead of infinite loop, keeping the
     original 6-register push.w/pop.w (8-byte SP alignment).
@@ -160,7 +160,7 @@ def main() -> int:
         assert HID_FN <= va < HID_LIT or KBS_FN <= va < KBS_LIT, hex(va)
     print(f"diff vs stock: {len(diffs)} bytes, all inside the two SendPacket bodies")
 
-    dst = root / "grok1.6.bin"
+    dst = root / "paduex3_1.6.bin"
     dst.write_bytes(buf)
     print(f"wrote {dst} ({len(buf)} bytes)")
 

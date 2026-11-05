@@ -5,12 +5,12 @@
          if((CMDBuffer[4]&0x0F)==0x01)     { App_Set_Flash_Cofnig(FLASH_DATA_ADDR_COLOR, AppUser.Color, MAX_VAL_CHAN);  }
          else if((CMDBuffer[4]&0x0F)==0x02){ App_Set_Flash_Cofnig(FLASH_DATA_ADDR_DTICK, AppUser.DTick, MAX_VAL_CHAN);  }
 -        //else                            { App_Set_Flash_Cofnig(FLASH_DATA_ADDR_SENSI, AppUser.Sensi, ADC_MAX_CHAN);  }  //Version	V1.15	: (1)20240930		: Power On Sensor Scan
-+        else                              { App_Set_Flash_Cofnig(FLASH_DATA_ADDR_SENSI, AppUser.Sensi, MAX_VAL_CHAN);  }  // grok1.0: persist sensitivity
++        else                              { App_Set_Flash_Cofnig(FLASH_DATA_ADDR_SENSI, AppUser.Sensi, MAX_VAL_CHAN);  }  // paduex3_1.0: persist sensitivity
          
 @@ -694,7 +694,7 @@
          //if(AppUser.Buf[i] > AppUser.Max[i])AppUser.Max[i]=AppUser.Buf[i];
          
          AppUser.Reg[i]    = AppUser.Buf[i]; 
 -        AppUser.Tck[i/4]  = AppUser.DTick[i/4];  //Version	V1.01	: (1)20240617		: App Param Config  
-+        AppUser.Tck[i/4]  = AppUser.DTick[(i/4)*4];  // grok1.0: per-key debounce slot
++        AppUser.Tck[i/4]  = AppUser.DTick[(i/4)*4];  // paduex3_1.0: per-key debounce slot
          App_User_SetKeyStatus(i/4,TRUE); 

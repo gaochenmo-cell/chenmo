@@ -22,7 +22,7 @@ namespace ConfigAppNS
         private const uint FLASH_CONFIG_ADDR = 0x0800F800;
         private const int MAX_APP_SIZE = (int)(FLASH_CONFIG_ADDR - FLASH_APP_ADDR); // 0xB800
         private const int MIN_APP_SIZE = 1024;
-        /// <summary>Stock / grok1.7 image length — ISP-safe.</summary>
+        /// <summary>Stock / paduex3_1.7 image length — ISP-safe.</summary>
         private const int STOCK_APP_SIZE = 37072;
         private const int CHUNK_1K = 1024;
         private const int HID_PAYLOAD = 60; // 64 - cmd(2) - len(2)
@@ -57,7 +57,10 @@ namespace ConfigAppNS
 
             // Fixed pixel layout — avoid Font autoscaling which garbles this dialog on high DPI
             this.AutoScaleMode = AutoScaleMode.None;
-            this.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
+            // Same family / fallback chain as the main window; designer sizes stay, 9pt rows grow to body size.
+            Font logFont = textLog.Font;
+            UiFont.Refamily(this, UiFont.Status);
+            textLog.Font = logFont;   // the hex log stays monospace
             ApplyUiLanguage();
             progressBar.Minimum = 0;
             progressBar.Maximum = 100;
@@ -91,21 +94,26 @@ namespace ConfigAppNS
             labelTips.Visible = true;
             labelTitle.Location = new Point(20, 16);
             labelTips.Location = new Point(20, 56);
-            int y = 156;
+            // The three tips wrap to up to 7 lines at the larger body font: give the block
+            // room for that and shift the rows below it by the same amount.
+            const int tipsExtra = 64;
+            labelTips.Size = new Size(520, 88 + tipsExtra);
+            int y = 156 + tipsExtra;
             labelAddr.Location = new Point(20, y);
-            labelLimit.Location = new Point(280, y);
-            y = 188;
+            labelLimit.Location = new Point(270, y);
+            labelLimit.Size = new Size(270, labelLimit.Height);
+            y = 188 + tipsExtra;
             textFile.Location = new Point(20, y);
             btnBrowse.Location = new Point(430, y - 2);
-            labelFileInfo.Location = new Point(20, 224);
-            progressBar.Location = new Point(20, 258);
-            labelPercent.Location = new Point(480, 258);
-            labelStatus.Location = new Point(20, 296);
-            textLog.Location = new Point(20, 328);
+            labelFileInfo.Location = new Point(20, 224 + tipsExtra);
+            progressBar.Location = new Point(20, 258 + tipsExtra);
+            labelPercent.Location = new Point(480, 258 + tipsExtra);
+            labelStatus.Location = new Point(20, 296 + tipsExtra);
+            textLog.Location = new Point(20, 328 + tipsExtra);
             textLog.Size = new Size(520, 140);
-            btnStart.Location = new Point(20, 484);
-            btnClose.Location = new Point(430, 484);
-            this.ClientSize = new Size(560, 540);
+            btnStart.Location = new Point(20, 484 + tipsExtra);
+            btnClose.Location = new Point(430, 484 + tipsExtra);
+            this.ClientSize = new Size(560, 540 + tipsExtra);
             this.BackColor = Color.FromArgb(250, 250, 250);
         }
 
@@ -119,7 +127,8 @@ namespace ConfigAppNS
             labelTips.Visible = false;
             int y = 68;
             labelAddr.Location = new Point(20, y);
-            labelLimit.Location = new Point(280, y);
+            labelLimit.Location = new Point(270, y);
+            labelLimit.Size = new Size(270, labelLimit.Height);
             y = 100;
             textFile.Location = new Point(20, y);
             btnBrowse.Location = new Point(430, y - 2);
@@ -203,7 +212,7 @@ namespace ConfigAppNS
                 labelFileInfo.Text = L.F("Ota.FileInfo", binData.Length, Align1K(binData.Length));
                 btnStart.Enabled = true;
                 SetStatus(L.F("Ota.Loaded", Path.GetFileName(binPath)));
-                // Soft warn: images longer than stock (e.g. grok1.1 cave) are OK for this OTA,
+                // Soft warn: images longer than stock (e.g. paduex3_1.1 cave) are OK for this OTA,
                 // but ISP tools that flash by old length can truncate and brick.
                 if (binData.Length > STOCK_APP_SIZE)
                 {
@@ -234,7 +243,7 @@ namespace ConfigAppNS
                 return L.Get("Ota.V.BadSp");
             if (reset < FLASH_APP_ADDR || reset >= FLASH_CONFIG_ADDR)
                 return L.Get("Ota.V.BadReset");
-            // IRQ67 (OTGFS1 / USB) vector must point into APP flash. grok1.0~1.5 wrote
+            // IRQ67 (OTGFS1 / USB) vector must point into APP flash. paduex3_1.0~1.5 wrote
             // code over 0x14C and brick on the first USB interrupt.
             if (data.Length > 0x150)
             {

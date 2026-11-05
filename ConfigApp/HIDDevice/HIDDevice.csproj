@@ -109,6 +109,7 @@
       <DependentUpon>Resources.resx</DependentUpon>
     </Compile>
     <Compile Include="SerialCom.cs" />
+    <Compile Include="UiFont.cs" />
     <EmbeddedResource Include="App_DDR.resx">
       <DependentUpon>App_DDR.cs</DependentUpon>
     </EmbeddedResource>

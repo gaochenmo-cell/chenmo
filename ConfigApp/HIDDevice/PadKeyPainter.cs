@@ -7,8 +7,8 @@ using System.Windows.Forms;
 namespace ConfigAppNS
 {
     /// <summary>
-    /// SVG-style corner arrows: thick uniform strokes forming diagonal + orthogonal L head
-    /// (same geometry as the reference SVG / tukuppt L-arrow).
+    /// Pad key glyphs: three stacked V-chevrons ("speed" arrow) in a cyan neon gradient,
+    /// rotated towards the key's corner; the centre key is a matching neon ring.
     /// </summary>
     internal static class PadKeyPainter
     {
@@ -34,7 +34,15 @@ namespace ConfigAppNS
             public Color SelectedGradientEnd;
             /// <summary>Outer glow / neon stroke colour; Color.Empty disables every glow effect (light theme).</summary>
             public Color GlowColor;
+            /// <summary>Chevron / ring gradient: front (tip) → middle → back layer, plus the halo colour.
+            /// Empty values fall back to the built-in cyan set.</summary>
+            public Color ArrowTip, ArrowMid, ArrowBack, ArrowGlow;
         }
+
+        // Default (dark theme) cyan set: #22D3EE → #06B6D4 → #0E7490
+        private static readonly Color DefaultTip = Color.FromArgb(0x22, 0xD3, 0xEE);
+        private static readonly Color DefaultMid = Color.FromArgb(0x06, 0xB6, 0xD4);
+        private static readonly Color DefaultBack = Color.FromArgb(0x0E, 0x74, 0x90);
 
         internal static void WireButton(Button btn, PadKeyKind kind)
         {
@@ -113,32 +121,160 @@ namespace ConfigAppNS
                 return;
             }
 
-            using (GraphicsPath path = BuildSvgLArrowPath(inner, kind))
-            {
-                if (args.Triggered)
-                {
-                    using (SolidBrush fill = new SolidBrush(args.TriggerFill))
-                        g.FillPath(fill, path);
-                }
+            DrawChevronStack(g, inner, kind, args);
+        }
 
-                float stroke = Math.Max(2f, Math.Min(inner.Width, inner.Height) * 0.035f);
-                if (neon)
+        /// <summary>Resolve the three gradient stops + halo for the current state: the LED colour
+        /// while the pad is pressed (existing highlight rule), otherwise the theme's cyan set.</summary>
+        private static void ResolveArrowColors(PadKeyPaintArgs args, out Color tip, out Color mid, out Color back, out Color glow)
+        {
+            if (args.Triggered)
+            {
+                Color led = Color.FromArgb(255, args.TriggerFill);
+                tip = Mix(led, Color.White, 0.45f);
+                mid = led;
+                back = Mix(led, Color.Black, 0.35f);
+                glow = led;
+                return;
+            }
+            tip = args.ArrowTip.IsEmpty ? DefaultTip : args.ArrowTip;
+            mid = args.ArrowMid.IsEmpty ? DefaultMid : args.ArrowMid;
+            back = args.ArrowBack.IsEmpty ? DefaultBack : args.ArrowBack;
+            glow = args.ArrowGlow.IsEmpty ? tip : args.ArrowGlow;
+        }
+
+        private static Color Mix(Color a, Color b, float t)
+        {
+            return Color.FromArgb(255,
+                (int)(a.R + (b.R - a.R) * t),
+                (int)(a.G + (b.G - a.G) * t),
+                (int)(a.B + (b.B - a.B) * t));
+        }
+
+        private static Color Alpha(Color c, int alpha)
+        {
+            return Color.FromArgb(alpha, c.R, c.G, c.B);
+        }
+
+        /// <summary>
+        /// Three V-chevrons stacked along the arrow direction (reference: cyan "speed" chevrons).
+        /// Layer 0 is the front/tip layer: brightest, filled with the tip→mid gradient, outer glow
+        /// and a bright edge. Layers 1–2 sit behind it, slightly smaller, darker and more translucent.
+        /// </summary>
+        private static void DrawChevronStack(Graphics g, Rectangle inner, PadKeyKind kind, PadKeyPaintArgs args)
+        {
+            Color tip, mid, back, glow;
+            ResolveArrowColors(args, out tip, out mid, out back, out glow);
+
+            float side = Math.Min(inner.Width, inner.Height);
+            float stroke = Math.Max(1.5f, side * 0.03f);
+
+            // Per-layer: tip position along the direction axis (unit space, 0 = key centre),
+            // size factor, fill alpha, glow alpha. Back layers first so the front overlaps them.
+            float[] tipU = { -0.10f, 0.17f, 0.46f };
+            float[] scale = { 0.79f, 0.95f, 1.10f };
+            // Less translucency on the coloured selected card so the back layers stay cyan
+            int[] fillA = args.Selected ? new int[] { 215, 240, 255 } : new int[] { 150, 205, 255 };
+            int[] glowA = { 0, 45, 95 };
+            Color[] c0 = { back, mid, tip };
+            Color[] c1 = { Mix(back, Color.Black, 0.25f), back, mid };
+
+            using (Matrix m = ArrowTransform(inner, kind))
+            {
+                for (int i = 0; i < 3; i++)
                 {
-                    using (Pen halo = new Pen(StrokeGlowColor(args), stroke * 3f))
+                    using (GraphicsPath path = BuildChevronPath(tipU[i], scale[i]))
                     {
-                        halo.LineJoin = LineJoin.Round;
-                        g.DrawPath(halo, path);
+                        path.Transform(m);
+
+                        // Gradient runs from the chevron tip (bright) back to its base (darker)
+                        PointF[] axis = { new PointF(tipU[i], 0f), new PointF(tipU[i] - 0.44f * scale[i], 0f) };   // 0.44 = d + t
+                        m.TransformPoints(axis);
+
+                        if (glowA[i] > 0)
+                        {
+                            using (Pen halo = new Pen(Alpha(glow, glowA[i] / 2), stroke * 5f))
+                            {
+                                halo.LineJoin = LineJoin.Round;
+                                g.DrawPath(halo, path);
+                            }
+                            using (Pen halo = new Pen(Alpha(glow, glowA[i]), stroke * 2.4f))
+                            {
+                                halo.LineJoin = LineJoin.Round;
+                                g.DrawPath(halo, path);
+                            }
+                        }
+
+                        using (LinearGradientBrush fill = new LinearGradientBrush(axis[0], axis[1], Alpha(c0[i], fillA[i]), Alpha(c1[i], fillA[i])))
+                            g.FillPath(fill, path);
+
+                        // Crisp neon edge on the front layer (white on the selected card for contrast)
+                        if (i == 2)
+                        {
+                            Color edge = args.Selected ? Color.White : Mix(tip, Color.White, 0.55f);
+                            using (Pen edgePen = new Pen(Alpha(edge, 230), Math.Max(1f, stroke * 0.55f)))
+                            {
+                                edgePen.LineJoin = LineJoin.Round;
+                                g.DrawPath(edgePen, path);
+                            }
+                        }
+                        else
+                        {
+                            using (Pen edgePen = new Pen(Alpha(Mix(c0[i], Color.White, 0.3f), 120), Math.Max(1f, stroke * 0.4f)))
+                            {
+                                edgePen.LineJoin = LineJoin.Round;
+                                g.DrawPath(edgePen, path);
+                            }
+                        }
                     }
                 }
-                using (Pen outline = new Pen(args.OutlineColor, stroke))
-                {
-                    outline.LineJoin = LineJoin.Miter;
-                    outline.MiterLimit = 8f;
-                    outline.StartCap = LineCap.Flat;
-                    outline.EndCap = LineCap.Flat;
-                    g.DrawPath(outline, path);
-                }
             }
+        }
+
+        /// <summary>
+        /// One V-chevron pointing along +x in unit space (key centre at the origin, key half-side = 0.5).
+        /// tipU = x of the point; scale shrinks arm length, thickness and spread together.
+        /// Arms open at 90° so the shape stays inside the cell once rotated 45° towards a corner.
+        /// </summary>
+        private static GraphicsPath BuildChevronPath(float tipU, float scale)
+        {
+            float h = 0.30f * scale;   // half spread of the arms
+            float d = 0.30f * scale;   // depth from arm end to notch
+            float t = 0.14f * scale;   // arm thickness along x
+            float baseU = tipU - d - t;
+
+            GraphicsPath path = new GraphicsPath(FillMode.Winding);
+            path.AddPolygon(new PointF[]
+            {
+                new PointF(baseU, -h),
+                new PointF(baseU + t, -h),
+                new PointF(tipU, 0f),
+                new PointF(baseU + t, h),
+                new PointF(baseU, h),
+                new PointF(baseU + d, 0f),
+            });
+            return path;
+        }
+
+        /// <summary>Unit space → key pixels, rotated so +x points at the key's corner.</summary>
+        private static Matrix ArrowTransform(Rectangle inner, PadKeyKind kind)
+        {
+            float side = Math.Min(inner.Width, inner.Height);
+            float cx = inner.X + inner.Width * 0.5f;
+            float cy = inner.Y + inner.Height * 0.5f;
+            float angle;
+            switch (kind)
+            {
+                case PadKeyKind.UpperLeft: angle = 225f; break;
+                case PadKeyKind.UpperRight: angle = 315f; break;
+                case PadKeyKind.DownLeft: angle = 135f; break;
+                default: angle = 45f; break;   // DownRight
+            }
+            Matrix m = new Matrix();
+            m.Rotate(angle, MatrixOrder.Append);
+            m.Scale(side, side, MatrixOrder.Append);
+            m.Translate(cx, cy, MatrixOrder.Append);
+            return m;
         }
 
         internal static GraphicsPath RoundedRect(Rectangle r, int radius)
@@ -180,10 +316,16 @@ namespace ConfigAppNS
             PaintKey(e.Graphics, btn.ClientRectangle, (PadKeyKind)btn.Tag, args);
         }
 
+        /// <summary>Centre key: neon cyan ring in the same gradient as the chevrons — outer halo,
+        /// gradient main ring, and a thinner darker inner ring echoing the layered arrows.</summary>
         private static void DrawCenterRing(Graphics g, Rectangle inner, PadKeyPaintArgs args)
         {
-            float stroke = Math.Max(3f, inner.Width * 0.08f);
-            float pad = stroke * 0.6f;
+            Color tip, mid, back, glow;
+            ResolveArrowColors(args, out tip, out mid, out back, out glow);
+
+            float side = Math.Min(inner.Width, inner.Height);
+            float stroke = Math.Max(3f, side * 0.075f);
+            float pad = stroke * 1.3f;
             RectangleF ring = new RectangleF(
                 inner.X + pad, inner.Y + pad,
                 inner.Width - pad * 2, inner.Height - pad * 2);
@@ -194,26 +336,27 @@ namespace ConfigAppNS
                     g.FillEllipse(fill, ring);
             }
 
-            if (!args.GlowColor.IsEmpty)
-            {
-                using (Pen halo = new Pen(StrokeGlowColor(args), stroke * 2.2f))
-                    g.DrawEllipse(halo, ring);
-            }
+            using (Pen halo = new Pen(Alpha(glow, 45), stroke * 2.6f))
+                g.DrawEllipse(halo, ring);
+            using (Pen halo = new Pen(Alpha(glow, 90), stroke * 1.6f))
+                g.DrawEllipse(halo, ring);
 
-            using (Pen pen = new Pen(args.OutlineColor, stroke))
-            {
-                pen.StartCap = LineCap.Flat;
-                pen.EndCap = LineCap.Flat;
+            using (LinearGradientBrush grad = new LinearGradientBrush(ring, tip, back, 45f))
+            using (Pen pen = new Pen(grad, stroke))
                 g.DrawEllipse(pen, ring);
-            }
-        }
 
-        /// <summary>Translucent halo behind the arrow / ring stroke: LED colour when pressed,
-        /// white on the selected gradient cell, otherwise the theme glow colour.</summary>
-        private static Color StrokeGlowColor(PadKeyPaintArgs args)
-        {
-            Color c = args.Triggered ? args.TriggerFill : (args.Selected ? Color.White : args.GlowColor);
-            return Color.FromArgb(args.Triggered ? 110 : 70, c.R, c.G, c.B);
+            Color edge = args.Selected ? Color.White : Mix(tip, Color.White, 0.55f);
+            using (Pen edgePen = new Pen(Alpha(edge, 220), Math.Max(1f, stroke * 0.18f)))
+                g.DrawEllipse(edgePen, ring);
+
+            float innerPad = stroke * 1.15f;
+            RectangleF innerRing = new RectangleF(ring.X + innerPad, ring.Y + innerPad,
+                ring.Width - innerPad * 2, ring.Height - innerPad * 2);
+            if (innerRing.Width > stroke * 2)
+            {
+                using (Pen innerPen = new Pen(Alpha(Mix(mid, back, 0.5f), 170), Math.Max(1f, stroke * 0.35f)))
+                    g.DrawEllipse(innerPen, innerRing);
+            }
         }
 
         /// <summary>Soft outer glow: three concentric translucent strokes centred on the card edge,
@@ -231,72 +374,6 @@ namespace ConfigAppNS
                     g.DrawPath(p, cardPath);
                 }
             }
-        }
-
-        /// <summary>
-        /// Single filled path matching SVG L-arrow: equal-thickness diagonal shaft + L head,
-        /// built in unit space for down-right then mirrored. Junction is continuous (no gap).
-        /// </summary>
-        private static GraphicsPath BuildSvgLArrowPath(Rectangle inner, PadKeyKind kind)
-        {
-            // Unit geometry (0..1): thickness t, tip at bottom-right outer corner.
-            const float t = 0.145f;
-            float outer = 1f;
-            float innerC = 1f - t;
-
-            // Continuous outline of the union of:
-            //  - horizontal bar [0.32, 1-t]..[1, 1]
-            //  - vertical bar   [1-t, 0.32]..[1, 1]
-            //  - diagonal shaft from upper-left into the inner corner (overlapping by t)
-            GraphicsPath unit = new GraphicsPath(FillMode.Winding);
-
-            PointF[] poly = new PointF[]
-            {
-                // start at outer tip corner, walk around clockwise
-                new PointF(outer, outer),
-                new PointF(0.32f, outer),
-                new PointF(0.32f, innerC),
-                // meet diagonal lower edge
-                new PointF(innerC - t * 0.15f, innerC),
-                new PointF(0.12f, 0.12f + t * 1.414f * 0.5f + t * 0.15f),
-                new PointF(0.12f + t * 1.414f * 0.5f + t * 0.15f, 0.12f),
-                new PointF(innerC, innerC - t * 0.15f),
-                new PointF(innerC, 0.32f),
-                new PointF(outer, 0.32f),
-            };
-            unit.AddPolygon(poly);
-
-            using (Matrix m = CornerTransform(inner, kind))
-            {
-                GraphicsPath path = (GraphicsPath)unit.Clone();
-                path.Transform(m);
-                return path;
-            }
-        }
-
-        private static Matrix CornerTransform(Rectangle inner, PadKeyKind kind)
-        {
-            float cx = inner.X + inner.Width * 0.5f;
-            float cy = inner.Y + inner.Height * 0.5f;
-            Matrix m = new Matrix();
-            m.Translate(-0.5f, -0.5f, MatrixOrder.Append);
-            switch (kind)
-            {
-                case PadKeyKind.DownRight:
-                    break;
-                case PadKeyKind.UpperLeft:
-                    m.Scale(-1f, -1f, MatrixOrder.Append);
-                    break;
-                case PadKeyKind.UpperRight:
-                    m.Scale(1f, -1f, MatrixOrder.Append);
-                    break;
-                case PadKeyKind.DownLeft:
-                    m.Scale(-1f, 1f, MatrixOrder.Append);
-                    break;
-            }
-            m.Scale(inner.Width, inner.Height, MatrixOrder.Append);
-            m.Translate(cx, cy, MatrixOrder.Append);
-            return m;
         }
     }
 }
