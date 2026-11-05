@@ -14,11 +14,17 @@ namespace ConfigAppNS
     {
         internal enum PadKeyKind
         {
+            // 5-key (PIU) layout: value == firmware key index
             UpperLeft = 0,
             UpperRight = 1,
             Center = 2,
             DownLeft = 3,
-            DownRight = 4
+            DownRight = 4,
+            // 4-key (DDR cross) layout: same chevron, axis-aligned; key index comes from App_DDR.FourKeyKinds
+            Left = 5,
+            Up = 6,
+            Down = 7,
+            Right = 8
         }
 
         internal struct PadKeyPaintArgs
@@ -268,6 +274,10 @@ namespace ConfigAppNS
                 case PadKeyKind.UpperLeft: angle = 225f; break;
                 case PadKeyKind.UpperRight: angle = 315f; break;
                 case PadKeyKind.DownLeft: angle = 135f; break;
+                case PadKeyKind.Left: angle = 180f; break;
+                case PadKeyKind.Up: angle = 270f; break;
+                case PadKeyKind.Down: angle = 90f; break;
+                case PadKeyKind.Right: angle = 0f; break;
                 default: angle = 45f; break;   // DownRight
             }
             Matrix m = new Matrix();

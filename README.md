@@ -2,8 +2,15 @@
 
 ## 下载
 
-- [`dist/PADUEX5/`](./dist/PADUEX5/) → `PADUEX5.exe`（1.0.0.61）
+- [`dist/PADUEX5/`](./dist/PADUEX5/) → `PADUEX5.exe`（1.0.0.62）
 - [`dist/PADUEX5-win-release.zip`](./dist/PADUEX5-win-release.zip)
+
+## 上位机 1.0.0.62 —— 四键跳舞机
+
+- 同一份程序通过 `Config.ini` 的 `KEYCOUNT=4|5`（默认 5）切换四键 / 五键界面。`KEYCOUNT=4`：窗口标题 **PADUEX4**，踏板区改为十字布局（上 / 下 / 左 / 右，复用青色霓虹 chevron 只改旋转角度），第五键按钮隐藏，「按键映射」页只有 4 行；灵敏度 / 调色 / 延迟释放 / 协议 / OTA / 配色 / 字体 / 多语言与五键版完全一致。
+- 键位对应（按 K1～K4 接线顺序推断，**需真机确认**）：K1 = ←、K2 = ↑、K3 = ↓、K4 = →。
+- 协议不变：仍是 20 × u16 的报文，第五键（K5）四个槽位读到什么就原样写回；「默认设置」只重置前四键。
+- 固件 **`firmware/paduex3_1.8_4key.bin`**（仅四键机）：paduex3_1.7 + 2 字节 —— 键扫描循环边界 `0x08006BE2` 由 36 个传感器改为 16 个，K5 在键盘 / 手柄 / RAW 流里永不上报；版本字节改 18，上位机显示 `FVer=2.18 (paduex3_1.8-4key)`。Unicorn 跑真实键扫描代码验证（`firmware/tests/emu_keyscan_4key.py`，52/52，对照 1.7 上 K5 会触发）。五键板请继续用 paduex3_1.7。
 
 ## 上位机 1.0.0.61
 
@@ -48,7 +55,7 @@
 
 ## 固件
 
-只刷 **`firmware/paduex3_1.7.bin`**（官方 V2.13 + 防粘键 + 键盘改键）。保守版 `paduex3_1.6.bin` 仅防粘键。
+五键板只刷 **`firmware/paduex3_1.7.bin`**（官方 V2.13 + 防粘键 + 键盘改键）。保守版 `paduex3_1.6.bin` 仅防粘键。四键机刷 `firmware/paduex3_1.8_4key.bin`（= 1.7 + 屏蔽第五键）。
 
 **paduex3_1.0～1.5 全部禁止**：它们覆盖了 USB 中断向量，OTA 后无 USB。详见 [`firmware/patches/paduex3_1.0-Vector-Brick.md`](./firmware/patches/paduex3_1.0-Vector-Brick.md)。
 
