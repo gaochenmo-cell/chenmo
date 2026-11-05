@@ -2,9 +2,9 @@
 """
 Emulate Report_Normal (keyboard report builder) of a PADUEX5 image with Unicorn
 and check which HID usages are produced for a given KeyCode / Color table /
-ConfigMode. Used to validate the paduex5_1.7 keyboard remap patch offline.
+ConfigMode. Used to validate the keyboard remap patch offline.
 
-  python3 firmware/tests/emu_report_normal.py firmware/paduex5_1.7.bin
+  python3 firmware/tests/emu_report_normal.py firmware/PADUEX5_V3.0.bin
 """
 from __future__ import annotations
 
@@ -61,7 +61,7 @@ def run(image: bytes, keycode: int, color: list[int], configmode: int) -> list[i
 
 
 def main() -> int:
-    img_path = Path(sys.argv[1] if len(sys.argv) > 1 else "firmware/paduex5_1.7.bin")
+    img_path = Path(sys.argv[1] if len(sys.argv) > 1 else "firmware/PADUEX5_V3.0.bin")
     img = img_path.read_bytes()
     fails = 0
 

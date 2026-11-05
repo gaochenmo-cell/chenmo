@@ -18,15 +18,15 @@ from __future__ import annotations
 import json
 import struct
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from capstone import CS_ARCH_ARM, CS_MODE_THUMB, Cs
 from PIL import Image, ImageDraw, ImageFont
 
-ROOT = Path(__file__).resolve().parents[2]
-FW = ROOT / "firmware"
-ART = Path("/opt/cursor/artifacts/sim-report")
+FW = Path(__file__).resolve().parents[1]          # firmware/legacy
+ART = Path(tempfile.gettempdir()) / "paduex5-sim-report"
 ART.mkdir(parents=True, exist_ok=True)
 
 BASE = 0x08004000
