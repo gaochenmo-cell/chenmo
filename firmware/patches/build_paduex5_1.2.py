@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Build paduex3_1.2.bin from paduex3_1.0.bin — remappable keys, SAME file size as paduex3_1.0.
+Build paduex5_1.2.bin from paduex5_1.0.bin — remappable keys, SAME file size as paduex5_1.0.
 
 Safety: never append past the original image. Handlers live inside a rewritten
 App_USB_KBS_Report_Normal region so ISP tools that flash by file length cannot
-truncate a dangling boot cave (the paduex3_1.1 brick mode).
+truncate a dangling boot cave (the paduex5_1.1 brick mode).
 
 Features:
   - Report_Normal reads Mapping[12] uint16 @ 0x20001BB0
@@ -112,8 +112,8 @@ def encode_bcond(frm: int, to: int, cond: int) -> bytes:
 
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
-    src_path = root / "paduex3_1.0.bin"
-    dst_path = root / "paduex3_1.2.bin"
+    src_path = root / "paduex5_1.0.bin"
+    dst_path = root / "paduex5_1.2.bin"
     buf = bytearray(src_path.read_bytes())
     orig_len = len(buf)
     print(f"base {src_path.name} ({orig_len} bytes) — size will be preserved")
@@ -363,14 +363,14 @@ def main() -> int:
     # Boot hook → Mapping_Load (still inside original image).
     # MUST be exactly 12 bytes (BL + 4 NOPs): the stock first memcpy is 12B.
     # Using 16B (BL+6 NOPs) overwrites the next `movs r2`/`ldr r1` and leaves
-    # a naked `adr; bl memcpy` with garbage args → HardFault / no USB. See paduex3_1.5.
+    # a naked `adr; bl memcpy` with garbage args → HardFault / no USB. See paduex5_1.5.
     boot = asm_bl(BOOT_HOOK, LOAD) + b"\x00\xbf" * 4
     assert len(boot) == 12
     buf[va_to_off(BOOT_HOOK) : va_to_off(BOOT_HOOK) + 12] = boot
 
     assert len(buf) == orig_len, f"size changed {orig_len} -> {len(buf)}"
     dst_path.write_bytes(buf)
-    print(f"wrote {dst_path} ({len(buf)} bytes) SAME as paduex3_1.0")
+    print(f"wrote {dst_path} ({len(buf)} bytes) SAME as paduex5_1.0")
 
     md = Cs(CS_ARCH_ARM, CS_MODE_THUMB)
     for name, va, n in [

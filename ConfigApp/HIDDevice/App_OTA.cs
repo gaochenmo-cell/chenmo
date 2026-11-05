@@ -22,7 +22,7 @@ namespace ConfigAppNS
         private const uint FLASH_CONFIG_ADDR = 0x0800F800;
         private const int MAX_APP_SIZE = (int)(FLASH_CONFIG_ADDR - FLASH_APP_ADDR); // 0xB800
         private const int MIN_APP_SIZE = 1024;
-        /// <summary>Stock / paduex3_1.7 image length — ISP-safe.</summary>
+        /// <summary>Stock / paduex5_1.7 image length — ISP-safe.</summary>
         private const int STOCK_APP_SIZE = 37072;
         private const int CHUNK_1K = 1024;
         private const int HID_PAYLOAD = 60; // 64 - cmd(2) - len(2)
@@ -212,7 +212,7 @@ namespace ConfigAppNS
                 labelFileInfo.Text = L.F("Ota.FileInfo", binData.Length, Align1K(binData.Length));
                 btnStart.Enabled = true;
                 SetStatus(L.F("Ota.Loaded", Path.GetFileName(binPath)));
-                // Soft warn: images longer than stock (e.g. paduex3_1.1 cave) are OK for this OTA,
+                // Soft warn: images longer than stock (e.g. paduex5_1.1 cave) are OK for this OTA,
                 // but ISP tools that flash by old length can truncate and brick.
                 if (binData.Length > STOCK_APP_SIZE)
                 {
@@ -243,7 +243,7 @@ namespace ConfigAppNS
                 return L.Get("Ota.V.BadSp");
             if (reset < FLASH_APP_ADDR || reset >= FLASH_CONFIG_ADDR)
                 return L.Get("Ota.V.BadReset");
-            // IRQ67 (OTGFS1 / USB) vector must point into APP flash. paduex3_1.0~1.5 wrote
+            // IRQ67 (OTGFS1 / USB) vector must point into APP flash. paduex5_1.0~1.5 wrote
             // code over 0x14C and brick on the first USB interrupt.
             if (data.Length > 0x150)
             {

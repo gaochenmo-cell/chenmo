@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Build paduex4_1.0.bin = paduex3_1.7.bin + "no fifth key" (for the 4-key pad
+Build paduex4_1.0.bin = paduex5_1.7.bin + "no fifth key" (for the 4-key pad
 that uses the same 5KEY_2P board with only connectors K1..K4 populated).
 
 What changes — exactly TWO bytes, no code moves, no new code:
@@ -17,10 +17,10 @@ What changes — exactly TWO bytes, no code moves, no new code:
 
   2. 0x0800616A  movs r1, #17   ->  movs r1, #18
      GET_MODE minor version: host shows "FVer=2.18 (paduex4_1.0)".
-     (paduex3 = 5-key series, paduex4 = 4-key series.)
+     (paduex5 = 5-key series, paduex4 = 4-key series.)
 
 Everything else (vector table, boot, USB commands, Flash code, Report_Normal remap,
-SendPacket timeouts) is byte-identical to paduex3_1.7. No new loops, waits, RAM or
+SendPacket timeouts) is byte-identical to paduex5_1.7. No new loops, waits, RAM or
 Flash writes. The build asserts the diff set, 0x14C == 0x080084A5 and size 37072.
 """
 from __future__ import annotations
@@ -65,12 +65,12 @@ def bl_target(buf: bytearray, addr: int) -> int:
 
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
-    src_path = root / "paduex3_1.7.bin"
+    src_path = root / "paduex5_1.7.bin"
     src = src_path.read_bytes()
     buf = bytearray(src)
     assert len(buf) == SIZE, len(buf)
 
-    # Pre-checks: this really is paduex3_1.7 and the scan loop looks like we expect
+    # Pre-checks: this really is paduex5_1.7 and the scan loop looks like we expect
     assert struct.unpack_from("<I", buf, USB_VECTOR_OFF)[0] == USB_VECTOR
     assert buf[off(SCAN_FN):off(SCAN_FN) + 4] == bytes.fromhex("2de9f843"), "scan fn push.w"
     assert buf[off(SCAN_LIMIT_SITE):off(SCAN_LIMIT_SITE) + 2] == bytes([SCAN_LIMIT_OLD, 0x2C]), "cmp r4,#0x24"
@@ -92,7 +92,7 @@ def main() -> int:
 
     dst = root / "paduex4_1.0.bin"
     dst.write_bytes(buf)
-    print(f"diff vs paduex3_1.7: {len(diffs)} bytes at {', '.join(hex(d) for d in diffs)}")
+    print(f"diff vs paduex5_1.7: {len(diffs)} bytes at {', '.join(hex(d) for d in diffs)}")
     print(f"wrote {dst} ({len(buf)} bytes), 0x14C = {struct.unpack_from('<I', buf, USB_VECTOR_OFF)[0]:#010x}")
 
     md = Cs(CS_ARCH_ARM, CS_MODE_THUMB)

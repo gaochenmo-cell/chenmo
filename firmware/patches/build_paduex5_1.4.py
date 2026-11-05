@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-Build paduex3_1.4.bin from paduex3_1.2.bin — same size.
+Build paduex5_1.4.bin from paduex5_1.2.bin — same size.
 
-Fixes vs paduex3_1.3:
-  paduex3_1.3 replaced `push.w {r4-r8,lr}` (6 regs = 24 bytes, 8-byte aligned)
+Fixes vs paduex5_1.3:
+  paduex5_1.3 replaced `push.w {r4-r8,lr}` (6 regs = 24 bytes, 8-byte aligned)
   with `push {r4-r7,lr}` (5 regs = 20 bytes). That breaks AAPCS 8-byte SP
   alignment before BL into the USB stack → HardFault → USB gone
   ("plug in, no sound, no response").
 
-  paduex3_1.4 keeps the TX timeout from 1.3 but restores the original 6-register
+  paduex5_1.4 keeps the TX timeout from 1.3 but restores the original 6-register
   push/pop so the stack stays 8-byte aligned.
 """
 from __future__ import annotations
@@ -167,10 +167,10 @@ def build_sendpacket(
 
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
-    src = root / "paduex3_1.2.bin"
-    dst = root / "paduex3_1.4.bin"
+    src = root / "paduex5_1.2.bin"
+    dst = root / "paduex5_1.4.bin"
     if not src.exists():
-        print("missing paduex3_1.2.bin", file=sys.stderr)
+        print("missing paduex5_1.2.bin", file=sys.stderr)
         return 1
 
     buf = bytearray(src.read_bytes())
@@ -189,7 +189,7 @@ def main() -> int:
 
     assert len(buf) == orig_len
     dst.write_bytes(buf)
-    print(f"wrote {dst} ({len(buf)} bytes) SAME as stock/1.2 — DO NOT use paduex3_1.3")
+    print(f"wrote {dst} ({len(buf)} bytes) SAME as stock/1.2 — DO NOT use paduex5_1.3")
 
     md = Cs(CS_ARCH_ARM, CS_MODE_THUMB)
     for name, va, n in [("KBS", KBS_FN, 60), ("HID", HID_FN, 64)]:

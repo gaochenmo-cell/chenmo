@@ -64,14 +64,14 @@ namespace ConfigAppNS
         }
 
         // Only tag versions we actually know. Stock V2.12, stock V2.13 (its FW_VERSION_MINOR
-        // constant was never bumped) and paduex3_1.6 all report 2.12; paduex3_1.7 is the only image
+        // constant was never bumped) and paduex5_1.6 all report 2.12; paduex5_1.7 is the only image
         // that reports 2.17. Anything else is shown as-is without a guess.
         // UID / HVer that differ from the known board are annotated, never rejected.
         private string FwTag()
         {
             if (!mFwValid) return "";
             string tag = "";
-            if (mFwMajor == 2 && mFwMinor == 17) tag = L.Get("Ver.Tag.Paduex3_17");
+            if (mFwMajor == 2 && mFwMinor == 17) tag = L.Get("Ver.Tag.Paduex5_17");
             else if (mFwMajor == 2 && mFwMinor == 18) tag = L.Get("Ver.Tag.Paduex4_10");
             else if (mFwMajor == 2 && mFwMinor == 12) tag = L.Get("Ver.Tag.Stock212");
             if (mDevUid != DeviceProtocol.ID_DDR) tag += L.Get("Ver.Tag.UidMismatch");
@@ -629,7 +629,7 @@ namespace ConfigAppNS
         // Stock Report_Normal tables. 1P: W X A D S   2P: H K J N M (firmware fixes 2P since V2.12)
         private readonly int[] DefaultKeyMapping1P = new int[] { 0x1A, 0x1B, 0x04, 0x07, 0x16 };
         private readonly int[] DefaultKeyMapping2P = new int[] { 0x0B, 0x0E, 0x0D, 0x11, 0x10 };
-        // paduex3_1.7 keymap lives in the unused Color[key*4+1] slot, tagged 0x4B00 ("K") | usage.
+        // paduex5_1.7 keymap lives in the unused Color[key*4+1] slot, tagged 0x4B00 ("K") | usage.
         private const int MAP_TAG = 0x4B;
         private Button btn_MapDefault;
 
@@ -1753,9 +1753,13 @@ namespace ConfigAppNS
             Color cellBg = pal.CardBg;
             Color outline = pal.PadOutline;
             bool triggered = key >= 0 && key < padKeyActive.Length && padKeyActive[key];
-            // 5-key: cyan idle set, pressed = the key's LED colour.
-            // 4-key: white idle set, pressed = red (←/→) or green (↑/↓) by direction.
-            Color triggerFill = FourKeyMode ? FourKeyPressColor(kind) : GetPadLedColor(key);
+            // Pressed = the pad's LED colour as currently shown on the Colour tab (same as the real
+            // light bar). Falls back to the per-layout default highlight (5-key amber, 4-key red
+            // ←/→ / green ↑/↓) while the colour is 0/unknown or not yet read from the board.
+            // Idle colours: 5-key cyan set, 4-key white set — unchanged.
+            Color triggerFill = GetPadLedColor(key);
+            if (triggerFill.IsEmpty)
+                triggerFill = FourKeyMode ? FourKeyPressColor(kind) : FiveKeyPressDefault;
             if (triggered)
                 triggerFill = Color.FromArgb(220, triggerFill);
             Color arrowTip = pal.ArrowTip, arrowMid = pal.ArrowMid, arrowBack = pal.ArrowBack, arrowGlow = pal.ArrowGlow;
@@ -1779,24 +1783,54 @@ namespace ConfigAppNS
             };
         }
 
+        /// <summary>
+        /// Pad highlight colour = the LED colour in ColorBuffer[key*4] (firmware Color[key*4], the
+        /// byte the light bar actually uses). Color.Empty when the pad's colour is not known yet
+        /// (nothing read from the board / chosen on the Colour tab since start-up or reconnect)
+        /// or the code is 0 / unrecognised, so the caller can fall back to the default highlight.
+        /// </summary>
         private Color GetPadLedColor(int keyIndex)
         {
-            if (keyIndex < 0 || keyIndex >= KEY_COUNT_5KEY)
-                return Color.White;
-            int led = ColorBuffer[keyIndex * SENSORS_PER_KEY];
-            return LedCodeToColor(led);
+            if (keyIndex < 0 || keyIndex >= KEY_COUNT_5KEY || !padLedKnown[keyIndex])
+                return Color.Empty;
+            return LedCodeToColor(ColorBuffer[keyIndex * SENSORS_PER_KEY]);
         }
 
-        private Color LedCodeToColor(int led)
+        // 5-key fallback highlight (amber, same as the selected-key colour of the light theme)
+        private static readonly Color FiveKeyPressDefault = Color.FromArgb(0xF5, 0x9E, 0x0B);
+
+        // Screen colours for the firmware LED codes R=1 G=2 B=4 Y=3 P=5 C=6 W=7
+        private static Color LedCodeToColor(int led)
         {
-            if (led == LED_COLOR_R) return Color.Red;
-            if (led == LED_COLOR_G) return Color.LimeGreen;
-            if (led == LED_COLOR_B) return Color.RoyalBlue;
-            if (led == LED_COLOR_Y) return Color.Gold;
-            if (led == LED_COLOR_P) return Color.Fuchsia;
-            if (led == LED_COLOR_C) return Color.Cyan;
-            if (led == LED_COLOR_W) return Color.White;
-            return Color.White;
+            switch (led & 0xFF)
+            {
+                case LED_COLOR_R: return Color.FromArgb(0xEF, 0x44, 0x44);
+                case LED_COLOR_G: return Color.FromArgb(0x22, 0xC5, 0x5E);
+                case LED_COLOR_B: return Color.FromArgb(0x3B, 0x82, 0xF6);
+                case LED_COLOR_Y: return Color.FromArgb(0xFA, 0xCC, 0x15);
+                case LED_COLOR_P: return Color.FromArgb(0xA8, 0x55, 0xF7);
+                case LED_COLOR_C: return Color.FromArgb(0x22, 0xD3, 0xEE);
+                case LED_COLOR_W: return Color.FromArgb(0xFF, 0xFF, 0xFF);
+                default: return Color.Empty;
+            }
+        }
+
+        /// <summary>Which pads have a trustworthy LED colour in ColorBuffer: set for every pad after
+        /// a successful GET_SENS(colour) and per pad when the user picks a colour on the Colour tab;
+        /// cleared whenever the USB device list changes so a re-plugged board is read again.</summary>
+        private readonly bool[] padLedKnown = new bool[KEY_COUNT_5KEY];
+
+        private void MarkPadLedKnown(int keyIndex, bool known)
+        {
+            if (keyIndex < 0 || keyIndex >= KEY_COUNT_5KEY) return;
+            padLedKnown[keyIndex] = known;
+            InvalidatePadKeyButtons();
+        }
+
+        private void MarkAllPadLedKnown(bool known)
+        {
+            for (int k = 0; k < KEY_COUNT_5KEY; k++) padLedKnown[k] = known;
+            InvalidatePadKeyButtons();
         }
 
         private void UpdatePadTriggerFromReport(byte[] buf, int reportIndex)
@@ -1919,7 +1953,7 @@ namespace ConfigAppNS
             if (tabPage_Map != null) tabPage_Map.Text = L.Get("Tab.KeyMap");
             if (groupBox_Map != null) groupBox_Map.Text = L.Get("Map.Group");
             if (label_MapHint != null) label_MapHint.Text = L.Get("Map.Hint");
-            if (label_MapKey != null) label_MapKey.Text = L.Get("Map.KeyLabel");
+            if (label_MapKey != null) label_MapKey.Text = L.Get(FourKeyMode ? "Map.KeyLabel4" : "Map.KeyLabel");
             if (btn_MapRead != null) btn_MapRead.Text = L.Get("Map.Read");
             if (btn_MapSave != null) btn_MapSave.Text = L.Get("Map.Save");
             if (btn_MapDefault != null) btn_MapDefault.Text = L.Get("Map.Default");
@@ -2136,6 +2170,7 @@ namespace ConfigAppNS
             bDeviceStatusFG = false;
             mConnState = ConnState.None;
             ResetDeviceVersion();
+            MarkAllPadLedKnown(false);   // after a (re)connect the board's own colours win once read back
             UpdateWindowTitle();
             UpdateVersionLabel();
             SetModeGroupEnabled(false);
@@ -2312,7 +2347,7 @@ namespace ConfigAppNS
             if (ms < 0) ms = 0;
             if (ms > 1000) ms = 1000;
             int key = GetDebounceKeyIndex();
-            // paduex3_1.0.bin + fixed source: DTick[(i/4)*4]; V2.12 quirk: DTick[key].
+            // paduex5_1.0.bin + fixed source: DTick[(i/4)*4]; V2.12 quirk: DTick[key].
             // Write both layouts so save works on either firmware.
             DTickBuffer[key] = ms;
             int packed = key * SENSORS_PER_KEY;
@@ -2364,7 +2399,7 @@ namespace ConfigAppNS
             {
                 if (!startup && !IsVisibleKey(i / SENSORS_PER_KEY)) continue;
                 SensiBuffer[i] = DEFAULT_SENSI_TAB[i];
-                if (!IsMapSlot(i)) ColorBuffer[i] = DEFAULT_COLOR_TAB[i];   // slot +1 = keymap (paduex3_1.7)
+                if (!IsMapSlot(i)) ColorBuffer[i] = DEFAULT_COLOR_TAB[i];   // slot +1 = keymap (paduex5_1.7)
                 if (startup || IsVisibleKey(i)) DTickBuffer[i] = DEFAULT_DTICK_TAB[i];
             }
         }
@@ -2442,6 +2477,8 @@ namespace ConfigAppNS
                         ConfigOut[ConfigOutIndex + i] = ((InputReportBuf[ReportIndex + SyncLen + (i * 2 + 0)] << 8) | (InputReportBuf[ReportIndex + SyncLen + (i * 2 + 1)]));
                     }
                     DebugLog.Log("GET_SENS type {0:X2}: OK crc={1:X2}", ConfigType, CS);
+                    if ((ConfigType & 0x0F) == 0x01 && ConfigOut == ColorBuffer)
+                        MarkAllPadLedKnown(true);   // pad highlight now follows the board's LED colours
                 }
                 else
                 {
@@ -2862,61 +2899,24 @@ namespace ConfigAppNS
         /// ====  Btn Sensor LED Click  ====
         /// =============================================================================================
         ///
-        private void Btn_Col_R_Click(object sender, EventArgs e)
+        // Writes slots +0/+2/+3 of the selected pad; slot +1 is the keymap and is never touched.
+        private void SetSelectedPadColor(int ledCode)
         {
-            ColorBuffer[(SensorIndex / 4) * 4 + 0] = LED_COLOR_R;
-            ColorBuffer[(SensorIndex / 4) * 4 + 2] = LED_COLOR_R;
-            ColorBuffer[(SensorIndex / 4) * 4 + 3] = LED_COLOR_R;
-            Sensor_Panel_Display_ReFlash(); 
+            int key = SensorIndex / 4;
+            ColorBuffer[key * 4 + 0] = ledCode;
+            ColorBuffer[key * 4 + 2] = ledCode;
+            ColorBuffer[key * 4 + 3] = ledCode;
+            MarkPadLedKnown(key, true);   // pressed highlight follows the Colour tab at once, saved or not
+            Sensor_Panel_Display_ReFlash();
         }
 
-        private void Btn_Col_G_Click(object sender, EventArgs e)
-        {
-            ColorBuffer[(SensorIndex / 4) * 4 + 0] = LED_COLOR_G;
-            ColorBuffer[(SensorIndex / 4) * 4 + 2] = LED_COLOR_G;
-            ColorBuffer[(SensorIndex / 4) * 4 + 3] = LED_COLOR_G;
-            Sensor_Panel_Display_ReFlash(); 
-        }
-
-        private void Btn_Col_B_Click(object sender, EventArgs e)
-        {
-            ColorBuffer[(SensorIndex / 4) * 4 + 0] = LED_COLOR_B;
-            ColorBuffer[(SensorIndex / 4) * 4 + 2] = LED_COLOR_B;
-            ColorBuffer[(SensorIndex / 4) * 4 + 3] = LED_COLOR_B;
-            Sensor_Panel_Display_ReFlash(); 
-        }
-
-        private void Btn_Col_Y_Click(object sender, EventArgs e)
-        {
-            ColorBuffer[(SensorIndex / 4) * 4 + 0] = LED_COLOR_Y;
-            ColorBuffer[(SensorIndex / 4) * 4 + 2] = LED_COLOR_Y;
-            ColorBuffer[(SensorIndex / 4) * 4 + 3] = LED_COLOR_Y;
-            Sensor_Panel_Display_ReFlash(); 
-        }
-
-        private void Btn_Col_P_Click(object sender, EventArgs e)
-        {
-            ColorBuffer[(SensorIndex / 4) * 4 + 0] = LED_COLOR_P;
-            ColorBuffer[(SensorIndex / 4) * 4 + 2] = LED_COLOR_P;
-            ColorBuffer[(SensorIndex / 4) * 4 + 3] = LED_COLOR_P;
-            Sensor_Panel_Display_ReFlash(); 
-        }
-
-        private void Btn_Col_C_Click(object sender, EventArgs e)
-        {
-            ColorBuffer[(SensorIndex / 4) * 4 + 0] = LED_COLOR_C;
-            ColorBuffer[(SensorIndex / 4) * 4 + 2] = LED_COLOR_C;
-            ColorBuffer[(SensorIndex / 4) * 4 + 3] = LED_COLOR_C;
-            Sensor_Panel_Display_ReFlash(); 
-        }
-
-        private void Btn_Col_W_Click(object sender, EventArgs e)
-        {
-            ColorBuffer[(SensorIndex / 4) * 4 + 0] = LED_COLOR_W;
-            ColorBuffer[(SensorIndex / 4) * 4 + 2] = LED_COLOR_W;
-            ColorBuffer[(SensorIndex / 4) * 4 + 3] = LED_COLOR_W;
-            Sensor_Panel_Display_ReFlash(); 
-        }
+        private void Btn_Col_R_Click(object sender, EventArgs e) { SetSelectedPadColor(LED_COLOR_R); }
+        private void Btn_Col_G_Click(object sender, EventArgs e) { SetSelectedPadColor(LED_COLOR_G); }
+        private void Btn_Col_B_Click(object sender, EventArgs e) { SetSelectedPadColor(LED_COLOR_B); }
+        private void Btn_Col_Y_Click(object sender, EventArgs e) { SetSelectedPadColor(LED_COLOR_Y); }
+        private void Btn_Col_P_Click(object sender, EventArgs e) { SetSelectedPadColor(LED_COLOR_P); }
+        private void Btn_Col_C_Click(object sender, EventArgs e) { SetSelectedPadColor(LED_COLOR_C); }
+        private void Btn_Col_W_Click(object sender, EventArgs e) { SetSelectedPadColor(LED_COLOR_W); }
 
 
         /// =============================================================================================
@@ -2963,6 +2963,10 @@ namespace ConfigAppNS
         private void btn_default_Click(object sender, EventArgs e)
         {
             Load_Default_Sens();
+            // The Colour tab now shows the default colours for the visible pads, so highlight them too
+            for (int k = 0; k < KEY_COUNT_5KEY; k++)
+                if (IsVisibleKey(k)) padLedKnown[k] = true;
+            InvalidatePadKeyButtons();
             Sensor_Panel_Display_ReFlash();
         }
         /// =============================================================================================

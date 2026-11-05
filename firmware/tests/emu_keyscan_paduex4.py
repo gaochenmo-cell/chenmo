@@ -6,10 +6,10 @@ Unicorn and check which key bits end up in AppUser.KeyCode and which KeyCode is
 handed to the USB report builders.
 
 Used to validate paduex4_1.0 (fifth key never reported) and to show that
-keys 0..3 behave exactly as on paduex3_1.7.
+keys 0..3 behave exactly as on paduex5_1.7.
 
   python3 firmware/tests/emu_keyscan_paduex4.py firmware/paduex4_1.0.bin     # expect 4-key behaviour
-  python3 firmware/tests/emu_keyscan_paduex4.py firmware/paduex3_1.7.bin    # control: K5 must still report
+  python3 firmware/tests/emu_keyscan_paduex4.py firmware/paduex5_1.7.bin    # control: K5 must still report
 
 Only printf, the USB packet senders and the LED driver are stubbed (they touch
 peripherals); the scan loop, SetKeyBit, the debounce helper and the dispatcher
