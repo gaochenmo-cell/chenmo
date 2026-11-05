@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Build paduex3_1.8_4key.bin = paduex3_1.7.bin + "no fifth key" (for the 4-key pad
+Build paduex4_1.0.bin = paduex3_1.7.bin + "no fifth key" (for the 4-key pad
 that uses the same 5KEY_2P board with only connectors K1..K4 populated).
 
 What changes — exactly TWO bytes, no code moves, no new code:
@@ -16,7 +16,8 @@ What changes — exactly TWO bytes, no code moves, no new code:
      auto-calibration printout) are untouched.
 
   2. 0x0800616A  movs r1, #17   ->  movs r1, #18
-     GET_MODE minor version: host shows "FVer=2.18 (paduex3_1.8-4key)".
+     GET_MODE minor version: host shows "FVer=2.18 (paduex4_1.0)".
+     (paduex3 = 5-key series, paduex4 = 4-key series.)
 
 Everything else (vector table, boot, USB commands, Flash code, Report_Normal remap,
 SendPacket timeouts) is byte-identical to paduex3_1.7. No new loops, waits, RAM or
@@ -89,7 +90,7 @@ def main() -> int:
     diffs = [BASE + i for i, (a, b) in enumerate(zip(src, buf)) if a != b]
     assert diffs == [FW_MINOR_SITE, SCAN_LIMIT_SITE], [hex(d) for d in diffs]
 
-    dst = root / "paduex3_1.8_4key.bin"
+    dst = root / "paduex4_1.0.bin"
     dst.write_bytes(buf)
     print(f"diff vs paduex3_1.7: {len(diffs)} bytes at {', '.join(hex(d) for d in diffs)}")
     print(f"wrote {dst} ({len(buf)} bytes), 0x14C = {struct.unpack_from('<I', buf, USB_VECTOR_OFF)[0]:#010x}")

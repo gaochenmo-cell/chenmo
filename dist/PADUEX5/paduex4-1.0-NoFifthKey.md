@@ -1,7 +1,9 @@
-# paduex3_1.8_4key：四键跳舞机专用——第五键永不上报（只改 2 字节）
+# paduex4_1.0：四键跳舞机专用固件——第五键永不上报（只改 2 字节）
+
+命名：**paduex3 = 五键系列，paduex4 = 四键系列**。paduex4_1.0 就是 1.0.0.62 时期的 `paduex3_1.8_4key.bin`，bin 内容一字节不差（SHA-256 `a90baf167df63a54d585d9f6227e341563dcf7a889fd10b278fd6fbebd35ec72`），只是改名。
 
 适用硬件：与五键相同的 5KEY_2P 控制板，但只插了 K1～K4 四个键的孔。
-上位机 1.0.0.62 起 `Config.ini` 设 `KEYCOUNT=4` 即为四键界面（PADUEX4），FVer 2.18 标注 `(paduex3_1.8-4key)`。
+上位机 1.0.0.62 起 `Config.ini` 设 `KEYCOUNT=4` 即为四键界面（PADUEX4）；1.0.0.63 起 FVer 2.18 标注 `(paduex4_1.0)`。
 
 ## 固件里第五键在哪
 
@@ -25,28 +27,28 @@
 没有新增任何循环、等待、RAM 变量或 Flash 写入；K5 的四路 ADC 仍照常采样（DMA），CPU 负担只少不多。
 向量表、启动、USB 命令、Flash 读写、`Report_Normal` 改键、`SendPacket` 有界等待全部与 paduex3_1.7 相同。
 
-`build_paduex3_1.8_4key.py` 以 `paduex3_1.7.bin` 为输入，断言：输入是 paduex3_1.7（扫描函数入口、循环边界、两处 `bl SetKeyBit`、版本字节）、
+`build_paduex4_1.0.py` 以 `paduex3_1.7.bin` 为输入，断言：输入是 paduex3_1.7（扫描函数入口、循环边界、两处 `bl SetKeyBit`、版本字节）、
 输出体积 37072、`0x14C == 0x080084A5`、前 0x200 字节不变、**差异恰好就是上面两个地址**。
 
 ## 验证（Unicorn，跑镜像里的真实代码）
 
-`firmware/tests/emu_keyscan_4key.py` 直接执行 `0x080069CC`：写新采样缓冲 → 真实的变化检测 / 阈值比较 / `SetKeyBit` / 分发；
+`firmware/tests/emu_keyscan_paduex4.py` 直接执行 `0x080069CC`：写新采样缓冲 → 真实的变化检测 / 阈值比较 / `SetKeyBit` / 分发；
 只对 printf、USB 发包、刷灯三处外设函数打桩，并记录它们收到的 `KeyCode`。
 
 ```bash
-python3 firmware/patches/build_paduex3_1.8_4key.py
-python3 firmware/tests/emu_keyscan_4key.py firmware/paduex3_1.8_4key.bin   # 52/52：K1～K4 每路按下/释放正常，K5 四路都为 0，键盘/手柄/灯都收不到 bit4
-python3 firmware/tests/emu_keyscan_4key.py firmware/paduex3_1.7.bin        # 对照组 52/52：同一脚本在 1.7 上 K5 能触发（0x10）
-python3 firmware/tests/emu_report_normal.py firmware/paduex3_1.8_4key.bin  # 25/25 改键逻辑未受影响
-python3 firmware/tests/emu_keymap_e2e.py firmware/paduex3_1.8_4key.bin     # 21/21 改键存 Flash / 重启链路未受影响
+python3 firmware/patches/build_paduex4_1.0.py
+python3 firmware/tests/emu_keyscan_paduex4.py firmware/paduex4_1.0.bin     # 52/52：K1～K4 每路按下/释放正常，K5 四路都为 0，键盘/手柄/灯都收不到 bit4
+python3 firmware/tests/emu_keyscan_paduex4.py firmware/paduex3_1.7.bin    # 对照组 52/52：同一脚本在 1.7 上 K5 能触发（0x10）
+python3 firmware/tests/emu_report_normal.py firmware/paduex4_1.0.bin       # 25/25 改键逻辑未受影响
+python3 firmware/tests/emu_keymap_e2e.py firmware/paduex4_1.0.bin          # 21/21 改键存 Flash / 重启链路未受影响
 ```
 
 ## 不刷这个固件会怎样
 
 第五个孔没插板时，K5 的 ADC 输入悬空 / 被上下拉固定，通常读数低于默认阈值 200，不会触发；对性能也没有影响。
-若真机上发现 K5 误触发（悬空噪声），有两种处理：刷 `paduex3_1.8_4key.bin`（根治），或暂时用 `KEYCOUNT=5` 的界面把 K5 四路灵敏度设到 4095。
+若真机上发现 K5 误触发（悬空噪声），有两种处理：刷 `paduex4_1.0.bin`（根治），或暂时用 `KEYCOUNT=5` 的界面把 K5 四路灵敏度设到 4095。
 
 ## 已知限制
 
-- 四键模式下上/下/左/右与 K1～K4 的对应关系（K1=←、K2=↑、K3=↓、K4=→）是按接线顺序推断的，需真机确认；只影响上位机显示，不影响固件。
-- 刷回五键板请用 `paduex3_1.7.bin`，`paduex3_1.8_4key.bin` 上 K5 永远无效。
+- 四键模式下上/下/左/右与 K1～K4 的对应关系已真机确认（2026-11-05）：K1=↑、K2=←、K3=→、K4=↓；只影响上位机显示，不影响固件。
+- 刷回五键板请用 `paduex3_1.7.bin`，`paduex4_1.0.bin` 上 K5 永远无效。

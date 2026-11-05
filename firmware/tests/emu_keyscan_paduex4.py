@@ -5,11 +5,11 @@ press/release per sensor -> SetKeyBit -> dispatch Report_Normal / HID / LED) wit
 Unicorn and check which key bits end up in AppUser.KeyCode and which KeyCode is
 handed to the USB report builders.
 
-Used to validate paduex3_1.8_4key (fifth key never reported) and to show that
+Used to validate paduex4_1.0 (fifth key never reported) and to show that
 keys 0..3 behave exactly as on paduex3_1.7.
 
-  python3 firmware/tests/emu_keyscan_4key.py firmware/paduex3_1.8_4key.bin   # expect 4-key behaviour
-  python3 firmware/tests/emu_keyscan_4key.py firmware/paduex3_1.7.bin        # control: K5 must still report
+  python3 firmware/tests/emu_keyscan_paduex4.py firmware/paduex4_1.0.bin     # expect 4-key behaviour
+  python3 firmware/tests/emu_keyscan_paduex4.py firmware/paduex3_1.7.bin    # control: K5 must still report
 
 Only printf, the USB packet senders and the LED driver are stubbed (they touch
 peripherals); the scan loop, SetKeyBit, the debounce helper and the dispatcher
@@ -90,9 +90,9 @@ class Board:
 
 
 def main() -> int:
-    img_path = Path(sys.argv[1] if len(sys.argv) > 1 else "firmware/paduex3_1.8_4key.bin")
+    img_path = Path(sys.argv[1] if len(sys.argv) > 1 else "firmware/paduex4_1.0.bin")
     img = img_path.read_bytes()
-    four_key = "4key" in img_path.name
+    four_key = "paduex4" in img_path.name or "4key" in img_path.name
     fails = 0
 
     def check(name: str, got, want) -> None:

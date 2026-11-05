@@ -72,7 +72,7 @@ namespace ConfigAppNS
             if (!mFwValid) return "";
             string tag = "";
             if (mFwMajor == 2 && mFwMinor == 17) tag = L.Get("Ver.Tag.Paduex3_17");
-            else if (mFwMajor == 2 && mFwMinor == 18) tag = L.Get("Ver.Tag.Paduex3_18_4key");
+            else if (mFwMajor == 2 && mFwMinor == 18) tag = L.Get("Ver.Tag.Paduex4_10");
             else if (mFwMajor == 2 && mFwMinor == 12) tag = L.Get("Ver.Tag.Stock212");
             if (mDevUid != DeviceProtocol.ID_DDR) tag += L.Get("Ver.Tag.UidMismatch");
             if (mDevHVer != DeviceProtocol.HVER_KNOWN) tag += L.Get("Ver.Tag.HVerUnknown");
@@ -525,18 +525,69 @@ namespace ConfigAppNS
 
         /// =============================================================================================
         /// ==== 4-key (KEYCOUNT=4) layout: same board, only connectors K1..K4 populated ====
-        ///   [    ] [2 ↑ ] [    ]
-        ///   [1 ← ] [    ] [4 → ]
-        ///   [    ] [3 ↓ ] [    ]
+        ///   [    ] [1 ↑ ] [    ]
+        ///   [2 ← ] [    ] [3 → ]
+        ///   [    ] [4 ↓ ] [    ]
         /// Firmware key index 0..3 (Btn_K1..K4) → arrow. Key index 4 (K5) is never shown; its 4
         /// config slots are still transferred unchanged so the 20-value packets stay intact.
-        /// Mapping assumed K1=←, K2=↑, K3=↓, K4=→ — to be confirmed on a real 4-key pad.
+        /// Mapping K1=↑, K2=←, K3=→, K4=↓ confirmed on the real 4-key pad (2026-11-05).
+        /// Arrow colours follow the direction, not the K number (see FourKeyArrowColors).
         /// =============================================================================================
         private static readonly PadKeyPainter.PadKeyKind[] FourKeyKinds = new PadKeyPainter.PadKeyKind[] {
-            PadKeyPainter.PadKeyKind.Left, PadKeyPainter.PadKeyKind.Up,
-            PadKeyPainter.PadKeyKind.Down, PadKeyPainter.PadKeyKind.Right
+            PadKeyPainter.PadKeyKind.Up, PadKeyPainter.PadKeyKind.Left,
+            PadKeyPainter.PadKeyKind.Right, PadKeyPainter.PadKeyKind.Down
         };
-        private static readonly string[] MapPadKeys4 = new string[] { "Map.Pad.L", "Map.Pad.U", "Map.Pad.D", "Map.Pad.R" };
+
+        private static string FourKeyCaptionKey(PadKeyPainter.PadKeyKind kind)
+        {
+            switch (kind)
+            {
+                case PadKeyPainter.PadKeyKind.Up: return "Map.Pad.U";
+                case PadKeyPainter.PadKeyKind.Down: return "Map.Pad.D";
+                case PadKeyPainter.PadKeyKind.Left: return "Map.Pad.L";
+                default: return "Map.Pad.R";
+            }
+        }
+
+        private static Point FourKeyCell(PadKeyPainter.PadKeyKind kind, int x0, int x1, int x2, int y0, int y1, int y2)
+        {
+            switch (kind)
+            {
+                case PadKeyPainter.PadKeyKind.Up: return new Point(x1, y0);
+                case PadKeyPainter.PadKeyKind.Down: return new Point(x1, y2);
+                case PadKeyPainter.PadKeyKind.Left: return new Point(x0, y1);
+                default: return new Point(x2, y1);
+            }
+        }
+
+        // 4-key arrow colours: idle white (dark theme) / dark grey (light theme); pressed = red for
+        // left/right, green for up/down. Same 3-layer chevron + glow, only the colours change.
+        private static readonly Color FourKeyPressRed = Color.FromArgb(0xEF, 0x44, 0x44);
+        private static readonly Color FourKeyPressGreen = Color.FromArgb(0x22, 0xC5, 0x5E);
+
+        private static Color FourKeyPressColor(PadKeyPainter.PadKeyKind kind)
+        {
+            return kind == PadKeyPainter.PadKeyKind.Left || kind == PadKeyPainter.PadKeyKind.Right
+                ? FourKeyPressRed : FourKeyPressGreen;
+        }
+
+        private void FourKeyIdleColors(out Color tip, out Color mid, out Color back, out Color glow)
+        {
+            if (bDarkMode)
+            {
+                tip = Color.White;
+                mid = Color.FromArgb(0xE5, 0xE7, 0xEB);
+                back = Color.FromArgb(0x9C, 0xA3, 0xAF);
+                glow = Color.White;
+            }
+            else
+            {
+                tip = Color.FromArgb(0x4B, 0x55, 0x63);
+                mid = Color.FromArgb(0x37, 0x41, 0x51);
+                back = Color.FromArgb(0x1F, 0x29, 0x37);
+                glow = Color.FromArgb(0x9C, 0xA3, 0xAF);
+            }
+        }
 
         /// <summary>Firmware key index (0..4) of a pad glyph, in either layout; -1 if not shown.</summary>
         private static int KeyIndexOfKind(PadKeyPainter.PadKeyKind kind)
@@ -552,7 +603,7 @@ namespace ConfigAppNS
 
         private string PadKeyCaptionKey(int k)
         {
-            return FourKeyMode && k < MapPadKeys4.Length ? MapPadKeys4[k] : MapPadKeys[k];
+            return FourKeyMode && k < FourKeyKinds.Length ? FourKeyCaptionKey(FourKeyKinds[k]) : MapPadKeys[k];
         }
         // Design canvas at 96 DPI — all layout math uses S(designPx)
         private const int DesignW = 1040;
@@ -745,11 +796,11 @@ namespace ConfigAppNS
             Point[] fillerPos;
             if (FourKeyMode)
             {
-                // Cross: K1 ←, K2 ↑, K3 ↓, K4 → ; K5 unused (see FourKeyKinds)
-                Btn_K1.Location = new Point(x0, y1);
-                Btn_K2.Location = new Point(x1, y0);
-                Btn_K3.Location = new Point(x1, y2);
-                Btn_K4.Location = new Point(x2, y1);
+                // Cross: K1 ↑, K2 ←, K3 →, K4 ↓ ; K5 unused (see FourKeyKinds)
+                Btn_K1.Location = FourKeyCell(FourKeyKinds[0], x0, x1, x2, y0, y1, y2);
+                Btn_K2.Location = FourKeyCell(FourKeyKinds[1], x0, x1, x2, y0, y1, y2);
+                Btn_K3.Location = FourKeyCell(FourKeyKinds[2], x0, x1, x2, y0, y1, y2);
+                Btn_K4.Location = FourKeyCell(FourKeyKinds[3], x0, x1, x2, y0, y1, y2);
                 Btn_K5.Location = new Point(x2, y2);
                 Btn_K5.Enabled = false;
                 Btn_K5.Visible = false;
@@ -1702,9 +1753,14 @@ namespace ConfigAppNS
             Color cellBg = pal.CardBg;
             Color outline = pal.PadOutline;
             bool triggered = key >= 0 && key < padKeyActive.Length && padKeyActive[key];
-            Color triggerFill = GetPadLedColor(key);
+            // 5-key: cyan idle set, pressed = the key's LED colour.
+            // 4-key: white idle set, pressed = red (←/→) or green (↑/↓) by direction.
+            Color triggerFill = FourKeyMode ? FourKeyPressColor(kind) : GetPadLedColor(key);
             if (triggered)
                 triggerFill = Color.FromArgb(220, triggerFill);
+            Color arrowTip = pal.ArrowTip, arrowMid = pal.ArrowMid, arrowBack = pal.ArrowBack, arrowGlow = pal.ArrowGlow;
+            if (FourKeyMode)
+                FourKeyIdleColors(out arrowTip, out arrowMid, out arrowBack, out arrowGlow);
             return new PadKeyPainter.PadKeyPaintArgs
             {
                 CellBackground = cellBg,
@@ -1712,10 +1768,10 @@ namespace ConfigAppNS
                 SelectedFill = pal.Selected,
                 SelectedGradientEnd = pal.SelectedGradientEnd,
                 GlowColor = pal.Glow,
-                ArrowTip = pal.ArrowTip,
-                ArrowMid = pal.ArrowMid,
-                ArrowBack = pal.ArrowBack,
-                ArrowGlow = pal.ArrowGlow,
+                ArrowTip = arrowTip,
+                ArrowMid = arrowMid,
+                ArrowBack = arrowBack,
+                ArrowGlow = arrowGlow,
                 BorderColor = pal.Border,
                 Selected = key == selected,
                 Triggered = triggered,

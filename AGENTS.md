@@ -38,7 +38,7 @@ paduex3_1.0 把补丁代码写进 `0x08004130..0x0800415F`，那是**中断向�
 |---|---|---|
 | `firmware/paduex3_1.6.bin` | 官方 V2.13 + 两处 `SendPacket` 有界等待（防粘键，60 字节） | 2.12（与原厂同） |
 | **`firmware/paduex3_1.7.bin`（推荐）** | paduex3_1.6 + 键盘模式改键（`Report_Normal` 86 字节）+ 版本字节 | **2.17**，上位机标注 `(paduex3_1.7)` |
-| `firmware/paduex3_1.8_4key.bin`（仅四键机） | paduex3_1.7 + 2 字节：键扫描循环边界 `0x08006BE2` 36→16 个传感器（K5 永不上报）+ 版本字节 | **2.18**，上位机标注 `(paduex3_1.8-4key)` |
+| `firmware/paduex4_1.0.bin`（仅四键机；**paduex3 = 五键，paduex4 = 四键**） | paduex3_1.7 + 2 字节：键扫描循环边界 `0x08006BE2` 36→16 个传感器（K5 永不上报）+ 版本字节。1.0.0.62 时曾叫 `paduex3_1.8_4key.bin`，内容相同 | **2.18**，上位机标注 `(paduex4_1.0)` |
 
 原厂 V2.13 的 `FW_VERSION_MINOR` 常量仍是 12，所以原厂 2.12/2.13 和 paduex3_1.6 都显示 2.12，无法区分；看到 2.17 才是 paduex3_1.7。
 
@@ -50,7 +50,7 @@ paduex3_1.0 把补丁代码写进 `0x08004130..0x0800415F`，那是**中断向�
 - 灯色改色、消抖 DTick、~1000Hz（bInterval=1）原厂 V2.13 本来就有，不需要新固件。
 - 1P/2P：固件自 V2.12 起 `ConfigMode = (flash & 0x0F) | DEFAULT_1P2P`，上位机设的 1P/2P 位无效；游戏按插入顺序分配玩家。上位机已去掉该选项。
 - 12V 供电检测：固件读 PF4/PF5 但从不通过 USB 上报，上位机无法知道。
-- 四键机（1.0.0.62）：`Config.ini` `KEYCOUNT=4|5`（默认 5）切换；4 = 十字布局（K1=←、K2=↑、K3=↓、K4=→，需真机确认）、标题 PADUEX4、Btn_K5 隐藏、改键页只有 4 行；报文仍 20 个 u16，K5 槽位原样回写，「默认设置」不碰 K5。固件 `paduex3_1.8_4key`：键扫描 `0x080069CC` 第二段循环边界 `0x08006BE2 cmp r4,#0x24→#0x10`，K5 的 `KeyCode` bit4 永远不置位；`emu_keyscan_4key.py` 验证。详见 `firmware/patches/paduex3_1.8-4key-NoFifthKey.md`。
+- 四键机（1.0.0.62/63）：`Config.ini` `KEYCOUNT=4|5`（默认 5）切换；4 = 十字布局（**K1=↑、K2=←、K3=→、K4=↓，2026-11-05 真机确认**；`FourKeyKinds[]` 一张表）、标题 PADUEX4、Btn_K5 隐藏、改键页只有 4 行；箭头默认白（白天深灰 `#374151`），踩下 ←/→ 红 `#EF4444`、↑/↓ 绿 `#22C55E`，按方向不按 K 号（`FourKeyPressColor/FourKeyIdleColors`）；报文仍 20 个 u16，K5 槽位原样回写，「默认设置」不碰 K5。固件 `paduex4_1.0`（原名 paduex3_1.8_4key）：键扫描 `0x080069CC` 第二段循环边界 `0x08006BE2 cmp r4,#0x24→#0x10`，K5 的 `KeyCode` bit4 永远不置位；`emu_keyscan_paduex4.py` 验证。详见 `firmware/patches/paduex4-1.0-NoFifthKey.md`。
 - 改键原理（paduex3_1.7）：`Color[key*4]` 决定灯色，`Color[key*4+1]` 原厂从不使用但随 GET/SET_SENS(type 1) 传输并存 Flash。放 `0x4B00 | usage`（'K' 标签）即为该键键值，否则走原厂 1P/2P 表（1P: W X A D S，2P: H K J N M）。仅键盘模式；usage ≤ 0x7F。详见 `firmware/patches/paduex3_1.7-KeyMap.md`。
 - 上位机改键页：读 = GET_SENS(1) 后解码；存 = 先 GET 刷新灯色再写 slot 再 SET_SENS(1)；"默认设置" = slot 清 0。调色页涂色不碰 `+1` 槽位。
 
@@ -69,11 +69,11 @@ paduex3_1.0 把补丁代码写进 `0x08004130..0x0800415F`，那是**中断向�
 python3 firmware/tests/sim_paduex5.py                            # 协议/灯色/模式模拟 53 项
 python3 firmware/tests/emu_report_normal.py firmware/paduex3_1.7.bin # Unicorn 跑真实 Report_Normal 25 项
 python3 firmware/tests/emu_keymap_e2e.py firmware/paduex3_1.7.bin    # Unicorn 全链路：改键→存Flash→重启→按键 21 项
-python3 firmware/tests/emu_keyscan_4key.py firmware/paduex3_1.8_4key.bin # Unicorn 跑真实键扫描 52 项：K5 永不上报、K1～K4 不变（对照 1.7 也应 52 项通过）
+python3 firmware/tests/emu_keyscan_paduex4.py firmware/paduex4_1.0.bin # Unicorn 跑真实键扫描 52 项：K5 永不上报、K1～K4 不变（对照 1.7 也应 52 项通过）
 ```
 `emu_*` 只给 Flash 外设和 printf 打桩，其余全是镜像里的原字节；在 paduex3_1.6 上跑 e2e 应有 5 项失败（对照组）。
 
-## 上位机现状（1.0.0.62）
+## 上位机现状（1.0.0.63）
 
 - 四键/五键一套代码：`App_DDR.KeyCount`（`ReadAppConfig` 读 `KEYCOUNT`）、`FourKeyMode`、`AppName`（PADUEX4/PADUEX5）、`FourKeyKinds[]`（key index → `PadKeyKind.Left/Up/Down/Right`）、`KeyIndexOfKind()`、`IsVisibleKey()`；`RebuildScaledLayout` 按模式摆九宫格（四键：5 个填充格），`EnsurePadKeyVectorPaint` 按模式挂 kind，`PadKeyPainter.ArrowTransform` 新增 0/90/180/270° 四个角度，chevron 本身不变。`EncodeKeyMapIntoColor` / `Load_Default_Sens` 只动 `KeyCount` 个键。
 - 多语言：所有文案在 `ConfigApp/HIDDevice/Strings.resx`（en，中性）和 `Strings.zh-CN.resx`，代码里用 `L.Get("Key")` / `L.F("Key", args)`（`Localization.cs`）。新增文案必须两个 resx 都加。`Config.ini` `LANGUAGE=AUTO|CN|EN`（`AppConfig.cs` 读写），`AUTO` 跟随系统；切换走 `App_DDR.SetLanguage()` → `L.LanguageChanged` → `ApplyUiLanguage()`。

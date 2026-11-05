@@ -283,8 +283,8 @@ Save anyway? It will take effect after flashing paduex3_1.7.</value>
   <data name="Ver.Tag.Paduex3_17" xml:space="preserve">
     <value> (paduex3_1.7)</value>
   </data>
-  <data name="Ver.Tag.Paduex3_18_4key" xml:space="preserve">
-    <value> (paduex3_1.8-4key)</value>
+  <data name="Ver.Tag.Paduex4_10" xml:space="preserve">
+    <value> (paduex4_1.0)</value>
   </data>
   <data name="Ver.Tag.Stock212" xml:space="preserve">
     <value> (stock V2.12/V2.13 or paduex3_1.6)</value>
