@@ -58,22 +58,29 @@ namespace ConfigAppNS
             // Fixed pixel layout — avoid Font autoscaling which garbles this dialog on high DPI
             this.AutoScaleMode = AutoScaleMode.None;
             this.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
-            this.Text = "PADUEX5 固件升级";
-            labelTitle.Text = "PADUEX5 固件升级";
-            labelTips.Text =
-                "操作提示：\r\n" +
-                "1. 选择 firmware\\grok1.7.bin（原厂 V2.13 + 防粘键 + 键盘改键；勿用 grok1.0～1.5）\r\n" +
-                "2. 保持 USB 连接，升级中勿拔线、勿关机、勿关闭本窗口\r\n" +
-                "3. 失败留在 Bootloader 可重试；ISP 请用 grok1.7 或官方 V2.13（grok1.0～1.5 全部禁止）";
-            labelAddr.Text = "APP 地址: 0x" + FLASH_APP_ADDR.ToString("X8");
-            labelLimit.Text = "最大允许: " + MAX_APP_SIZE + " 字节（保护配置区）";
-            labelWarn.Text = "升级中，请勿关机！";
+            ApplyUiLanguage();
             progressBar.Minimum = 0;
             progressBar.Maximum = 100;
             progressBar.Value = 0;
             panelBanner.Visible = false;
             ApplyIdleLayout();
-            SetStatus("请选择固件 .bin，然后开始升级。");
+            SetStatus(L.Get("Ota.SelectPrompt"));
+        }
+
+        /// <summary>All captions of this dialog come from Strings*.resx (see Localization.cs).</summary>
+        private void ApplyUiLanguage()
+        {
+            this.Text = L.Get("Ota.Title");
+            labelTitle.Text = L.Get("Ota.Title");
+            labelTips.Text = L.Get("Ota.Tips");
+            labelAddr.Text = L.F("Ota.Addr", FLASH_APP_ADDR.ToString("X8"));
+            labelLimit.Text = L.F("Ota.Limit", MAX_APP_SIZE);
+            labelWarn.Text = L.Get("Ota.Warn");
+            btnBrowse.Text = L.Get("Ota.Browse");
+            btnStart.Text = L.Get("Ota.Start");
+            btnClose.Text = L.Get("Ota.Close");
+            if (binData == null)
+                labelFileInfo.Text = L.Get("Ota.NoFile");
         }
 
         /// <summary>Idle layout: title + tips visible; banner hidden.</summary>
@@ -175,7 +182,7 @@ namespace ConfigAppNS
         private void btnBrowse_Click(object sender, EventArgs e)
         {
             OpenFileDialog dlg = new OpenFileDialog();
-            dlg.Filter = "Firmware (*.bin)|*.bin|All files (*.*)|*.*";
+            dlg.Filter = L.Get("Ota.Filter");
             dlg.FilterIndex = 1;
             dlg.RestoreDirectory = true;
             if (dlg.ShowDialog() != DialogResult.OK)
@@ -187,32 +194,29 @@ namespace ConfigAppNS
                 string err = ValidateFirmware(data);
                 if (err != null)
                 {
-                    MessageBox.Show(err, "PADUEX5 固件检查", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show(err, L.Get("Ota.CheckTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
                 binPath = dlg.FileName;
                 binData = data;
                 textFile.Text = binPath;
-                labelFileInfo.Text = "大小: " + binData.Length + " 字节  |  对齐后: " + Align1K(binData.Length) + " 字节";
+                labelFileInfo.Text = L.F("Ota.FileInfo", binData.Length, Align1K(binData.Length));
                 btnStart.Enabled = true;
-                SetStatus("已加载固件: " + Path.GetFileName(binPath));
+                SetStatus(L.F("Ota.Loaded", Path.GetFileName(binPath)));
                 // Soft warn: images longer than stock (e.g. grok1.1 cave) are OK for this OTA,
                 // but ISP tools that flash by old length can truncate and brick.
                 if (binData.Length > STOCK_APP_SIZE)
                 {
                     MessageBox.Show(
-                        "此固件比原厂镜像长（" + binData.Length + " > " + STOCK_APP_SIZE + " 字节）。\r\n\r\n" +
-                        "本窗口 OTA 会整包写入，一般可用。\r\n" +
-                        "若改用厂家 ISP/IPS：请改刷 grok1.7.bin 或官方 V2.13（grok1.0～1.5 全部禁止），" +
-                        "地址 0x08004000，否则可能截断末尾导致 USB 无法识别。",
-                        "PADUEX5 体积提示",
+                        L.F("Ota.SizeWarn", binData.Length, STOCK_APP_SIZE),
+                        L.Get("Ota.SizeWarnTitle"),
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Warning);
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show("读取固件失败: " + ex.Message, "PADUEX5", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(L.F("Ota.ReadFail", ex.Message), L.Get("App.Name"), MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -220,23 +224,23 @@ namespace ConfigAppNS
         private string ValidateFirmware(byte[] data)
         {
             if (data == null || data.Length < MIN_APP_SIZE)
-                return "固件太小（<" + MIN_APP_SIZE + "），已拒绝，避免写入无效镜像。";
+                return L.F("Ota.V.TooSmall", MIN_APP_SIZE);
             if (data.Length > MAX_APP_SIZE)
-                return "固件过大（>" + MAX_APP_SIZE + "），会覆盖配置区，已拒绝以防变砖。";
+                return L.F("Ota.V.TooLarge", MAX_APP_SIZE);
             // Vector table: SP roughly in SRAM (0x2000xxxx), Reset in flash app region
             uint sp = BitConverter.ToUInt32(data, 0);
             uint reset = BitConverter.ToUInt32(data, 4);
             if ((sp & 0xFFF00000) != 0x20000000)
-                return "固件向量表栈顶异常（非 SRAM），可能不是本机 APP，已拒绝。";
+                return L.Get("Ota.V.BadSp");
             if (reset < FLASH_APP_ADDR || reset >= FLASH_CONFIG_ADDR)
-                return "固件复位向量不在 APP 区 (0x08004000~0x0800F800)，已拒绝以防变砖。";
+                return L.Get("Ota.V.BadReset");
             // IRQ67 (OTGFS1 / USB) vector must point into APP flash. grok1.0~1.5 wrote
             // code over 0x14C and brick on the first USB interrupt.
             if (data.Length > 0x150)
             {
                 uint usbIrq = BitConverter.ToUInt32(data, 0x14C);
                 if (usbIrq < FLASH_APP_ADDR || usbIrq >= FLASH_CONFIG_ADDR || (usbIrq & 1) == 0)
-                    return "固件 USB 中断向量(0x14C)已被覆盖（grok1.0～1.5 的已知致命问题），已拒绝。请改用 grok1.7 或官方 V2.13。";
+                    return L.Get("Ota.V.BadUsbVector");
             }
             return null;
         }
@@ -259,28 +263,19 @@ namespace ConfigAppNS
         {
             if (binData == null)
             {
-                MessageBox.Show("请先选择固件文件。", "PADUEX5", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(L.Get("Ota.SelectFirst"), L.Get("App.Name"), MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             string err = ValidateFirmware(binData);
             if (err != null)
             {
-                MessageBox.Show(err, "PADUEX5 固件检查", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(err, L.Get("Ota.CheckTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
             DialogResult r = MessageBox.Show(
-                "即将升级 PADUEX5 固件。\r\n\r\n" +
-                "文件: " + Path.GetFileName(binPath) + "\r\n" +
-                "大小: " + binData.Length + " 字节\r\n" +
-                "地址: 0x" + FLASH_APP_ADDR.ToString("X8") + "\r\n\r\n" +
-                "请注意：\r\n" +
-                "· 升级中请勿拔 USB、勿关机、勿关闭本窗口\r\n" +
-                "· 写完并 CRC 通过后才会跳转；失败则留在 Bootloader，可重试\r\n" +
-                "· 推荐刷入 grok1.7.bin（原厂底 + 防粘键 + 键盘改键，向量表未动；grok1.0～1.5 全部禁止）\r\n" +
-                "· 勿再用 ISP 刷 grok1.1.bin（末尾加长，易截断变砖）\r\n\r\n" +
-                "确认开始？",
-                "PADUEX5 升级确认",
+                L.F("Ota.Confirm", Path.GetFileName(binPath), binData.Length, FLASH_APP_ADDR.ToString("X8")),
+                L.Get("Ota.ConfirmTitle"),
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Warning);
             if (r != DialogResult.Yes)
@@ -311,12 +306,10 @@ namespace ConfigAppNS
             catch { }
             if (e.Error != null)
             {
-                SetStatus("升级失败: " + e.Error.Message);
+                SetStatus(L.F("Ota.Failed", e.Error.Message));
                 MessageBox.Show(
-                    "升级失败: " + e.Error.Message + "\r\n\r\n" +
-                    "设备应仍在 Bootloader（OTA）模式。\r\n" +
-                    "请保持 USB 连接，关闭本提示后再次点「开始升级」。一般不会变砖。",
-                    "PADUEX5",
+                    L.F("Ota.FailedDetail", e.Error.Message),
+                    L.Get("App.Name"),
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
                 return;
@@ -324,8 +317,8 @@ namespace ConfigAppNS
             bool ok = e.Result is bool && (bool)e.Result;
             if (ok)
             {
-                SetProgress(100, "升级完成");
-                MessageBox.Show("固件升级成功！设备已跳转运行新固件。", "PADUEX5", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                SetProgress(100, L.Get("Ota.Done"));
+                MessageBox.Show(L.Get("Ota.Success"), L.Get("App.Name"), MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
 
@@ -338,28 +331,28 @@ namespace ConfigAppNS
 
             try
             {
-                bw.ReportProgress(2, "检测设备…");
+                bw.ReportProgress(2, L.Get("Ota.P.Detect"));
                 EnsureBootloaderReady(bw);
 
                 // Release HIDLibrary so interrupt port can open exclusively
                 try { usb.USBLib_Disconnect(); } catch { }
                 Thread.Sleep(200);
 
-                bw.ReportProgress(8, "打开 Bootloader HID 中断口…");
+                bw.ReportProgress(8, L.Get("Ota.P.OpenPort"));
                 port = OtaHidPort.Open((ushort)DeviceType.HID_OTA_VID, (ushort)DeviceType.HID_OTA_PID);
-                bw.ReportProgress(10, "IAP 端口就绪 (IN=" + port.InputReportLen + ", OUT=" + port.OutputReportLen + ")");
+                bw.ReportProgress(10, L.F("Ota.P.PortReady", port.InputReportLen, port.OutputReportLen));
                 Thread.Sleep(150);
 
                 byte[] pkt = new byte[64];
 
                 // START 0x5AA1
-                bw.ReportProgress(12, "开始 IAP 下载…");
+                bw.ReportProgress(12, L.Get("Ota.P.StartIap"));
                 Array.Clear(pkt, 0, pkt.Length);
                 pkt[0] = 0x5A; pkt[1] = 0xA1;
                 if (!SendCmdReliable(ref port, pkt, 0x5A, 0xA1, true, 2500))
                 {
                     bool currentPrefix = port.ForceReportIdPrefix ?? (port.OutputReportLen >= 65);
-                    bw.ReportProgress(12, "无 ACK，切换 HID 帧格式重试…");
+                    bw.ReportProgress(12, L.Get("Ota.P.NoAckRetry"));
                     try { port.Dispose(); } catch { }
                     port = OtaHidPort.Open((ushort)DeviceType.HID_OTA_VID, (ushort)DeviceType.HID_OTA_PID);
                     port.ForceReportIdPrefix = !currentPrefix;
@@ -367,16 +360,16 @@ namespace ConfigAppNS
                     Array.Clear(pkt, 0, pkt.Length);
                     pkt[0] = 0x5A; pkt[1] = 0xA1;
                     if (!SendCmdReliable(ref port, pkt, 0x5A, 0xA1, true, 3000))
-                        throw new Exception("IAP 启动失败" + FailDetail());
+                        throw new Exception(L.Get("Ota.E.IapStart") + FailDetail());
                 }
 
                 // Optional GETADDR 0x5AA7 (non-fatal if device skips)
                 Array.Clear(pkt, 0, pkt.Length);
                 pkt[0] = 0x5A; pkt[1] = 0xA7;
                 if (SendCmdReliable(ref port, pkt, 0x5A, 0xA7, true, 1000))
-                    bw.ReportProgress(14, "Bootloader APP 地址确认 OK");
+                    bw.ReportProgress(14, L.Get("Ota.P.AddrOk"));
                 else
-                    bw.ReportProgress(14, "跳过 GETADDR（部分 Bootloader 不回），继续写入…");
+                    bw.ReportProgress(14, L.Get("Ota.P.SkipGetAddr"));
 
                 int total = image.Length;
                 for (int offset = 0; offset < total; offset += CHUNK_1K)
@@ -385,13 +378,13 @@ namespace ConfigAppNS
                     int totalBlocks = Math.Max(1, total / CHUNK_1K);
                     int pct = 15 + (blockIndex * 77) / totalBlocks;
                     uint addr = FLASH_APP_ADDR + (uint)offset;
-                    bw.ReportProgress(pct, "写入 0x" + addr.ToString("X8") + " (" + (blockIndex + 1) + "/" + totalBlocks + ")");
+                    bw.ReportProgress(pct, L.F("Ota.P.Write", addr.ToString("X8"), blockIndex + 1, totalBlocks));
 
                     Array.Clear(pkt, 0, pkt.Length);
                     pkt[0] = 0x5A; pkt[1] = 0xA2;
                     PutBe32(pkt, 2, addr);
                     if (!SendCmdReliable(ref port, pkt, 0x5A, 0xA2, true, 5000))
-                        throw new Exception("设置地址失败" + FailDetail());
+                        throw new Exception(L.Get("Ota.E.SetAddr") + FailDetail());
 
                     int blockSent = 0;
                     while (blockSent < CHUNK_1K)
@@ -406,7 +399,7 @@ namespace ConfigAppNS
                         if (!SendCmdReliable(ref port, pkt, 0x5A, 0xA3, lastOfBlock, lastOfBlock ? 8000 : 0))
                         {
                             if (lastOfBlock)
-                                throw new Exception("数据块 ACK 失败" + FailDetail());
+                                throw new Exception(L.Get("Ota.E.BlockAck") + FailDetail());
                         }
                         else if (!lastOfBlock)
                         {
@@ -415,20 +408,20 @@ namespace ConfigAppNS
                     }
                 }
 
-                bw.ReportProgress(94, "完成下载…");
+                bw.ReportProgress(94, L.Get("Ota.P.Finish"));
                 Array.Clear(pkt, 0, pkt.Length);
                 pkt[0] = 0x5A; pkt[1] = 0xA4;
                 if (!SendCmdReliable(ref port, pkt, 0x5A, 0xA4, true, 3000))
-                    throw new Exception("完成命令失败" + FailDetail());
+                    throw new Exception(L.Get("Ota.E.Finish") + FailDetail());
 
-                bw.ReportProgress(98, "跳转应用…");
+                bw.ReportProgress(98, L.Get("Ota.P.Jump"));
                 Array.Clear(pkt, 0, pkt.Length);
                 pkt[0] = 0x5A; pkt[1] = 0xA6;
                 PutBe32(pkt, 2, FLASH_APP_ADDR);
                 SendCmdReliable(ref port, pkt, 0x5A, 0xA6, true, 2000);
 
                 Thread.Sleep(800);
-                bw.ReportProgress(100, "升级成功");
+                bw.ReportProgress(100, L.Get("Ota.P.Success"));
                 e.Result = true;
             }
             finally
@@ -441,11 +434,11 @@ namespace ConfigAppNS
         {
             if (ProbeOtaEnumerated())
             {
-                bw.ReportProgress(5, "已检测到 OTA Bootloader");
+                bw.ReportProgress(5, L.Get("Ota.P.OtaFound"));
                 return;
             }
 
-            bw.ReportProgress(3, "尝试让 APP 进入 OTA…");
+            bw.ReportProgress(3, L.Get("Ota.P.TryEnterOta"));
             bool sent = false;
             int[] vids = new int[] {
                 (int)DeviceType.DDR_KBS_VID,
@@ -481,19 +474,19 @@ namespace ConfigAppNS
             }
 
             if (!sent)
-                bw.ReportProgress(4, "未找到运行中的 APP，等待 Bootloader…");
+                bw.ReportProgress(4, L.Get("Ota.P.NoApp"));
 
             for (int i = 0; i < 40; i++)
             {
                 Thread.Sleep(250);
                 if (ProbeOtaEnumerated())
                 {
-                    bw.ReportProgress(6, "OTA Bootloader 已连接");
+                    bw.ReportProgress(6, L.Get("Ota.P.OtaConnected"));
                     return;
                 }
-                bw.ReportProgress(4 + (i % 3), "等待 OTA 设备… (" + (i + 1) + "/40)");
+                bw.ReportProgress(4 + (i % 3), L.F("Ota.P.Waiting", i + 1, 40));
             }
-            throw new Exception("超时未检测到 OTA 设备 (VID 0x0E8F / PID 0x8901)。请确认设备已进入升级模式。");
+            throw new Exception(L.Get("Ota.E.Timeout"));
         }
 
         private bool ProbeOtaEnumerated()
@@ -533,7 +526,7 @@ namespace ConfigAppNS
             if (!string.IsNullOrEmpty(lastIapError))
                 detail += " (" + lastIapError + ")";
             else
-                detail += "（无 ACK）";
+                detail += L.Get("Ota.NoAck");
             if (!string.IsNullOrEmpty(lastRxHex))
                 detail += " RX=" + lastRxHex;
             return detail;
@@ -838,7 +831,7 @@ namespace ConfigAppNS
                     SetupDiDestroyDeviceInfoList(devInfo);
                 }
 
-                throw new IOException("OTA HID 设备未找到 (0x0E8F:0x8901)");
+                throw new IOException(L.Get("Ota.E.PortNotFound"));
             }
 
             public void WritePacket(byte[] packet64)
@@ -891,7 +884,7 @@ namespace ConfigAppNS
         {
             if (upgrading)
             {
-                MessageBox.Show("升级进行中，请勿关闭。", "PADUEX5", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(L.Get("Ota.BusyClose"), L.Get("App.Name"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             this.Close();
@@ -902,8 +895,8 @@ namespace ConfigAppNS
             if (upgrading)
             {
                 e.Cancel = true;
-                MessageBox.Show("升级进行中，请勿关闭。中断可能导致需重新升级（Bootloader 仍可进入）。",
-                    "PADUEX5", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(L.Get("Ota.BusyCloseForm"),
+                    L.Get("App.Name"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             try { usb.USBLib_Disconnect(); }

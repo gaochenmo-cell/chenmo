@@ -1,0 +1,475 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <!--
+    UI strings for PADUEX5 ConfigApp. Keys are shared across cultures; see Localization.cs (class L).
+    Simplified Chinese.
+  -->
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="App.Name" xml:space="preserve">
+    <value>PADUEX5</value>
+  </data>
+  <data name="App.AlreadyRunning" xml:space="preserve">
+    <value>{0} 已经在运行。</value>
+  </data>
+  <data name="Title.Connected" xml:space="preserve">
+    <value>（设备已连接）</value>
+  </data>
+  <data name="Title.OtaConnected" xml:space="preserve">
+    <value>（OTA 设备已连接）</value>
+  </data>
+  <data name="Title.NoDevice" xml:space="preserve">
+    <value>（未连接设备）</value>
+  </data>
+  <data name="Msg.SystemTitle" xml:space="preserve">
+    <value>系统消息</value>
+  </data>
+  <data name="Msg.ErrorTitle" xml:space="preserve">
+    <value>错误</value>
+  </data>
+  <data name="Msg.InputError" xml:space="preserve">
+    <value>输入错误
+{0}</value>
+  </data>
+  <data name="Btn.Default" xml:space="preserve">
+    <value>默认设置</value>
+  </data>
+  <data name="Btn.Read" xml:space="preserve">
+    <value>读取设置</value>
+  </data>
+  <data name="Btn.Save" xml:space="preserve">
+    <value>保存设置</value>
+  </data>
+  <data name="Btn.Debug" xml:space="preserve">
+    <value>调试模式</value>
+  </data>
+  <data name="Btn.Stop" xml:space="preserve">
+    <value>停止</value>
+  </data>
+  <data name="Btn.ReadMode" xml:space="preserve">
+    <value>读取模式</value>
+  </data>
+  <data name="Btn.SaveMode" xml:space="preserve">
+    <value>保存模式</value>
+  </data>
+  <data name="Btn.FwUpgrade" xml:space="preserve">
+    <value>固件升级</value>
+  </data>
+  <data name="Btn.RawRead" xml:space="preserve">
+    <value>读取 RAW</value>
+  </data>
+  <data name="Btn.RawClear" xml:space="preserve">
+    <value>清零 RAW</value>
+  </data>
+  <data name="Btn.Language" xml:space="preserve">
+    <value>语言</value>
+  </data>
+  <data name="Btn.ThemeLight" xml:space="preserve">
+    <value>白天</value>
+  </data>
+  <data name="Btn.ThemeDark" xml:space="preserve">
+    <value>黑夜</value>
+  </data>
+  <data name="Lang.Auto" xml:space="preserve">
+    <value>跟随系统</value>
+  </data>
+  <data name="Lang.zhCN" xml:space="preserve">
+    <value>简体中文</value>
+  </data>
+  <data name="Lang.en" xml:space="preserve">
+    <value>English</value>
+  </data>
+  <data name="Group.Edit" xml:space="preserve">
+    <value>编辑</value>
+  </data>
+  <data name="Group.Mode" xml:space="preserve">
+    <value>模式</value>
+  </data>
+  <data name="Group.Sensitivity" xml:space="preserve">
+    <value>灵敏度</value>
+  </data>
+  <data name="Group.Color" xml:space="preserve">
+    <value>调色</value>
+  </data>
+  <data name="Group.Debounce" xml:space="preserve">
+    <value>延迟释放 (0~1000 ms)</value>
+  </data>
+  <data name="Group.USB" xml:space="preserve">
+    <value>USB</value>
+  </data>
+  <data name="Group.PlayerNum" xml:space="preserve">
+    <value>玩家</value>
+  </data>
+  <data name="Label.Hold" xml:space="preserve">
+    <value>松开保持(ms) =</value>
+  </data>
+  <data name="Tab.Sensitivity" xml:space="preserve">
+    <value>灵敏度</value>
+  </data>
+  <data name="Tab.Color" xml:space="preserve">
+    <value>调色</value>
+  </data>
+  <data name="Tab.Debounce" xml:space="preserve">
+    <value>延迟释放</value>
+  </data>
+  <data name="Tab.KeyMap" xml:space="preserve">
+    <value>按键映射</value>
+  </data>
+  <data name="Radio.Keyboard" xml:space="preserve">
+    <value>键盘</value>
+  </data>
+  <data name="Radio.Gamepad" xml:space="preserve">
+    <value>手柄</value>
+  </data>
+  <data name="Radio.IO" xml:space="preserve">
+    <value>IO 模式</value>
+  </data>
+  <data name="Radio.1P" xml:space="preserve">
+    <value>1P</value>
+  </data>
+  <data name="Radio.2P" xml:space="preserve">
+    <value>2P</value>
+  </data>
+  <data name="Map.Group" xml:space="preserve">
+    <value>键盘按键映射</value>
+  </data>
+  <data name="Map.Hint" xml:space="preserve">
+    <value>仅键盘模式，需固件 grok1.7 及以上。映射随灯色一起保存在板子里。1P/2P 由游戏按插入顺序自动分配，无需设置。</value>
+  </data>
+  <data name="Map.KeyLabel" xml:space="preserve">
+    <value>五个踏板对应 HID 键值（选好后点保存映射）：</value>
+  </data>
+  <data name="Map.Read" xml:space="preserve">
+    <value>读取映射</value>
+  </data>
+  <data name="Map.Save" xml:space="preserve">
+    <value>保存映射</value>
+  </data>
+  <data name="Map.Default" xml:space="preserve">
+    <value>默认设置</value>
+  </data>
+  <data name="Map.Pad.UL" xml:space="preserve">
+    <value>↖ 左上</value>
+  </data>
+  <data name="Map.Pad.UR" xml:space="preserve">
+    <value>↗ 右上</value>
+  </data>
+  <data name="Map.Pad.C" xml:space="preserve">
+    <value>● 中</value>
+  </data>
+  <data name="Map.Pad.DL" xml:space="preserve">
+    <value>↙ 左下</value>
+  </data>
+  <data name="Map.Pad.DR" xml:space="preserve">
+    <value>↘ 右下</value>
+  </data>
+  <data name="Map.NoDevice" xml:space="preserve">
+    <value>未连接设备。</value>
+  </data>
+  <data name="Map.ReadOk" xml:space="preserve">
+    <value>按键映射读取成功。</value>
+  </data>
+  <data name="Map.ReadDefault" xml:space="preserve">
+    <value>设备未设置自定义映射，显示的是固件默认键位。</value>
+  </data>
+  <data name="Map.FwNoSupport" xml:space="preserve">
+    <value>设备固件版本 {0} 不支持改键（需 grok1.7，显示为 2.17）。
+仍要保存吗？刷入 grok1.7 后会生效。</value>
+  </data>
+  <data name="Map.ResetOk" xml:space="preserve">
+    <value>按键映射已恢复固件默认。</value>
+  </data>
+  <data name="Map.SaveOk" xml:space="preserve">
+    <value>按键映射已保存。键盘模式下立即生效（需固件 grok1.7 及以上）。</value>
+  </data>
+  <data name="Hid.Space" xml:space="preserve">
+    <value>空格</value>
+  </data>
+  <data name="Hid.Enter" xml:space="preserve">
+    <value>回车</value>
+  </data>
+  <data name="Hid.Backspace" xml:space="preserve">
+    <value>退格</value>
+  </data>
+  <data name="Hid.Left" xml:space="preserve">
+    <value>←左</value>
+  </data>
+  <data name="Hid.Right" xml:space="preserve">
+    <value>→右</value>
+  </data>
+  <data name="Hid.Up" xml:space="preserve">
+    <value>↑上</value>
+  </data>
+  <data name="Hid.Down" xml:space="preserve">
+    <value>↓下</value>
+  </data>
+  <data name="Hid.Numpad" xml:space="preserve">
+    <value>小键盘 {0}</value>
+  </data>
+  <data name="Ver.Label" xml:space="preserve">
+    <value>UID={0}, HVer={1}, FVer={2}{3}</value>
+  </data>
+  <data name="Ver.NotRead" xml:space="preserve">
+    <value>未读到设备版本——点击「读取模式」重试。</value>
+  </data>
+  <data name="Ver.Tag.Grok17" xml:space="preserve">
+    <value> (grok1.7)</value>
+  </data>
+  <data name="Ver.Tag.Stock212" xml:space="preserve">
+    <value> (原厂 V2.12/V2.13 或 grok1.6)</value>
+  </data>
+  <data name="Cfg.ReadOk" xml:space="preserve">
+    <value>读取完成。</value>
+  </data>
+  <data name="Cfg.WriteOk" xml:space="preserve">
+    <value>保存完成。</value>
+  </data>
+  <data name="Cfg.ReadCsError" xml:space="preserve">
+    <value>读取配置校验错误（{0}, {1}）。</value>
+  </data>
+  <data name="Cfg.ReadError" xml:space="preserve">
+    <value>读取配置失败（{0}）。</value>
+  </data>
+  <data name="Cfg.WriteError" xml:space="preserve">
+    <value>写入配置失败（{0}）。</value>
+  </data>
+  <data name="Ota.Title" xml:space="preserve">
+    <value>PADUEX5 固件升级</value>
+  </data>
+  <data name="Ota.Tips" xml:space="preserve">
+    <value>操作提示：
+1. 选择 firmware\grok1.7.bin（原厂 V2.13 + 防粘键 + 键盘改键；勿用 grok1.0～1.5）
+2. 保持 USB 连接，升级中勿拔线、勿关机、勿关闭本窗口
+3. 失败留在 Bootloader 可重试；ISP 请用 grok1.7 或官方 V2.13（grok1.0～1.5 全部禁止）</value>
+  </data>
+  <data name="Ota.Addr" xml:space="preserve">
+    <value>APP 地址: 0x{0}</value>
+  </data>
+  <data name="Ota.Limit" xml:space="preserve">
+    <value>最大允许: {0} 字节（保护配置区）</value>
+  </data>
+  <data name="Ota.Warn" xml:space="preserve">
+    <value>升级中，请勿关机！</value>
+  </data>
+  <data name="Ota.Browse" xml:space="preserve">
+    <value>选择固件</value>
+  </data>
+  <data name="Ota.NoFile" xml:space="preserve">
+    <value>尚未选择文件</value>
+  </data>
+  <data name="Ota.Start" xml:space="preserve">
+    <value>开始升级</value>
+  </data>
+  <data name="Ota.Close" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+  <data name="Ota.SelectPrompt" xml:space="preserve">
+    <value>请选择固件 .bin，然后开始升级。</value>
+  </data>
+  <data name="Ota.Filter" xml:space="preserve">
+    <value>固件 (*.bin)|*.bin|所有文件 (*.*)|*.*</value>
+  </data>
+  <data name="Ota.CheckTitle" xml:space="preserve">
+    <value>PADUEX5 固件检查</value>
+  </data>
+  <data name="Ota.FileInfo" xml:space="preserve">
+    <value>大小: {0} 字节  |  对齐后: {1} 字节</value>
+  </data>
+  <data name="Ota.Loaded" xml:space="preserve">
+    <value>已加载固件: {0}</value>
+  </data>
+  <data name="Ota.SizeWarn" xml:space="preserve">
+    <value>此固件比原厂镜像长（{0} &gt; {1} 字节）。
+
+本窗口 OTA 会整包写入，一般可用。
+若改用厂家 ISP/IPS：请改刷 grok1.7.bin 或官方 V2.13（grok1.0～1.5 全部禁止），地址 0x08004000，否则可能截断末尾导致 USB 无法识别。</value>
+  </data>
+  <data name="Ota.SizeWarnTitle" xml:space="preserve">
+    <value>PADUEX5 体积提示</value>
+  </data>
+  <data name="Ota.ReadFail" xml:space="preserve">
+    <value>读取固件失败: {0}</value>
+  </data>
+  <data name="Ota.V.TooSmall" xml:space="preserve">
+    <value>固件太小（&lt;{0}），已拒绝，避免写入无效镜像。</value>
+  </data>
+  <data name="Ota.V.TooLarge" xml:space="preserve">
+    <value>固件过大（&gt;{0}），会覆盖配置区，已拒绝以防变砖。</value>
+  </data>
+  <data name="Ota.V.BadSp" xml:space="preserve">
+    <value>固件向量表栈顶异常（非 SRAM），可能不是本机 APP，已拒绝。</value>
+  </data>
+  <data name="Ota.V.BadReset" xml:space="preserve">
+    <value>固件复位向量不在 APP 区 (0x08004000~0x0800F800)，已拒绝以防变砖。</value>
+  </data>
+  <data name="Ota.V.BadUsbVector" xml:space="preserve">
+    <value>固件 USB 中断向量(0x14C)已被覆盖（grok1.0～1.5 的已知致命问题），已拒绝。请改用 grok1.7 或官方 V2.13。</value>
+  </data>
+  <data name="Ota.SelectFirst" xml:space="preserve">
+    <value>请先选择固件文件。</value>
+  </data>
+  <data name="Ota.Confirm" xml:space="preserve">
+    <value>即将升级 PADUEX5 固件。
+
+文件: {0}
+大小: {1} 字节
+地址: 0x{2}
+
+请注意：
+· 升级中请勿拔 USB、勿关机、勿关闭本窗口
+· 写完并 CRC 通过后才会跳转；失败则留在 Bootloader，可重试
+· 推荐刷入 grok1.7.bin（原厂底 + 防粘键 + 键盘改键，向量表未动；grok1.0～1.5 全部禁止）
+· 勿再用 ISP 刷 grok1.1.bin（末尾加长，易截断变砖）
+
+确认开始？</value>
+  </data>
+  <data name="Ota.ConfirmTitle" xml:space="preserve">
+    <value>PADUEX5 升级确认</value>
+  </data>
+  <data name="Ota.Failed" xml:space="preserve">
+    <value>升级失败: {0}</value>
+  </data>
+  <data name="Ota.FailedDetail" xml:space="preserve">
+    <value>升级失败: {0}
+
+设备应仍在 Bootloader（OTA）模式。
+请保持 USB 连接，关闭本提示后再次点「开始升级」。一般不会变砖。</value>
+  </data>
+  <data name="Ota.Done" xml:space="preserve">
+    <value>升级完成</value>
+  </data>
+  <data name="Ota.Success" xml:space="preserve">
+    <value>固件升级成功！设备已跳转运行新固件。</value>
+  </data>
+  <data name="Ota.P.Detect" xml:space="preserve">
+    <value>检测设备…</value>
+  </data>
+  <data name="Ota.P.OpenPort" xml:space="preserve">
+    <value>打开 Bootloader HID 中断口…</value>
+  </data>
+  <data name="Ota.P.PortReady" xml:space="preserve">
+    <value>IAP 端口就绪 (IN={0}, OUT={1})</value>
+  </data>
+  <data name="Ota.P.StartIap" xml:space="preserve">
+    <value>开始 IAP 下载…</value>
+  </data>
+  <data name="Ota.P.NoAckRetry" xml:space="preserve">
+    <value>无 ACK，切换 HID 帧格式重试…</value>
+  </data>
+  <data name="Ota.E.IapStart" xml:space="preserve">
+    <value>IAP 启动失败</value>
+  </data>
+  <data name="Ota.P.AddrOk" xml:space="preserve">
+    <value>Bootloader APP 地址确认 OK</value>
+  </data>
+  <data name="Ota.P.SkipGetAddr" xml:space="preserve">
+    <value>跳过 GETADDR（部分 Bootloader 不回），继续写入…</value>
+  </data>
+  <data name="Ota.P.Write" xml:space="preserve">
+    <value>写入 0x{0} ({1}/{2})</value>
+  </data>
+  <data name="Ota.E.SetAddr" xml:space="preserve">
+    <value>设置地址失败</value>
+  </data>
+  <data name="Ota.E.BlockAck" xml:space="preserve">
+    <value>数据块 ACK 失败</value>
+  </data>
+  <data name="Ota.P.Finish" xml:space="preserve">
+    <value>完成下载…</value>
+  </data>
+  <data name="Ota.E.Finish" xml:space="preserve">
+    <value>完成命令失败</value>
+  </data>
+  <data name="Ota.P.Jump" xml:space="preserve">
+    <value>跳转应用…</value>
+  </data>
+  <data name="Ota.P.Success" xml:space="preserve">
+    <value>升级成功</value>
+  </data>
+  <data name="Ota.P.OtaFound" xml:space="preserve">
+    <value>已检测到 OTA Bootloader</value>
+  </data>
+  <data name="Ota.P.TryEnterOta" xml:space="preserve">
+    <value>尝试让 APP 进入 OTA…</value>
+  </data>
+  <data name="Ota.P.NoApp" xml:space="preserve">
+    <value>未找到运行中的 APP，等待 Bootloader…</value>
+  </data>
+  <data name="Ota.P.OtaConnected" xml:space="preserve">
+    <value>OTA Bootloader 已连接</value>
+  </data>
+  <data name="Ota.P.Waiting" xml:space="preserve">
+    <value>等待 OTA 设备… ({0}/{1})</value>
+  </data>
+  <data name="Ota.E.Timeout" xml:space="preserve">
+    <value>超时未检测到 OTA 设备 (VID 0x0E8F / PID 0x8901)。请确认设备已进入升级模式。</value>
+  </data>
+  <data name="Ota.NoAck" xml:space="preserve">
+    <value>（无 ACK）</value>
+  </data>
+  <data name="Ota.E.PortNotFound" xml:space="preserve">
+    <value>OTA HID 设备未找到 (0x0E8F:0x8901)</value>
+  </data>
+  <data name="Ota.BusyClose" xml:space="preserve">
+    <value>升级进行中，请勿关闭。</value>
+  </data>
+  <data name="Ota.BusyCloseForm" xml:space="preserve">
+    <value>升级进行中，请勿关闭。中断可能导致需重新升级（Bootloader 仍可进入）。</value>
+  </data>
+</root>

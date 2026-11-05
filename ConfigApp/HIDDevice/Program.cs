@@ -23,6 +23,9 @@ namespace ConfigAppNS
 			Application.EnableVisualStyles();
 			Application.SetCompatibleTextRenderingDefault(false);
 
+			// Language: Config.ini LANGUAGE=AUTO|CN|EN (missing/AUTO = follow the Windows UI language)
+			L.Apply(AppConfig.Read("LANGUAGE"));
+
 			string AppName = "PADUEX5";
 			bool gotOwnership = false;
 			Mutex mutex = null;
@@ -31,7 +34,7 @@ namespace ConfigAppNS
 				mutex = new Mutex(true, AppName, out gotOwnership);
 				if (!gotOwnership)
 				{
-					MessageBox.Show(AppName + " is already running !!!", "System Message", MessageBoxButtons.OK, MessageBoxIcon.Error);
+					MessageBox.Show(L.F("App.AlreadyRunning", AppName), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
 					return;
 				}
 				Application.Run(new App_DDR());

@@ -137,7 +137,7 @@
             this.Btn_ADJ.Name = "Btn_ADJ";
             this.Btn_ADJ.Size = new System.Drawing.Size(147, 48);
             this.Btn_ADJ.TabIndex = 134;
-            this.Btn_ADJ.Text = "调试模式";
+            this.Btn_ADJ.Text = "Debug";
             this.Btn_ADJ.UseVisualStyleBackColor = false;
             this.Btn_ADJ.Click += new System.EventHandler(this.Btn_Debug_Click);
             // 
@@ -148,7 +148,7 @@
             this.btn_default.Name = "btn_default";
             this.btn_default.Size = new System.Drawing.Size(147, 48);
             this.btn_default.TabIndex = 109;
-            this.btn_default.Text = "默认设置";
+            this.btn_default.Text = "Default";
             this.btn_default.UseVisualStyleBackColor = false;
             this.btn_default.Click += new System.EventHandler(this.btn_default_Click);
             // 
@@ -159,7 +159,7 @@
             this.btn_Save.Name = "btn_Save";
             this.btn_Save.Size = new System.Drawing.Size(147, 48);
             this.btn_Save.TabIndex = 111;
-            this.btn_Save.Text = "保存设置";
+            this.btn_Save.Text = "Save";
             this.btn_Save.UseVisualStyleBackColor = false;
             this.btn_Save.Click += new System.EventHandler(this.btn_Save_Click);
             // 
@@ -170,7 +170,7 @@
             this.btn_Read.Name = "btn_Read";
             this.btn_Read.Size = new System.Drawing.Size(147, 48);
             this.btn_Read.TabIndex = 110;
-            this.btn_Read.Text = "读取设置";
+            this.btn_Read.Text = "Read";
             this.btn_Read.UseVisualStyleBackColor = false;
             this.btn_Read.Click += new System.EventHandler(this.btn_Read_Click);
             // 
@@ -814,7 +814,7 @@
             this.Btn_SaveMode.Name = "Btn_SaveMode";
             this.Btn_SaveMode.Size = new System.Drawing.Size(147, 48);
             this.Btn_SaveMode.TabIndex = 175;
-            this.Btn_SaveMode.Text = "保存模式";
+            this.Btn_SaveMode.Text = "Save Mode";
             this.Btn_SaveMode.UseVisualStyleBackColor = false;
             this.Btn_SaveMode.Click += new System.EventHandler(this.Btn_SaveMode_Click);
             // 
@@ -867,7 +867,7 @@
             this.Btn_ReadMode.Name = "Btn_ReadMode";
             this.Btn_ReadMode.Size = new System.Drawing.Size(147, 48);
             this.Btn_ReadMode.TabIndex = 174;
-            this.Btn_ReadMode.Text = "读取模式";
+            this.Btn_ReadMode.Text = "Read Mode";
             this.Btn_ReadMode.UseVisualStyleBackColor = false;
             this.Btn_ReadMode.Click += new System.EventHandler(this.Btn_ReadMode_Click);
             // 
@@ -879,7 +879,7 @@
             this.label_Ver.Name = "label_Ver";
             this.label_Ver.Size = new System.Drawing.Size(44, 18);
             this.label_Ver.TabIndex = 174;
-            this.label_Ver.Text = "Ver:";
+            this.label_Ver.Text = "";
             // 
             // App_DDR
             // 
@@ -907,7 +907,7 @@
             this.Controls.Add(this.Btn_K6);
             this.Controls.Add(this.Btn_K5);
             this.Name = "App_DDR";
-            this.Text = "DDRConfig";
+            this.Text = "PADUEX5";
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.DDR_Form_FormClosing);
             this.Load += new System.EventHandler(this.DDR_Form_Load);
             this.groupBox_Button.ResumeLayout(false);
