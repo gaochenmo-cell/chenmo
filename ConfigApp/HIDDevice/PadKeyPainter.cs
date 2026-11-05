@@ -30,6 +30,10 @@ namespace ConfigAppNS
             public Color TriggerFill;
             public Color SelectedFill;
             public Color BorderColor;
+            /// <summary>Second gradient stop for the selected cell; Color.Empty paints SelectedFill solid.</summary>
+            public Color SelectedGradientEnd;
+            /// <summary>Outer glow / neon stroke colour; Color.Empty disables every glow effect (light theme).</summary>
+            public Color GlowColor;
         }
 
         internal static void WireButton(Button btn, PadKeyKind kind)
@@ -65,16 +69,37 @@ namespace ConfigAppNS
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
             g.CompositingQuality = CompositingQuality.HighQuality;
 
-            // Laverita card: rounded cell, amber when selected, thin border otherwise
-            Color cardFill = args.Selected && !args.SelectedFill.IsEmpty ? args.SelectedFill : args.CellBackground;
-            Rectangle card = new Rectangle(bounds.X + 1, bounds.Y + 1, bounds.Width - 3, bounds.Height - 3);
+            // Card: rounded cell, filled with the selection colour when selected, thin border otherwise.
+            // Neon (dark) theme: the cell is inset a few px so an outer glow fits inside the button,
+            // the selected cell gets a diagonal gradient and pressed cells glow in their LED colour.
+            bool neon = !args.GlowColor.IsEmpty;
+            bool selectedFill = args.Selected && !args.SelectedFill.IsEmpty;
+            bool gradient = selectedFill && !args.SelectedGradientEnd.IsEmpty;
+            int glowPad = neon ? Math.Max(3, bounds.Width / 40) : 0;
+            Color cardFill = selectedFill ? args.SelectedFill : args.CellBackground;
+            Rectangle card = new Rectangle(bounds.X + 1 + glowPad, bounds.Y + 1 + glowPad,
+                bounds.Width - 3 - glowPad * 2, bounds.Height - 3 - glowPad * 2);
             using (GraphicsPath cardPath = RoundedRect(card, Math.Max(4, bounds.Width / 14)))
             {
-                using (SolidBrush backBrush = new SolidBrush(cardFill))
-                    g.FillPath(backBrush, cardPath);
+                if (neon && (args.Selected || args.Triggered))
+                    DrawOuterGlow(g, cardPath, args.Triggered ? Color.FromArgb(255, args.TriggerFill) : args.GlowColor, glowPad);
+
+                if (gradient)
+                {
+                    using (LinearGradientBrush backBrush = new LinearGradientBrush(card, args.SelectedFill, args.SelectedGradientEnd, 45f))
+                        g.FillPath(backBrush, cardPath);
+                }
+                else
+                {
+                    using (SolidBrush backBrush = new SolidBrush(cardFill))
+                        g.FillPath(backBrush, cardPath);
+                }
+
                 Color border = args.BorderColor.IsEmpty ? Color.FromArgb(209, 213, 219) : args.BorderColor;
-                if (args.Selected && !args.SelectedFill.IsEmpty)
-                    border = args.SelectedFill;
+                if (selectedFill)
+                    border = gradient ? args.GlowColor : args.SelectedFill;
+                else if (neon && args.Triggered)
+                    border = Color.FromArgb(255, args.TriggerFill);
                 using (Pen borderPen = new Pen(border, 1f))
                     g.DrawPath(borderPen, cardPath);
             }
@@ -97,6 +122,14 @@ namespace ConfigAppNS
                 }
 
                 float stroke = Math.Max(2f, Math.Min(inner.Width, inner.Height) * 0.035f);
+                if (neon)
+                {
+                    using (Pen halo = new Pen(StrokeGlowColor(args), stroke * 3f))
+                    {
+                        halo.LineJoin = LineJoin.Round;
+                        g.DrawPath(halo, path);
+                    }
+                }
                 using (Pen outline = new Pen(args.OutlineColor, stroke))
                 {
                     outline.LineJoin = LineJoin.Miter;
@@ -161,11 +194,42 @@ namespace ConfigAppNS
                     g.FillEllipse(fill, ring);
             }
 
+            if (!args.GlowColor.IsEmpty)
+            {
+                using (Pen halo = new Pen(StrokeGlowColor(args), stroke * 2.2f))
+                    g.DrawEllipse(halo, ring);
+            }
+
             using (Pen pen = new Pen(args.OutlineColor, stroke))
             {
                 pen.StartCap = LineCap.Flat;
                 pen.EndCap = LineCap.Flat;
                 g.DrawEllipse(pen, ring);
+            }
+        }
+
+        /// <summary>Translucent halo behind the arrow / ring stroke: LED colour when pressed,
+        /// white on the selected gradient cell, otherwise the theme glow colour.</summary>
+        private static Color StrokeGlowColor(PadKeyPaintArgs args)
+        {
+            Color c = args.Triggered ? args.TriggerFill : (args.Selected ? Color.White : args.GlowColor);
+            return Color.FromArgb(args.Triggered ? 110 : 70, c.R, c.G, c.B);
+        }
+
+        /// <summary>Soft outer glow: three concentric translucent strokes centred on the card edge,
+        /// widest and faintest first. Half of each pen width lands outside the card, inside glowPad.</summary>
+        private static void DrawOuterGlow(Graphics g, GraphicsPath cardPath, Color color, int glowPad)
+        {
+            const int passes = 3;
+            for (int i = passes; i >= 1; i--)
+            {
+                float width = glowPad * 2f * i / passes;
+                int alpha = 40 + (passes - i) * 35;
+                using (Pen p = new Pen(Color.FromArgb(alpha, color.R, color.G, color.B), width))
+                {
+                    p.LineJoin = LineJoin.Round;
+                    g.DrawPath(p, cardPath);
+                }
             }
         }
 
