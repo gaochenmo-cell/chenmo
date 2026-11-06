@@ -4,10 +4,10 @@ Yuanpad 五键（PADUEX5）与四键（PADUEX4）跳舞毯控制板的 Windows �
 
 ## 下载
 
-- [`dist/PADUEX5/`](./dist/PADUEX5/) → `PADUEX5.exe`（V3.2.0）
+- [`dist/PADUEX5/`](./dist/PADUEX5/) → `PADUEX5.exe`（V3.2.1）
 - [`dist/PADUEX5-win-release.zip`](./dist/PADUEX5-win-release.zip)
 
-同一个程序通过 `Config.ini` 的 `KEYCOUNT=5|4` 切换五键 / 四键界面，窗口标题分别为 `PADUEX5 V3.2.0` / `PADUEX4 V3.2.0`。
+同一个程序通过 `Config.ini` 的 `KEYCOUNT=5|4` 切换五键 / 四键界面，窗口标题分别为 `PADUEX5 V3.2.1` / `PADUEX4 V3.2.1`。
 
 ## 功能
 

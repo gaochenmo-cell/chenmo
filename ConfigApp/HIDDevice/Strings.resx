@@ -430,6 +430,8 @@ If you use the vendor ISP/IPS tool instead: flash PADUEX5_V3.2.bin / PADUEX4_V3.
 File: {0}
 Size: {1} bytes
 Address: 0x{2}
+Firmware in file: {3}
+Board now: {4}
 
 Please note:
 - Do not unplug USB, power off or close this window while upgrading
@@ -454,7 +456,7 @@ Keep USB connected, close this message and press "Start Upgrade" again. It norma
     <value>Upgrade complete</value>
   </data>
   <data name="Ota.Success" xml:space="preserve">
-    <value>Firmware upgraded successfully! The device has jumped to the new firmware.</value>
+    <value>Firmware written and the board was told to jump to it. Close this window: the version the board reports will then be compared with the file.</value>
   </data>
   <data name="Ota.P.Detect" xml:space="preserve">
     <value>Detecting device…</value>
@@ -551,5 +553,70 @@ Keep USB connected, close this message and press "Start Upgrade" again. It norma
   </data>
   <data name="Ver.Tag.HVerUnknown" xml:space="preserve">
     <value> [unknown HVer]</value>
+  </data>
+  <data name="Ota.FileVer" xml:space="preserve">
+    <value>firmware in file: {0} ({1})</value>
+  </data>
+  <data name="Ota.FileVerUnknown" xml:space="preserve">
+    <value>firmware in file: unknown (no version constants at 0x215E/0x216A)</value>
+  </data>
+  <data name="Ota.BoardVer" xml:space="preserve">
+    <value>{0} ({1})</value>
+  </data>
+  <data name="Ota.BoardVerUnknown" xml:space="preserve">
+    <value>unknown (not read)</value>
+  </data>
+  <data name="Ota.Kind5" xml:space="preserve">
+    <value>PADUEX5 5-key</value>
+  </data>
+  <data name="Ota.Kind4" xml:space="preserve">
+    <value>PADUEX4 4-key</value>
+  </data>
+  <data name="Ota.KindUnknown" xml:space="preserve">
+    <value>HVer 0x{0:X2}</value>
+  </data>
+  <data name="Ota.NoVersionInFile" xml:space="preserve">
+    <value>This file has no recognisable PADUEX version constants; the result cannot be verified after the upgrade.</value>
+  </data>
+  <data name="Ota.NoVersionConfirm" xml:space="preserve">
+    <value>The selected file has no PADUEX5 / PADUEX4 version constants (offsets 0x215E / 0x2164 / 0x216A). It may not be a firmware for this board.
+
+Flash it anyway?</value>
+  </data>
+  <data name="Ota.HVerMismatch" xml:space="preserve">
+    <value>The file is a {0} firmware, but the connected board reports {1}.
+
+A 5-key image on a 4-key board leaves K5 floating; a 4-key image on a 5-key board disables K5.
+
+Flash it anyway?</value>
+  </data>
+  <data name="Ota.Downgrade" xml:space="preserve">
+    <value>The file is firmware {0}, older than the {1} currently on the board.
+
+Flash the older version anyway?</value>
+  </data>
+  <data name="Ota.SameVersion" xml:space="preserve">
+    <value>The board already reports firmware {0}, the same version as the file. After the upgrade it will not be possible to tell from the version whether anything was written.
+
+Flash it anyway?</value>
+  </data>
+  <data name="Ota.E.DataWrite" xml:space="preserve">
+    <value>Data packet could not be sent (block {0}, offset {1} in block)</value>
+  </data>
+  <data name="Ota.VerifyNoDevice" xml:space="preserve">
+    <value>The upgrade finished, but the board did not come back as a PADUEX device within {0} s. Unplug and re-plug the USB cable, then check the version in the top-left corner.</value>
+  </data>
+  <data name="Ota.VerifyOk" xml:space="preserve">
+    <value>Upgrade verified: the board now reports firmware {0}, as in the file.</value>
+  </data>
+  <data name="Ota.VerifyMismatch" xml:space="preserve">
+    <value>Firmware version unchanged: the file is {0} but the board still reports {1}. The upgrade may not have been written.
+
+Check that you selected the .bin from the new release folder and run the upgrade again. Details are in PADUEX5.log.</value>
+  </data>
+  <data name="Cfg.SensiOldFwConfirm" xml:space="preserve">
+    <value>Firmware {0} does not keep the sensitivity: it resets to 200 at every power-up. Upgrade to V3.2 first (Firmware Upgrade button).
+
+Write the values anyway? They stay active until the board is unplugged.</value>
   </data>
 </root>

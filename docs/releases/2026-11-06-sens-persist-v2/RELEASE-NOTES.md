@@ -1,4 +1,4 @@
-# PADUEX5 / PADUEX4 V3.2.0 发布说明（2026-11-06）—— 灵敏度拔插后恢复 200（第二轮）
+# PADUEX5 / PADUEX4 V3.2.1 发布说明（2026-11-06）—— 灵敏度拔插后恢复 200（第二轮）+ 固件升级核对
 
 分支 `fix/sensitivity-persist`，PR [#8](https://github.com/gaochenmo-cell/chenmo/pull/8)（base：`release/v3.0`）。取代 `2026-11-06-sens-persist/` 的 V3.1.0。
 
@@ -6,12 +6,12 @@
 
 | 文件 | 说明 | SHA-256 |
 |---|---|---|
-| `ConfigApp-PADUEX5-V3.2.0-20261106.zip` | 五键上位机包（`Config.ini` `KEYCOUNT=5`、`NAME=PADUEX5 V3.2.0`），内含两个 V3.2 固件与说明 | `dd5c9529…3ea2db` |
-| `ConfigApp-PADUEX4-V3.2.0-20261106.zip` | 四键上位机包（`KEYCOUNT=4`、`NAME=PADUEX4 V3.2.0`），exe 与五键包相同 | `e593e498…dbcd4e` |
+| `ConfigApp-PADUEX5-V3.2.1-20261106.zip` | 五键上位机包（`Config.ini` `KEYCOUNT=5`、`NAME=PADUEX5 V3.2.1`），内含两个 V3.2 固件与说明 | `4a737d73…e3095c` |
+| `ConfigApp-PADUEX4-V3.2.1-20261106.zip` | 四键上位机包（`KEYCOUNT=4`、`NAME=PADUEX4 V3.2.1`），exe 与五键包相同 | `6b935d50…421264` |
 | `PADUEX5_V3.2.bin` | 五键固件，37072 字节，`0x14C = 0x080084A5`，上报 `V3.2` HVer `13` | `83cb64af…4ff2c8` |
 | `PADUEX4_V3.2.bin` | 四键固件，37072 字节，`0x14C = 0x080084A5`，上报 `V3.2` HVer `14` | `3948c15a…4bdbe5` |
 
-两个包里都有 `DEBUGLOG=1`，日志在 exe 同目录 `PADUEX5.log`。
+两个包里都有 `DEBUGLOG=1`，日志在 exe 同目录 `PADUEX5.log`。固件 bin 与 3.2.0 发布时完全相同（SHA-256 未变）；上位机由 3.2.0 升到 3.2.1，见「三之二」。
 
 ## 一、V3.1 为什么在真机上还是不行
 
@@ -51,6 +51,18 @@ V3.1 的页写入本身是对的——灵敏度页走的是和颜色页**同一�
 - 固件 < V3.2 时版本标签加注「建议升级 V3.2（灵敏度不掉电保存）」。
 - `PADUEX5.log` 记录每笔 TX / RX 原始 64 字节、`REBOOT-VERIFY` 的每一步（发 SET_MODE、几毫秒后回来、回读结果）。
 
+## 三之二、上位机 3.2.1：固件升级为什么要再核对一次
+
+3.2.0 的真机日志（`docs/issues/sens-persist-v32-PADUEX5.log`）：20:15:28 板子进 Bootloader（`0E8F:8901`），20:15:39 回到 `4D47` 后 GET_MODE 仍是 `03 01`（V3.1），随后四次保存的 `REBOOT-VERIFY` 全部 LOST。REBOOT-VERIFY 工作正常，是 V3.2 没有刷进去（交付的 `PADUEX4_V3.2.bin` 在 `0x216A` 确为 `02 21`，文件没问题；最可能是选到了旧目录里的 V3.1 bin）。3.2.0 的升级窗口不显示文件版本、不比对板子版本、升级后也不核对，所以这种情况完全无感。3.2.1：
+
+- **选文件**：显示「文件固件: V3.2（PADUEX4 四键）」；日志 `OTA: file "<完整路径>" size=37072 sha256=… HVer=14 FVer=V3.2 (03 02)`。HVer / FVer 从 bin 的文件偏移 `0x215E` / `0x2164` / `0x216A`（APP 地址 `0x0800615E` / `0x08006164` / `0x0800616A`，`movs r1,#imm`）解析，三个 `21` 操作码对不上就按「无版本常量」处理。
+- **开始前核对**（都可选择继续，选择写入日志）：文件 HVer 与板子不符（五键 / 四键互刷）；文件版本低于板子；文件版本等于板子（提醒升级后无法通过版本判断是否写入）；文件没有版本常量。确认框同时列出「文件固件」与「板子当前」。
+- **升级过程日志**：进入 Bootloader 的方式（已在 OTA 模式 / 发 `SET_OTA` 后多少毫秒枚举）、HID 口 In/Out 报文长度、`START(5AA1)` ACK 与 Report-ID 前缀判定、`GETADDR` 回包、每个 1 KB 块 `block n/37 @0x0800xxxx 1024 bytes acknowledged (RX=…)`、`FINISH(5AA4)` ACK 与累计字节数、`JUMP(5AA6)` 是否 ACK、失败时已写字节数与原因。
+- **升级后核对**：关闭升级窗口后主窗口等板子以 APP 重新枚举（≤ 15 s），用 GET_MODE 读版本与文件比对：`OTA-VERIFY: OK board reports HVer=14 FVer=V3.2 as in the file` / `OTA-VERIFY: MISMATCH file HVer=14 FVer=V3.2 (03 02); board now HVer=14 FVer=V3.1` / `OTA-VERIFY: NO DEVICE`。不一致弹「固件版本未变：文件是 V3.2，板子仍上报 V3.1，升级可能未写入」。
+- **OTA 写入路径核对结果**：AT32 IAP Bootloader 没有读回命令，上位机只能依赖每 1 KB 块的 ACK（Bootloader 收满 1024 字节、编程完成后才回）与 `FINISH` ACK，这部分原代码没有静默吞错；发现并修复的一处是块内（非块尾）数据包连写两次失败时被 `if (lastOfBlock) throw` 跳过，留到块尾超时报一个含糊的「数据块 ACK 失败」，现改为立即报「数据包发送失败（第 n 块，块内偏移 m）」。`JUMP` 的 ACK 之前被忽略，现写入日志（Bootloader 通常先复位再无暇应答，以重新枚举后的版本核对为准）。文件选错（HVer 不符 / 旧版本）之前没有任何提示，现按上面的核对处理。
+- **保存灵敏度前**：固件低于 V3.2 时先弹「当前固件 V3.1 不会保存灵敏度，每次上电都恢复 200。请先点「固件升级」升级到 V3.2。仍要写入吗？」（默认取消）。
+- `REBOOT-VERIFY` 的「board back after」改为真实耗时。
+
 ## 四、验证
 
 ### Unicorn（镜像真实代码 + 严格 Flash 模型）
@@ -74,9 +86,10 @@ V3.1 的页写入本身是对的——灵敏度页走的是和颜色页**同一�
 - `save-reboot-nodevice.png`：复位后设备 12 s 内没回来的提示。
 - 丢弃写入的设备：即时回读即报「保存未生效（K1-A：写入 300，设备回读 200）」。
 - `log-sample-v32.txt` / `log-sample-v31.txt`：完整的 TX / RX / REBOOT-VERIFY 日志。
+- `ota-verify-mismatch.png`：V3.1 模型 + V3.2 文件，升级后核对弹「固件版本未变…」；`ota-verify-ok-en.png`：一致时的提示；`save-oldfw-warning.png`：V3.1 上保存灵敏度前的确认；`log-sample-ota-verify.txt`：`OTA-VERIFY` 与升级前核对（五键文件刷四键板 / 降级 / 同版本 / 无版本常量）的日志。
 
 ## 五、升级步骤
 
-1. 解压对应包，运行 `PADUEX5.exe`，点「固件升级」刷 `PADUEX4_V3.2.bin`（四键）或 `PADUEX5_V3.2.bin`（五键），左上角应显示 `FVer=V3.2`。
+1. 解压对应包，运行 `PADUEX5.exe`，点「固件升级」，选**本目录**里的 `PADUEX4_V3.2.bin`（四键）或 `PADUEX5_V3.2.bin`（五键）——文件信息行应显示「文件固件: V3.2」。升级窗口关闭后会自动核对，应弹「升级已核对：板子现在上报固件 V3.2」，左上角 `FVer=V3.2`。若弹「固件版本未变」，把 `PADUEX5.log` 发回（里面有所选文件的完整路径、SHA-256 与每一步 ACK）。
 2. 灵敏度页改值 →「保存设置」，等板子重启（约 2～3 s）后应弹「已确认写入 Flash」。
 3. 拔插 USB →「读取设置」，数值应保持。若仍为 200，请把 `PADUEX5.log` 发回。

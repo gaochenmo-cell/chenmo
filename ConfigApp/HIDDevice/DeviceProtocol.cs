@@ -33,6 +33,83 @@ namespace ConfigAppNS
     }
 
     /// <summary>
+    /// What a PADUEX5 / PADUEX4 firmware image says about itself. The GET_MODE reply is built at
+    /// 0x08006148 from four `movs r1,#imm` constants; relative to the APP base 0x08004000 the
+    /// HVer, FW major and FW minor immediates sit at file offsets 0x215E, 0x2164 and 0x216A
+    /// (each `imm 21`). Images that do not have that opcode pattern report HasVersion == false.
+    /// </summary>
+    internal sealed class FirmwareImageInfo
+    {
+        public const int OFF_HVER = 0x215E;
+        public const int OFF_FW_MAJOR = 0x2164;
+        public const int OFF_FW_MINOR = 0x216A;
+        private const byte MOVS_R1_HI = 0x21;
+
+        public int Length;
+        public string Sha256 = "";
+        public bool HasVersion;
+        public int HVer, FwMajor, FwMinor;
+
+        public static FirmwareImageInfo Parse(byte[] data)
+        {
+            FirmwareImageInfo info = new FirmwareImageInfo();
+            if (data == null) return info;
+            info.Length = data.Length;
+            try
+            {
+                using (System.Security.Cryptography.SHA256 sha = System.Security.Cryptography.SHA256.Create())
+                {
+                    byte[] h = sha.ComputeHash(data);
+                    System.Text.StringBuilder sb = new System.Text.StringBuilder(64);
+                    for (int i = 0; i < h.Length; i++) sb.Append(h[i].ToString("x2"));
+                    info.Sha256 = sb.ToString();
+                }
+            }
+            catch { info.Sha256 = "?"; }
+            if (data.Length > OFF_FW_MINOR + 1
+                && data[OFF_HVER + 1] == MOVS_R1_HI
+                && data[OFF_FW_MAJOR + 1] == MOVS_R1_HI
+                && data[OFF_FW_MINOR + 1] == MOVS_R1_HI)
+            {
+                info.HasVersion = true;
+                info.HVer = data[OFF_HVER];
+                info.FwMajor = data[OFF_FW_MAJOR];
+                info.FwMinor = data[OFF_FW_MINOR];
+            }
+            return info;
+        }
+
+        /// <summary>Same formatting as the main window: "V3.2" for major >= 3, "2.17" for the old images.</summary>
+        public static string VersionText(int major, int minor)
+        {
+            if (major >= 3) return "V" + major + "." + minor;
+            return major.ToString() + "." + minor.ToString("D02");
+        }
+
+        public string VersionText() { return HasVersion ? VersionText(FwMajor, FwMinor) : "?"; }
+
+        /// <summary>For PADUEX5.log: "HVer=14 FVer=V3.2 (03 02)" or "version=unknown".</summary>
+        public string VersionLogText()
+        {
+            if (!HasVersion) return "version=unknown (no movs r1 pattern at 0x215E/0x2164/0x216A)";
+            return string.Format("HVer={0:X2} FVer={1} ({2:X2} {3:X2})", HVer, VersionText(), FwMajor, FwMinor);
+        }
+
+        /// <summary>Compare the image version with a board version: &lt;0 older, 0 same, &gt;0 newer.</summary>
+        public int CompareVersion(int major, int minor)
+        {
+            if (FwMajor != major) return FwMajor < major ? -1 : 1;
+            if (FwMinor != minor) return FwMinor < minor ? -1 : 1;
+            return 0;
+        }
+
+        public bool SameVersionAs(int hver, int major, int minor)
+        {
+            return HasVersion && HVer == hver && FwMajor == major && FwMinor == minor;
+        }
+    }
+
+    /// <summary>
     /// Byte-level view of the HID protocol (no USB, no UI).
     ///
     /// Input reports are fetched with HidD_GetInputReport through HIDLibrary.USBLib_DeviceCtrlInput

@@ -17,8 +17,8 @@
 |---|---|---|
 | 固件文件 | `PADUEX5_Vx.y.bin` / `PADUEX4_Vx.y.bin` | `PADUEX5_V3.2.bin` |
 | 固件上报 | GET_MODE 回包 FW major / minor 为整数 | `03 02` → 上位机显示 `V3.2` |
-| 上位机 | `AssemblyVersion` 三段式显示 | `PADUEX5 V3.2.0` |
-| 交付包 | `ConfigApp-PADUEX5-Vx.y.z-YYYYMMDD.zip` | `ConfigApp-PADUEX5-V3.2.0-20261106.zip` |
+| 上位机 | `AssemblyVersion` 三段式显示 | `PADUEX5 V3.2.1` |
+| 交付包 | `ConfigApp-PADUEX5-Vx.y.z-YYYYMMDD.zip` | `ConfigApp-PADUEX5-V3.2.1-20261106.zip` |
 
 五键 / 四键固件版本号相同，由 GET_MODE 回包的 HVer 字节区分：`0x13` 五键、`0x14` 四键。
 
@@ -91,7 +91,8 @@
 | 文件 | 职责 |
 |---|---|
 | `App_DDR.cs` | 主窗体：布局、协议读写、主题、按键映射页、调试模式 |
-| `App_OTA.cs` | 固件升级（AT32 IAP），升级前校验镜像 |
+| `App_OTA.cs` | 固件升级（AT32 IAP：`5AA1` START → `5AA7` GETADDR → 每 1 KB `5AA2` 地址 + 17×`5AA3` 数据（块尾等 ACK）→ `5AA4` FINISH → `5AA6` JUMP）。Bootloader 没有读回命令，所以升级前校验镜像（向量表、`0x14C`、`FirmwareImageInfo` 解析 HVer/FVer 并与板子比对），升级后由 `App_DDR.Verify_Firmware_AfterOta` 等板子重新枚举、用 GET_MODE 核对版本（`OTA-VERIFY`） |
+| `DeviceProtocol.cs` | 回包分类 / 解析、CRC8；`FirmwareImageInfo` 从 bin 文件偏移 `0x215E/0x2164/0x216A` 读 HVer / FW major / FW minor（`movs r1,#imm`，`imm 21`），算 SHA-256 |
 | `DeviceProtocol.cs` | 回包分类与解析（`ReplyKind`、`ModeReply`、`HVER_5KEY/HVER_4KEY`、CRC8） |
 | `Localization.cs` | `L.Get/L.F`，资源在 `Strings.resx`（英文，中性）与 `Strings.zh-CN.resx`；新增文案两个文件都要加 |
 | `AppConfig.cs` | `Config.ini` `[APP Config]` 读写（`LANGUAGE=AUTO|CN|EN`、`THEME=LIGHT|DARK`、`KEYCOUNT=4|5`、`DEBUGLOG=1|0`） |

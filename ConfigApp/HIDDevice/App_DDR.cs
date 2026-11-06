@@ -2701,35 +2701,15 @@ namespace ConfigAppNS
             DebugLog.Log("REBOOT-VERIFY type {0:X2}: TX slot{1} SET_MODE {2} to restart the board", ConfigType, mDeviceIndex, DebugLog.Hex(cmd, 0, 2));
             USBCtrl.USBLib_DeviceCtrlOutput(mDeviceIndex, 0, 64, cmd);
             //-------------------------------------------------------------------------------------------
-            // The board drops off the bus and enumerates again; WM_DEVICECHANGE arrives on this
-            // thread, so pump messages while polling instead of blocking in Sleep.
-            Cursor = Cursors.WaitCursor;
-            bool back = false;
-            int waited = 0;
-            try
-            {
-                Thread.Sleep(400);                 // let the old handle go away before probing
-                bDeviceStatusFG = false;
-                USBCtrl.USBLib_Disconnect();
-                for (; waited < REBOOT_WAIT_MS; waited += REBOOT_POLL_MS)
-                {
-                    Application.DoEvents();
-                    Thread.Sleep(REBOOT_POLL_MS);
-                    if (!bDeviceStatusFG) Find_USB_Deivce();
-                    if (bDeviceStatusFG && mFwValid) { back = true; break; }
-                }
-            }
-            finally
-            {
-                Cursor = Cursors.Default;
-            }
-            if (!back)
+            Thread.Sleep(400);                 // let the old handle go away before probing
+            int waited = WaitForDeviceBack(REBOOT_WAIT_MS);
+            if (waited < 0)
             {
                 DebugLog.Log("REBOOT-VERIFY type {0:X2}: board did not come back within {1} ms (device={2}, version={3})",
                     ConfigType, REBOOT_WAIT_MS, bDeviceStatusFG, mFwValid);
                 return L.Get("Cfg.RebootNoDevice");
             }
-            DebugLog.Log("REBOOT-VERIFY type {0:X2}: board back after ~{1} ms, fw={2}", ConfigType, waited, FwVersionText());
+            DebugLog.Log("REBOOT-VERIFY type {0:X2}: board back after {1} ms, fw={2}", ConfigType, waited, FwVersionText());
             //-------------------------------------------------------------------------------------------
             int[] back2 = new int[CONFIG_VALUE_COUNT];
             Thread.Sleep(150);
@@ -2749,6 +2729,34 @@ namespace ConfigAppNS
             }
             DebugLog.Log("REBOOT-VERIFY type {0:X2}: values survived the restart (read from flash)", ConfigType);
             return null;
+        }
+
+        /// <summary>
+        /// Drop the current handle and poll until the board enumerates again and GET_MODE
+        /// succeeds. WM_DEVICECHANGE arrives on this thread, so messages are pumped while
+        /// polling instead of blocking in Sleep. Returns the elapsed milliseconds, or -1 on timeout.
+        /// </summary>
+        private int WaitForDeviceBack(int timeoutMs)
+        {
+            Cursor = Cursors.WaitCursor;
+            DateTime t0 = DateTime.Now;
+            try
+            {
+                bDeviceStatusFG = false;
+                USBCtrl.USBLib_Disconnect();
+                while (true)
+                {
+                    Application.DoEvents();
+                    Thread.Sleep(REBOOT_POLL_MS);
+                    if (!bDeviceStatusFG) Find_USB_Deivce();
+                    if (bDeviceStatusFG && mFwValid) return (int)(DateTime.Now - t0).TotalMilliseconds;
+                    if ((DateTime.Now - t0).TotalMilliseconds >= timeoutMs) return -1;
+                }
+            }
+            finally
+            {
+                Cursor = Cursors.Default;
+            }
         }
 
         /// =============================================================================================
@@ -3208,6 +3216,16 @@ namespace ConfigAppNS
             if (tabControl1.SelectedIndex == 0)
             {
                 ConfigType |= 0x00;
+                // Up to V3.1 the board forgets the sensitivity at the next power-up; say so
+                // before writing, so nobody is surprised by the post-restart comparison.
+                if (mFwValid && !FwPersistsSensitivity())
+                {
+                    DebugLog.Log("SET_SENS type 00: firmware {0} does not keep the sensitivity across power-up, asking before writing", FwVersionText());
+                    DialogResult r = MessageBox.Show(L.F("Cfg.SensiOldFwConfirm", FwVersionText()), L.Get("App.Name"),
+                        MessageBoxButtons.OKCancel, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+                    DebugLog.Log("SET_SENS type 00: user chose {0}", r);
+                    if (r != DialogResult.OK) return;
+                }
                 result = Write_Config_PausingDebug(ConfigType, SensiBuffer, CONFIG_VALUE_COUNT, true);
             }
             //-------------------------------------------------------------------------------------------
@@ -3238,10 +3256,57 @@ namespace ConfigAppNS
         private void Btn_OTA_Click(object sender, EventArgs e)
         {
             // Firmware upgrade dialog; it switches the board into OTA mode itself.
-            App_OTA ota = new App_OTA();
+            bool hadVersion = mFwValid;
+            int hverBefore = mDevHVer, majorBefore = mFwMajor, minorBefore = mFwMinor;
+            App_OTA ota = new App_OTA(mFwValid, mDevHVer, mFwMajor, mFwMinor);
             ota.ShowDialog(this);
-            // Refresh device state after upgrade window closes
-            Find_USB_Deivce();
+            FirmwareImageInfo flashed = ota.FlashedImage;
+            if (flashed == null)
+            {
+                // Nothing was written (cancelled / failed); just refresh the device state.
+                Find_USB_Deivce();
+                return;
+            }
+            Verify_Firmware_AfterOta(flashed, hadVersion, hverBefore, majorBefore, minorBefore);
+        }
+
+        private const int OTA_RETURN_WAIT_MS = 15000;
+
+        /// <summary>
+        /// The bootloader has no read command, so the only end-to-end proof that an upgrade took
+        /// is the version the new APP reports. Wait for the board to enumerate as the APP again,
+        /// read GET_MODE and compare HVer / FVer with the constants in the file that was flashed.
+        /// </summary>
+        private void Verify_Firmware_AfterOta(FirmwareImageInfo flashed, bool hadVersion, int hverBefore, int majorBefore, int minorBefore)
+        {
+            string before = hadVersion ? string.Format("HVer={0:X2} FVer={1}", hverBefore, FirmwareImageInfo.VersionText(majorBefore, minorBefore)) : "unknown";
+            DebugLog.Log("OTA-VERIFY: waiting for the APP to enumerate; file {0}; board before OTA {1}", flashed.VersionLogText(), before);
+            int waited = WaitForDeviceBack(OTA_RETURN_WAIT_MS);
+            if (waited < 0)
+            {
+                DebugLog.Log("OTA-VERIFY: NO DEVICE within {0} ms (device={1}, version={2})", OTA_RETURN_WAIT_MS, bDeviceStatusFG, mFwValid);
+                MessageBox.Show(L.F("Ota.VerifyNoDevice", OTA_RETURN_WAIT_MS / 1000), L.Get("App.Name"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            string now = string.Format("HVer={0:X2} FVer={1}", mDevHVer, FwVersionText());
+            if (!flashed.HasVersion)
+            {
+                DebugLog.Log("OTA-VERIFY: file had no version bytes; board now {0} (was {1}), back after {2} ms", now, before, waited);
+                return;
+            }
+            if (flashed.SameVersionAs(mDevHVer, mFwMajor, mFwMinor))
+            {
+                bool unchanged = hadVersion && hverBefore == mDevHVer && majorBefore == mFwMajor && minorBefore == mFwMinor;
+                DebugLog.Log("OTA-VERIFY: OK board reports {0} as in the file{1}, back after {2} ms",
+                    now, unchanged ? " (same as before the upgrade, so a non-write cannot be told apart)" : "", waited);
+                MessageBox.Show(L.F("Ota.VerifyOk", FwVersionText()), L.Get("App.Name"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            DebugLog.Log("OTA-VERIFY: MISMATCH file {0}; board now {1}; before {2}; back after {3} ms",
+                flashed.VersionLogText(), now, before, waited);
+            MessageBox.Show(
+                L.F("Ota.VerifyMismatch", flashed.VersionText(), FwVersionText()),
+                L.Get("App.Name"), MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
 
         /// =============================================================================================

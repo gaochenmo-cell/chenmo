@@ -33,13 +33,32 @@ namespace ConfigAppNS
 
         private string binPath = "";
         private byte[] binData = null;
+        private FirmwareImageInfo binInfo = null;
         private bool upgrading = false;
         private BackgroundWorker worker;
         private string lastRxHex = "";
         private string lastIapError = "";
+        private int bytesWritten = 0;
 
-        public App_OTA()
+        // Version of the board as the main window last read it (GET_MODE), used to warn about
+        // a file that does not match the board or does not move its version forward.
+        private readonly bool devValid;
+        private readonly int devHVer, devFwMajor, devFwMinor;
+
+        /// <summary>
+        /// Set when the worker reported success: the image whose version the main window should
+        /// see on the board once it re-enumerates (null when the file carried no version).
+        /// </summary>
+        internal FirmwareImageInfo FlashedImage { get; private set; }
+
+        public App_OTA() : this(false, 0, 0, 0) { }
+
+        public App_OTA(bool deviceVersionValid, int deviceHVer, int deviceFwMajor, int deviceFwMinor)
         {
+            devValid = deviceVersionValid;
+            devHVer = deviceHVer;
+            devFwMajor = deviceFwMajor;
+            devFwMinor = deviceFwMinor;
             InitializeComponent();
             try
             {
@@ -200,18 +219,25 @@ namespace ConfigAppNS
             try
             {
                 byte[] data = File.ReadAllBytes(dlg.FileName);
+                FirmwareImageInfo info = FirmwareImageInfo.Parse(data);
+                DebugLog.Log("OTA: file \"{0}\" size={1} sha256={2} {3}", dlg.FileName, data.Length, info.Sha256, info.VersionLogText());
                 string err = ValidateFirmware(data);
                 if (err != null)
                 {
+                    DebugLog.Log("OTA: file rejected: {0}", err);
                     MessageBox.Show(err, L.Get("Ota.CheckTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
                 binPath = dlg.FileName;
                 binData = data;
+                binInfo = info;
                 textFile.Text = binPath;
-                labelFileInfo.Text = L.F("Ota.FileInfo", binData.Length, Align1K(binData.Length));
+                labelFileInfo.Text = L.F("Ota.FileInfo", binData.Length, Align1K(binData.Length)) + "  |  " + FileVersionText(info);
                 btnStart.Enabled = true;
-                SetStatus(L.F("Ota.Loaded", Path.GetFileName(binPath)));
+                SetStatus(L.F("Ota.Loaded", Path.GetFileName(binPath)) + "  " + FileVersionText(info));
+                SetStatus("SHA-256 " + info.Sha256);
+                if (!info.HasVersion)
+                    SetStatus(L.Get("Ota.NoVersionInFile"));
                 // Images longer than stock are written in full here, but ISP tools that
                 // flash by the stock length would truncate them.
                 if (binData.Length > STOCK_APP_SIZE)
@@ -254,6 +280,80 @@ namespace ConfigAppNS
             return null;
         }
 
+        /// <summary>"V3.2 (PADUEX4)" from the version bytes inside the image, or an "unknown" text.</summary>
+        private static string FileVersionText(FirmwareImageInfo info)
+        {
+            if (info == null || !info.HasVersion) return L.Get("Ota.FileVerUnknown");
+            return L.F("Ota.FileVer", info.VersionText(), BoardKindText(info.HVer));
+        }
+
+        private string BoardVersionText()
+        {
+            if (!devValid) return L.Get("Ota.BoardVerUnknown");
+            return L.F("Ota.BoardVer", FirmwareImageInfo.VersionText(devFwMajor, devFwMinor), BoardKindText(devHVer));
+        }
+
+        private static string BoardKindText(int hver)
+        {
+            if (hver == DeviceProtocol.HVER_5KEY) return L.Get("Ota.Kind5");
+            if (hver == DeviceProtocol.HVER_4KEY) return L.Get("Ota.Kind4");
+            return L.F("Ota.KindUnknown", hver);
+        }
+
+        /// <summary>
+        /// Warn when the file obviously does not belong on this board (5-key image on a 4-key
+        /// board and vice versa) or does not move the version forward. Both are legitimate in
+        /// recovery scenarios, so the user may still go ahead; the decision is logged.
+        /// Returns false when the user backs out.
+        /// </summary>
+        private bool PreflightVersionCheck()
+        {
+            if (binInfo == null) return true;
+            if (!binInfo.HasVersion)
+            {
+                DebugLog.Log("OTA: preflight: file carries no recognisable version bytes");
+                DialogResult r0 = MessageBox.Show(L.Get("Ota.NoVersionConfirm"), L.Get("Ota.CheckTitle"),
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+                DebugLog.Log("OTA: preflight: user chose {0}", r0);
+                return r0 == DialogResult.Yes;
+            }
+            if (!devValid)
+            {
+                DebugLog.Log("OTA: preflight: board version unknown, file {0}", binInfo.VersionLogText());
+                return true;
+            }
+            if (binInfo.HVer != devHVer && DeviceProtocol.IsKnownHVer(devHVer))
+            {
+                DebugLog.Log("OTA: preflight: HVer mismatch file=0x{0:X2} board=0x{1:X2}", binInfo.HVer, devHVer);
+                DialogResult r1 = MessageBox.Show(
+                    L.F("Ota.HVerMismatch", BoardKindText(binInfo.HVer), BoardKindText(devHVer)),
+                    L.Get("Ota.CheckTitle"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+                DebugLog.Log("OTA: preflight: user chose {0}", r1);
+                if (r1 != DialogResult.Yes) return false;
+            }
+            int cmp = binInfo.CompareVersion(devFwMajor, devFwMinor);
+            if (cmp < 0)
+            {
+                DebugLog.Log("OTA: preflight: file {0} is older than board {1}",
+                    binInfo.VersionText(), FirmwareImageInfo.VersionText(devFwMajor, devFwMinor));
+                DialogResult r2 = MessageBox.Show(
+                    L.F("Ota.Downgrade", binInfo.VersionText(), FirmwareImageInfo.VersionText(devFwMajor, devFwMinor)),
+                    L.Get("Ota.CheckTitle"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+                DebugLog.Log("OTA: preflight: user chose {0}", r2);
+                if (r2 != DialogResult.Yes) return false;
+            }
+            else if (cmp == 0)
+            {
+                DebugLog.Log("OTA: preflight: file version {0} equals board version (re-flash)", binInfo.VersionText());
+                DialogResult r3 = MessageBox.Show(
+                    L.F("Ota.SameVersion", binInfo.VersionText()),
+                    L.Get("Ota.CheckTitle"), MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
+                DebugLog.Log("OTA: preflight: user chose {0}", r3);
+                if (r3 != DialogResult.Yes) return false;
+            }
+            return true;
+        }
+
         private static int Align1K(int len)
         {
             return ((len + CHUNK_1K - 1) / CHUNK_1K) * CHUNK_1K;
@@ -281,15 +381,25 @@ namespace ConfigAppNS
                 MessageBox.Show(err, L.Get("Ota.CheckTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
+            if (!PreflightVersionCheck())
+                return;
 
             DialogResult r = MessageBox.Show(
-                L.F("Ota.Confirm", Path.GetFileName(binPath), binData.Length, FLASH_APP_ADDR.ToString("X8")),
+                L.F("Ota.Confirm", Path.GetFileName(binPath), binData.Length, FLASH_APP_ADDR.ToString("X8"),
+                    FileVersionText(binInfo), BoardVersionText()),
                 L.Get("Ota.ConfirmTitle"),
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Warning);
             if (r != DialogResult.Yes)
+            {
+                DebugLog.Log("OTA: cancelled at confirmation");
                 return;
+            }
 
+            DebugLog.Log("OTA: START file=\"{0}\" size={1} padded={2} sha256={3} {4}; board={5}",
+                binPath, binData.Length, Align1K(binData.Length), binInfo.Sha256, binInfo.VersionLogText(), BoardVersionText());
+            FlashedImage = null;
+            bytesWritten = 0;
             SetUiBusy(true);
             progressBar.Value = 0;
             worker = new BackgroundWorker();
@@ -315,6 +425,7 @@ namespace ConfigAppNS
             catch { }
             if (e.Error != null)
             {
+                DebugLog.Log("OTA: FAILED after {0} bytes: {1}", bytesWritten, e.Error.Message);
                 SetStatus(L.F("Ota.Failed", e.Error.Message));
                 MessageBox.Show(
                     L.F("Ota.FailedDetail", e.Error.Message),
@@ -326,9 +437,21 @@ namespace ConfigAppNS
             bool ok = e.Result is bool && (bool)e.Result;
             if (ok)
             {
+                DebugLog.Log("OTA: DONE {0} bytes written, FINISH acknowledged, jump issued; expected on the board: {1}",
+                    bytesWritten, binInfo != null ? binInfo.VersionLogText() : "(unknown)");
+                FlashedImage = binInfo;
                 SetProgress(100, L.Get("Ota.Done"));
+                // The main window verifies the version once the board re-enumerates
+                // (App_DDR.Btn_OTA_Click, after this dialog closes).
                 MessageBox.Show(L.Get("Ota.Success"), L.Get("App.Name"), MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
+        }
+
+        /// <summary>Progress line for the dialog log plus the same text in PADUEX5.log.</summary>
+        private static void Step(BackgroundWorker bw, int pct, string text)
+        {
+            DebugLog.Log("OTA: {0}", text);
+            bw.ReportProgress(pct, text);
         }
 
         private void Worker_DoWork(object sender, DoWorkEventArgs e)
@@ -340,28 +463,28 @@ namespace ConfigAppNS
 
             try
             {
-                bw.ReportProgress(2, L.Get("Ota.P.Detect"));
+                Step(bw, 2, L.Get("Ota.P.Detect"));
                 EnsureBootloaderReady(bw);
 
                 // Release HIDLibrary so interrupt port can open exclusively
                 try { usb.USBLib_Disconnect(); } catch { }
                 Thread.Sleep(200);
 
-                bw.ReportProgress(8, L.Get("Ota.P.OpenPort"));
+                Step(bw, 8, L.Get("Ota.P.OpenPort"));
                 port = OtaHidPort.Open((ushort)DeviceType.HID_OTA_VID, (ushort)DeviceType.HID_OTA_PID);
-                bw.ReportProgress(10, L.F("Ota.P.PortReady", port.InputReportLen, port.OutputReportLen));
+                Step(bw, 10, L.F("Ota.P.PortReady", port.InputReportLen, port.OutputReportLen));
                 Thread.Sleep(150);
 
                 byte[] pkt = new byte[64];
 
                 // START 0x5AA1
-                bw.ReportProgress(12, L.Get("Ota.P.StartIap"));
+                Step(bw, 12, L.Get("Ota.P.StartIap"));
                 Array.Clear(pkt, 0, pkt.Length);
                 pkt[0] = 0x5A; pkt[1] = 0xA1;
                 if (!SendCmdReliable(ref port, pkt, 0x5A, 0xA1, true, 2500))
                 {
                     bool currentPrefix = port.ForceReportIdPrefix ?? (port.OutputReportLen >= 65);
-                    bw.ReportProgress(12, L.Get("Ota.P.NoAckRetry"));
+                    Step(bw, 12, L.Get("Ota.P.NoAckRetry") + " " + FailDetail());
                     try { port.Dispose(); } catch { }
                     port = OtaHidPort.Open((ushort)DeviceType.HID_OTA_VID, (ushort)DeviceType.HID_OTA_PID);
                     port.ForceReportIdPrefix = !currentPrefix;
@@ -371,20 +494,22 @@ namespace ConfigAppNS
                     if (!SendCmdReliable(ref port, pkt, 0x5A, 0xA1, true, 3000))
                         throw new Exception(L.Get("Ota.E.IapStart") + FailDetail());
                 }
+                DebugLog.Log("OTA: START(5AA1) acknowledged, RX={0}, reportIdPrefix={1}", lastRxHex,
+                    port.ForceReportIdPrefix ?? (port.OutputReportLen >= 65));
 
                 // Optional GETADDR 0x5AA7 (non-fatal if device skips)
                 Array.Clear(pkt, 0, pkt.Length);
                 pkt[0] = 0x5A; pkt[1] = 0xA7;
                 if (SendCmdReliable(ref port, pkt, 0x5A, 0xA7, true, 1000))
-                    bw.ReportProgress(14, L.Get("Ota.P.AddrOk"));
+                    Step(bw, 14, L.Get("Ota.P.AddrOk") + " RX=" + lastRxHex);
                 else
-                    bw.ReportProgress(14, L.Get("Ota.P.SkipGetAddr"));
+                    Step(bw, 14, L.Get("Ota.P.SkipGetAddr"));
 
                 int total = image.Length;
+                int totalBlocks = Math.Max(1, total / CHUNK_1K);
                 for (int offset = 0; offset < total; offset += CHUNK_1K)
                 {
                     int blockIndex = offset / CHUNK_1K;
-                    int totalBlocks = Math.Max(1, total / CHUNK_1K);
                     int pct = 15 + (blockIndex * 77) / totalBlocks;
                     uint addr = FLASH_APP_ADDR + (uint)offset;
                     bw.ReportProgress(pct, L.F("Ota.P.Write", addr.ToString("X8"), blockIndex + 1, totalBlocks));
@@ -405,32 +530,40 @@ namespace ConfigAppNS
                         Buffer.BlockCopy(image, offset + blockSent, pkt, 4, n);
                         blockSent += n;
                         bool lastOfBlock = (blockSent >= CHUNK_1K);
+                        // The bootloader programs a block only after all 1024 bytes arrived and
+                        // acknowledges once per block. A data packet that could not even be
+                        // written to the pipe leaves the block short, so it is fatal as well
+                        // (it used to be skipped silently and surfaced later as a vague timeout).
                         if (!SendCmdReliable(ref port, pkt, 0x5A, 0xA3, lastOfBlock, lastOfBlock ? 8000 : 0))
                         {
-                            if (lastOfBlock)
-                                throw new Exception(L.Get("Ota.E.BlockAck") + FailDetail());
+                            throw new Exception((lastOfBlock ? L.Get("Ota.E.BlockAck") : L.F("Ota.E.DataWrite", blockIndex + 1, blockSent - n))
+                                + FailDetail());
                         }
-                        else if (!lastOfBlock)
-                        {
+                        if (!lastOfBlock)
                             Thread.Sleep(1);
-                        }
                     }
+                    bytesWritten = offset + CHUNK_1K;
+                    DebugLog.Log("OTA: block {0}/{1} @0x{2:X8} 1024 bytes acknowledged (RX={3})", blockIndex + 1, totalBlocks, addr, lastRxHex);
                 }
 
-                bw.ReportProgress(94, L.Get("Ota.P.Finish"));
+                Step(bw, 94, L.Get("Ota.P.Finish"));
                 Array.Clear(pkt, 0, pkt.Length);
                 pkt[0] = 0x5A; pkt[1] = 0xA4;
                 if (!SendCmdReliable(ref port, pkt, 0x5A, 0xA4, true, 3000))
                     throw new Exception(L.Get("Ota.E.Finish") + FailDetail());
+                DebugLog.Log("OTA: FINISH(5AA4) acknowledged after {0} bytes, RX={1}", bytesWritten, lastRxHex);
 
-                bw.ReportProgress(98, L.Get("Ota.P.Jump"));
+                Step(bw, 98, L.Get("Ota.P.Jump"));
                 Array.Clear(pkt, 0, pkt.Length);
                 pkt[0] = 0x5A; pkt[1] = 0xA6;
                 PutBe32(pkt, 2, FLASH_APP_ADDR);
-                SendCmdReliable(ref port, pkt, 0x5A, 0xA6, true, 2000);
+                bool jumpAck = SendCmdReliable(ref port, pkt, 0x5A, 0xA6, true, 2000);
+                // The bootloader usually resets before it can answer the jump command; the
+                // version check after re-enumeration is what tells whether the board took it.
+                DebugLog.Log("OTA: JUMP(5AA6) to 0x{0:X8} {1}", FLASH_APP_ADDR, jumpAck ? "acknowledged RX=" + lastRxHex : "not acknowledged" + FailDetail());
 
                 Thread.Sleep(800);
-                bw.ReportProgress(100, L.Get("Ota.P.Success"));
+                Step(bw, 100, L.Get("Ota.P.Success"));
                 e.Result = true;
             }
             finally
@@ -443,11 +576,11 @@ namespace ConfigAppNS
         {
             if (ProbeOtaEnumerated())
             {
-                bw.ReportProgress(5, L.Get("Ota.P.OtaFound"));
+                Step(bw, 5, L.Get("Ota.P.OtaFound"));
                 return;
             }
 
-            bw.ReportProgress(3, L.Get("Ota.P.TryEnterOta"));
+            Step(bw, 3, L.Get("Ota.P.TryEnterOta"));
             bool sent = false;
             int[] vids = new int[] {
                 (int)DeviceType.DDR_KBS_VID,
@@ -474,27 +607,33 @@ namespace ConfigAppNS
                         // APP config channel still uses control transfer — OK here
                         usb.USBLib_DeviceCtrlOutput(0, reportId, reportSize, pkt);
                         sent = true;
+                        DebugLog.Log("OTA: SET_OTA sent to VID {0:X4} PID {1:X4}: {2}", vid, pid, DebugLog.Hex(pkt, 0, 4));
                         usb.USBLib_Disconnect();
                         break;
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        DebugLog.Log("OTA: SET_OTA to VID {0:X4} PID {1:X4} failed: {2}", vid, pid, ex.Message);
+                    }
                 }
                 if (sent) break;
             }
 
             if (!sent)
-                bw.ReportProgress(4, L.Get("Ota.P.NoApp"));
+                Step(bw, 4, L.Get("Ota.P.NoApp"));
 
             for (int i = 0; i < 40; i++)
             {
                 Thread.Sleep(250);
                 if (ProbeOtaEnumerated())
                 {
-                    bw.ReportProgress(6, L.Get("Ota.P.OtaConnected"));
+                    Step(bw, 6, L.Get("Ota.P.OtaConnected") + " (" + ((i + 1) * 250) + " ms)");
                     return;
                 }
                 bw.ReportProgress(4 + (i % 3), L.F("Ota.P.Waiting", i + 1, 40));
             }
+            DebugLog.Log("OTA: bootloader {0:X4}:{1:X4} did not enumerate within 10 s (SET_OTA sent={2})",
+                (int)DeviceType.HID_OTA_VID, (int)DeviceType.HID_OTA_PID, sent);
             throw new Exception(L.Get("Ota.E.Timeout"));
         }
 

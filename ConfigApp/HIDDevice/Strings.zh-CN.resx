@@ -430,6 +430,8 @@
 文件: {0}
 大小: {1} 字节
 地址: 0x{2}
+文件固件: {3}
+板子当前: {4}
 
 请注意：
 · 升级中请勿拔 USB、勿关机、勿关闭本窗口
@@ -454,7 +456,7 @@
     <value>升级完成</value>
   </data>
   <data name="Ota.Success" xml:space="preserve">
-    <value>固件升级成功！设备已跳转运行新固件。</value>
+    <value>固件已写入并已让板子跳转运行。关闭本窗口后会自动核对板子上报的固件版本是否与文件一致。</value>
   </data>
   <data name="Ota.P.Detect" xml:space="preserve">
     <value>检测设备…</value>
@@ -551,5 +553,70 @@
   </data>
   <data name="Ver.Tag.HVerUnknown" xml:space="preserve">
     <value> [HVer 未知]</value>
+  </data>
+  <data name="Ota.FileVer" xml:space="preserve">
+    <value>文件固件: {0}（{1}）</value>
+  </data>
+  <data name="Ota.FileVerUnknown" xml:space="preserve">
+    <value>文件固件: 未知（0x215E/0x216A 处没有版本常量）</value>
+  </data>
+  <data name="Ota.BoardVer" xml:space="preserve">
+    <value>{0}（{1}）</value>
+  </data>
+  <data name="Ota.BoardVerUnknown" xml:space="preserve">
+    <value>未知（未读到）</value>
+  </data>
+  <data name="Ota.Kind5" xml:space="preserve">
+    <value>PADUEX5 五键</value>
+  </data>
+  <data name="Ota.Kind4" xml:space="preserve">
+    <value>PADUEX4 四键</value>
+  </data>
+  <data name="Ota.KindUnknown" xml:space="preserve">
+    <value>HVer 0x{0:X2}</value>
+  </data>
+  <data name="Ota.NoVersionInFile" xml:space="preserve">
+    <value>该文件里没有可识别的 PADUEX 版本常量，升级后无法核对结果。</value>
+  </data>
+  <data name="Ota.NoVersionConfirm" xml:space="preserve">
+    <value>所选文件里没有 PADUEX5 / PADUEX4 的版本常量（偏移 0x215E / 0x2164 / 0x216A），可能不是本板子的固件。
+
+仍要刷写吗？</value>
+  </data>
+  <data name="Ota.HVerMismatch" xml:space="preserve">
+    <value>所选文件是 {0} 固件，而当前板子上报的是 {1}。
+
+四键板刷五键固件会让 K5 悬空误触发；五键板刷四键固件 K5 永远无效。
+
+仍要刷写吗？</value>
+  </data>
+  <data name="Ota.Downgrade" xml:space="preserve">
+    <value>所选文件是固件 {0}，比板子当前的 {1} 旧。
+
+仍要刷回旧版本吗？</value>
+  </data>
+  <data name="Ota.SameVersion" xml:space="preserve">
+    <value>板子当前已是固件 {0}，与文件版本相同。升级后将无法通过版本号判断是否真的写入。
+
+仍要刷写吗？</value>
+  </data>
+  <data name="Ota.E.DataWrite" xml:space="preserve">
+    <value>数据包发送失败（第 {0} 块，块内偏移 {1}）</value>
+  </data>
+  <data name="Ota.VerifyNoDevice" xml:space="preserve">
+    <value>升级流程已结束，但 {0} 秒内板子没有以 PADUEX 设备重新连接。请拔插 USB 后查看左上角的固件版本。</value>
+  </data>
+  <data name="Ota.VerifyOk" xml:space="preserve">
+    <value>升级已核对：板子现在上报固件 {0}，与文件一致。</value>
+  </data>
+  <data name="Ota.VerifyMismatch" xml:space="preserve">
+    <value>固件版本未变：文件是 {0}，板子仍上报 {1}，升级可能未写入。
+
+请确认选的是新发布目录里的 .bin 文件后重新升级。详情见 PADUEX5.log。</value>
+  </data>
+  <data name="Cfg.SensiOldFwConfirm" xml:space="preserve">
+    <value>当前固件 {0} 不会保存灵敏度，每次上电都恢复 200。请先点「固件升级」升级到 V3.2。
+
+仍要写入吗？写入的值在拔掉 USB 前有效。</value>
   </data>
 </root>
