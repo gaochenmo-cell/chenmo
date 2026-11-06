@@ -284,13 +284,13 @@
     <value>未读到设备版本——点击「读取模式」重试。</value>
   </data>
   <data name="Ver.Tag.Paduex5_17" xml:space="preserve">
-    <value> (旧版五键固件，建议升级 V3.0)</value>
+    <value> (旧版五键固件，建议升级 V3.1)</value>
   </data>
   <data name="Ver.Tag.Paduex4_10" xml:space="preserve">
-    <value> (旧版四键固件，建议升级 V3.0)</value>
+    <value> (旧版四键固件，建议升级 V3.1)</value>
   </data>
   <data name="Ver.Tag.Stock212" xml:space="preserve">
-    <value> (原厂 V2.12/V2.13，建议升级 V3.0)</value>
+    <value> (原厂 V2.12/V2.13，建议升级 V3.1)</value>
   </data>
   <data name="Ver.Tag.Board5" xml:space="preserve">
     <value> (PADUEX5 五键)</value>
@@ -298,11 +298,26 @@
   <data name="Ver.Tag.Board4" xml:space="preserve">
     <value> (PADUEX4 四键)</value>
   </data>
+  <data name="Ver.Tag.UpgradeSensi" xml:space="preserve">
+    <value>，建议升级 V3.1（灵敏度不掉电保存）</value>
+  </data>
+  <data name="Cfg.WriteOkVerified" xml:space="preserve">
+    <value>保存完成，已从设备回读核对一致。</value>
+  </data>
+  <data name="Cfg.WriteOkSensiVolatile" xml:space="preserve">
+    <value>保存完成（已回读核对），但固件 {0} 只把灵敏度写进 RAM，拔掉 USB 后会恢复出厂值。请把固件升级到 V3.1。</value>
+  </data>
+  <data name="Cfg.WriteNotApplied" xml:space="preserve">
+    <value>保存未生效（{0}）。报文详情见 PADUEX5.log。</value>
+  </data>
+  <data name="Cfg.VerifyReadFail" xml:space="preserve">
+    <value>保存后回读失败</value>
+  </data>
+  <data name="Cfg.VerifyMismatch" xml:space="preserve">
+    <value>K{0}-{1}：写入 {2}，设备回读 {3}</value>
+  </data>
   <data name="Cfg.ReadOk" xml:space="preserve">
     <value>读取完成。</value>
-  </data>
-  <data name="Cfg.WriteOk" xml:space="preserve">
-    <value>保存完成。</value>
   </data>
   <data name="Cfg.ReadCsError" xml:space="preserve">
     <value>读取配置校验错误（{0}, {1}）。</value>
@@ -318,9 +333,9 @@
   </data>
   <data name="Ota.Tips" xml:space="preserve">
     <value>操作提示：
-1. 五键机选择 PADUEX5_V3.0.bin，四键机选择 PADUEX4_V3.0.bin
+1. 五键机选择 PADUEX5_V3.1.bin，四键机选择 PADUEX4_V3.1.bin
 2. 保持 USB 连接，升级中勿拔线、勿关机、勿关闭本窗口
-3. 失败留在 Bootloader 可重试；ISP 请用 PADUEX5_V3.0.bin / PADUEX4_V3.0.bin 或官方 V2.13</value>
+3. 失败留在 Bootloader 可重试；ISP 请用 PADUEX5_V3.1.bin / PADUEX4_V3.1.bin 或官方 V2.13</value>
   </data>
   <data name="Ota.Addr" xml:space="preserve">
     <value>APP 地址: 0x{0}</value>
@@ -362,7 +377,7 @@
     <value>此固件比原厂镜像长（{0} &gt; {1} 字节）。
 
 本窗口 OTA 会整包写入，一般可用。
-若改用厂家 ISP/IPS：请刷 PADUEX5_V3.0.bin / PADUEX4_V3.0.bin 或官方 V2.13，地址 0x08004000，否则可能截断末尾导致 USB 无法识别。</value>
+若改用厂家 ISP/IPS：请刷 PADUEX5_V3.1.bin / PADUEX4_V3.1.bin 或官方 V2.13，地址 0x08004000，否则可能截断末尾导致 USB 无法识别。</value>
   </data>
   <data name="Ota.SizeWarnTitle" xml:space="preserve">
     <value>PADUEX5 体积提示</value>
@@ -383,7 +398,7 @@
     <value>固件复位向量不在 APP 区 (0x08004000~0x0800F800)，已拒绝以防变砖。</value>
   </data>
   <data name="Ota.V.BadUsbVector" xml:space="preserve">
-    <value>该固件的 USB 中断向量(0x14C)已被覆盖，已拒绝。请改用 PADUEX5_V3.0.bin / PADUEX4_V3.0.bin 或官方 V2.13。</value>
+    <value>该固件的 USB 中断向量(0x14C)已被覆盖，已拒绝。请改用 PADUEX5_V3.1.bin / PADUEX4_V3.1.bin 或官方 V2.13。</value>
   </data>
   <data name="Ota.SelectFirst" xml:space="preserve">
     <value>请先选择固件文件。</value>
@@ -398,7 +413,7 @@
 请注意：
 · 升级中请勿拔 USB、勿关机、勿关闭本窗口
 · 写完并 CRC 通过后才会跳转；失败则留在 Bootloader，可重试
-· 五键机刷 PADUEX5_V3.0.bin，四键机刷 PADUEX4_V3.0.bin
+· 五键机刷 PADUEX5_V3.1.bin，四键机刷 PADUEX4_V3.1.bin
 
 确认开始？</value>
   </data>

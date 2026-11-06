@@ -64,7 +64,8 @@ namespace ConfigAppNS
         }
 
         // Known firmware versions:
-        //   3.0  current release (HVer 0x13 = 5-key PADUEX5, 0x14 = 4-key PADUEX4)
+        //   3.1  current release (HVer 0x13 = 5-key PADUEX5, 0x14 = 4-key PADUEX4)
+        //   3.0  first V3 release; SET_SENS(sensitivity) only reached RAM, lost on power cycle
         //   2.17 previous 5-key image, 2.18 previous 4-key image
         //   2.12 stock V2.12 / V2.13 (stock never bumped its minor constant)
         // Anything else is shown as-is. UID / HVer mismatches are annotated, never rejected.
@@ -76,6 +77,7 @@ namespace ConfigAppNS
             {
                 if (mDevHVer == DeviceProtocol.HVER_4KEY) tag = L.Get("Ver.Tag.Board4");
                 else if (mDevHVer == DeviceProtocol.HVER_5KEY) tag = L.Get("Ver.Tag.Board5");
+                if (!FwPersistsSensitivity()) tag += L.Get("Ver.Tag.UpgradeSensi");
             }
             else if (mFwMajor == 2 && mFwMinor == 17) tag = L.Get("Ver.Tag.Paduex5_17");
             else if (mFwMajor == 2 && mFwMinor == 18) tag = L.Get("Ver.Tag.Paduex4_10");
@@ -87,6 +89,15 @@ namespace ConfigAppNS
         private bool FwHasKeyMap()
         {
             return mFwValid && (mFwMajor >= 3 || (mFwMajor == 2 && mFwMinor >= 17));
+        }
+        /// <summary>
+        /// Stock V2.13 and every image up to V3.0 write the colour and debounce tables to
+        /// flash on SET_SENS but keep the sensitivity table in RAM only, so it reverts to
+        /// the built-in 800 after a power cycle. V3.1 persists all three tables.
+        /// </summary>
+        private bool FwPersistsSensitivity()
+        {
+            return mFwValid && (mFwMajor > 3 || (mFwMajor == 3 && mFwMinor >= 1));
         }
 
         private void ResetDeviceVersion()
@@ -2427,6 +2438,15 @@ namespace ConfigAppNS
 
         private byte Read_Config_Value(byte ConfigType, int[] ConfigOut, int Len)
         {
+            return Read_Config_Core(ConfigType, ConfigOut, Len, false);
+        }
+
+        /// <summary>
+        /// GET_SENS. With <paramref name="quiet"/> nothing is shown to the user (used for the
+        /// read-back check after a save); the outcome still goes to the log.
+        /// </summary>
+        private byte Read_Config_Core(byte ConfigType, int[] ConfigOut, int Len, bool quiet)
+        {
             //-------------------------------------------------------------------------------------------
             byte index = 0;
             byte ReportIndex = 0x00;
@@ -2479,14 +2499,15 @@ namespace ConfigAppNS
                     {
                         ConfigOut[ConfigOutIndex + i] = ((InputReportBuf[ReportIndex + SyncLen + (i * 2 + 0)] << 8) | (InputReportBuf[ReportIndex + SyncLen + (i * 2 + 1)]));
                     }
-                    DebugLog.Log("GET_SENS type {0:X2}: OK crc={1:X2}", ConfigType, CS);
+                    DebugLog.Log("GET_SENS type {0:X2}: OK crc={1:X2} values={2}", ConfigType, CS, ValuesText(ConfigOut, Len));
                     if ((ConfigType & 0x0F) == 0x01 && ConfigOut == ColorBuffer)
                         MarkAllPadLedKnown(true);   // pad highlight now follows the board's LED colours
                 }
                 else
                 {
                     DebugLog.Log("GET_SENS type {0:X2}: CRC error calc={1:X2} got={2:X2}", ConfigType, CS, InputReportBuf[ReportIndex + PktLen - 1]);
-                    MessageBox.Show(L.F("Cfg.ReadCsError", CS.ToString("X02"), InputReportBuf[ReportIndex + PktLen - 1].ToString("X02")), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    if (!quiet)
+                        MessageBox.Show(L.F("Cfg.ReadCsError", CS.ToString("X02"), InputReportBuf[ReportIndex + PktLen - 1].ToString("X02")), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return 0;
                 }
                 //---------------------------------------------------------------------------------------
@@ -2498,13 +2519,53 @@ namespace ConfigAppNS
                            : kind == ReplyKind.NoData ? L.Get("Ver.Fail.HidRead")
                            : kind == ReplyKind.Empty ? L.Get("Ver.Fail.NoReply")
                            : HexHead(InputReportBuf, ReportIndex, 5);
-                MessageBox.Show(L.F("Cfg.ReadError", why), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
+                if (!quiet)
+                    MessageBox.Show(L.F("Cfg.ReadError", why), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return 0;
             }
             //-------------------------------------------------------------------------------------------
-            MessageBox.Show(L.Get("Cfg.ReadOk"), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+            if (!quiet)
+                MessageBox.Show(L.Get("Cfg.ReadOk"), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
             return 1;
             //-------------------------------------------------------------------------------------------
+        }
+
+        private static string ValuesText(int[] values, int len)
+        {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < len && i < values.Length; i++)
+            {
+                if (i > 0) sb.Append(i % SENSORS_PER_KEY == 0 ? " | " : " ");
+                sb.Append(values[i]);
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Read the table back right after a SET_SENS and compare it with what was sent.
+        /// Returns null when every value matches, otherwise a short description of the first
+        /// difference (key / sensor, sent, read). A failed read-back is reported as well.
+        /// </summary>
+        private string Verify_Config_Written(byte ConfigType, int[] Sent, int Len)
+        {
+            int[] back = new int[CONFIG_VALUE_COUNT];
+            Thread.Sleep(50);
+            if (Read_Config_Core(ConfigType, back, Len, true) == 0)
+            {
+                DebugLog.Log("VERIFY type {0:X2}: read-back failed", ConfigType);
+                return L.Get("Cfg.VerifyReadFail");
+            }
+            for (int i = 0; i < Len; i++)
+            {
+                if (back[i] != Sent[i])
+                {
+                    DebugLog.Log("VERIFY type {0:X2}: MISMATCH at [{1}] sent={2} read={3}; sent={4}; read={5}",
+                        ConfigType, i, Sent[i], back[i], ValuesText(Sent, Len), ValuesText(back, Len));
+                    return L.F("Cfg.VerifyMismatch", i / SENSORS_PER_KEY + 1, (char)('A' + i % SENSORS_PER_KEY), Sent[i], back[i]);
+                }
+            }
+            DebugLog.Log("VERIFY type {0:X2}: read-back matches", ConfigType);
+            return null;
         }
 
         /// =============================================================================================
@@ -2545,6 +2606,8 @@ namespace ConfigAppNS
             Txd_CS = USBCtrl.UPDATE_CRC(0,SendByteBuf, index);
             SendByteBuf[index++] = Txd_CS;
             //-------------------------------------------------------------------------------------------
+            DebugLog.Log("SET_SENS type {0:X2}: values={1} fw={2}", ConfigType, ValuesText(ConfigOut, Len),
+                mFwValid ? FwVersionText() : "?");
             ReplyKind kind = Transact("SET_SENS type " + ConfigType.ToString("X2"), SendByteBuf, index,
                 DeviceProtocol.CMD_SET_SENS, 100, InputReportBuf);
             //-------------------------------------------------------------------------------------------
@@ -2563,7 +2626,30 @@ namespace ConfigAppNS
                 return 0;
             }
             //-------------------------------------------------------------------------------------------
-            MessageBox.Show(L.Get("Cfg.WriteOk"), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+            // The ACK only says the packet was accepted. Read the table back and compare, so a
+            // save that did not take effect is visible immediately instead of after a re-plug.
+            string verify = Verify_Config_Written(ConfigType, ConfigOut, Len);
+            if (verify != null)
+            {
+                MessageBox.Show(L.F("Cfg.WriteNotApplied", verify), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return 0;
+            }
+            //-------------------------------------------------------------------------------------------
+            // Up to V3.0 the firmware keeps the sensitivity table in RAM only (colour and debounce
+            // are written to flash); say so, otherwise the user discovers it at the next power-up.
+            if ((ConfigType & 0x0F) == 0x00 && !FwPersistsSensitivity())
+            {
+                if (!mFwValid) ReadDeviceMode();
+                if (!FwPersistsSensitivity())
+                {
+                    DebugLog.Log("SET_SENS type 00: firmware {0} does not persist sensitivity (needs V3.1)",
+                        mFwValid ? FwVersionText() : "?");
+                    MessageBox.Show(L.F("Cfg.WriteOkSensiVolatile", mFwValid ? FwVersionText() : "?"),
+                        L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return 1;
+                }
+            }
+            MessageBox.Show(L.Get("Cfg.WriteOkVerified"), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
             return 1;
             //-------------------------------------------------------------------------------------------
         }
