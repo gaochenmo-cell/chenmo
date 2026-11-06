@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Build PADUEX4_V3.0.bin (4-key board: same 5KEY_2P PCB with only K1..K4 populated).
+Build PADUEX4_V3.1.bin (4-key board: same 5KEY_2P PCB with only K1..K4 populated).
 
-Base   : PADUEX5_V3.0.bin
+Base   : PADUEX5_V3.1.bin
 Patches: two bytes, no code moves, no new code.
 
   1. 0x08006BE2  cmp r4, #0x24  ->  cmp r4, #0x10
@@ -17,10 +17,10 @@ Patches: two bytes, no code moves, no new code.
   2. 0x0800615E  movs r1, #0x13  ->  movs r1, #0x14
      HVer byte of the GET_MODE reply. The constant is only used to build that reply,
      so it is a safe place to tell the host which board variant it is talking to:
-     0x13 = 5-key, 0x14 = 4-key. Both images report FW version 3.0.
+     0x13 = 5-key, 0x14 = 4-key. Both images report FW version 3.1.
 
 Everything else (vector table, boot, USB commands, flash code, Report_Normal remap,
-SendPacket timeouts) is byte-identical to PADUEX5_V3.0. The build asserts the diff
+SET_SENS persistence, SendPacket timeouts) is byte-identical to PADUEX5_V3.1. The build asserts the diff
 set, 0x14C == 0x080084A5 and size 37072.
 """
 from __future__ import annotations
@@ -67,11 +67,11 @@ def bl_target(buf: bytearray, addr: int) -> int:
 
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
-    src = (root / "PADUEX5_V3.0.bin").read_bytes()
+    src = (root / "PADUEX5_V3.1.bin").read_bytes()
     buf = bytearray(src)
     assert len(buf) == SIZE, len(buf)
 
-    # Pre-checks: this really is PADUEX5_V3.0 and the scan loop looks like we expect
+    # Pre-checks: this really is PADUEX5_V3.1 and the scan loop looks like we expect
     assert struct.unpack_from("<I", buf, USB_VECTOR_OFF)[0] == USB_VECTOR
     assert buf[off(SCAN_FN):off(SCAN_FN) + 4] == bytes.fromhex("2de9f843"), "scan fn push.w"
     assert buf[off(SCAN_LIMIT_SITE):off(SCAN_LIMIT_SITE) + 2] == bytes([SCAN_LIMIT_OLD, 0x2C]), "cmp r4,#0x24"
@@ -81,7 +81,7 @@ def main() -> int:
         assert bl_target(buf, site) == SETKEYBIT_FN, hex(site)
     assert buf[off(HVER_SITE):off(HVER_SITE) + 2] == bytes([HVER_5KEY, 0x21]), "movs r1,#0x13"
     assert buf[off(FW_MAJOR_SITE):off(FW_MAJOR_SITE) + 2] == bytes([3, 0x21]), "movs r1,#3"
-    assert buf[off(FW_MINOR_SITE):off(FW_MINOR_SITE) + 2] == bytes([0, 0x21]), "movs r1,#0"
+    assert buf[off(FW_MINOR_SITE):off(FW_MINOR_SITE) + 2] == bytes([1, 0x21]), "movs r1,#1"
 
     buf[off(SCAN_LIMIT_SITE)] = SCAN_LIMIT_NEW
     buf[off(HVER_SITE)] = HVER_4KEY
@@ -93,15 +93,15 @@ def main() -> int:
     diffs = [BASE + i for i, (a, b) in enumerate(zip(src, buf)) if a != b]
     assert diffs == [HVER_SITE, SCAN_LIMIT_SITE], [hex(d) for d in diffs]
 
-    prev = root / "legacy" / "paduex4_1.0.bin"
+    prev = root / "legacy" / "PADUEX4_V3.0.bin"
     if prev.exists():
         pd = [BASE + i for i, (a, b) in enumerate(zip(prev.read_bytes(), buf)) if a != b]
-        assert pd == [HVER_SITE, FW_MAJOR_SITE, FW_MINOR_SITE], [hex(d) for d in pd]
-        print("diff vs paduex4_1.0: HVer + version bytes only")
+        assert all(0x08004BD8 <= d < 0x08004C04 or d == FW_MINOR_SITE for d in pd), [hex(d) for d in pd]
+        print("diff vs PADUEX4_V3.0: SET_SENS persistence + FW minor only")
 
-    dst = root / "PADUEX4_V3.0.bin"
+    dst = root / "PADUEX4_V3.1.bin"
     dst.write_bytes(buf)
-    print(f"diff vs PADUEX5_V3.0: {len(diffs)} bytes at {', '.join(hex(d) for d in diffs)}")
+    print(f"diff vs PADUEX5_V3.1: {len(diffs)} bytes at {', '.join(hex(d) for d in diffs)}")
     print(f"wrote {dst} ({len(buf)} bytes), 0x14C = {struct.unpack_from('<I', buf, USB_VECTOR_OFF)[0]:#010x}")
 
     md = Cs(CS_ARCH_ARM, CS_MODE_THUMB)

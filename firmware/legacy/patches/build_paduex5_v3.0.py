@@ -2,7 +2,7 @@
 """
 Build PADUEX5_V3.0.bin (5-key board).
 
-Base   : legacy/paduex5_1.6.bin = stock 5KEY_2P_V2.13.bin + bounded SendPacket wait
+Base   : paduex5_1.6.bin (same directory) = stock 5KEY_2P_V2.13.bin + bounded SendPacket wait
 Patches:
   1. Report_Normal keyboard remap (0x08005D72..0x08005DCA, 88 bytes).
      The firmware only reads AppUser.Color[key*4] for the LED colour; Color[key*4+1]
@@ -132,7 +132,7 @@ def build_remap() -> bytearray:
 
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
-    src = (root / "legacy" / "paduex5_1.6.bin").read_bytes()
+    src = (root / "paduex5_1.6.bin").read_bytes()
     buf = bytearray(src)
     assert len(buf) == SIZE
 
@@ -161,7 +161,7 @@ def main() -> int:
         assert LOOKUP <= va < CHAIN1P_END or va in (FW_MAJOR_SITE, FW_MINOR_SITE), hex(va)
     print(f"diff vs paduex5_1.6: {len(diffs)} bytes, all inside {LOOKUP:#x}..{CHAIN1P_END:#x} + version bytes")
 
-    prev = root / "legacy" / "paduex5_1.7.bin"
+    prev = root / "paduex5_1.7.bin"
     if prev.exists():
         pd = [BASE + i for i, (a, b) in enumerate(zip(prev.read_bytes(), buf)) if a != b]
         assert pd == [FW_MAJOR_SITE, FW_MINOR_SITE], [hex(d) for d in pd]

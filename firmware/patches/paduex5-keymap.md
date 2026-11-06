@@ -1,6 +1,6 @@
 # 键盘模式改键（不加命令、不加 Flash 代码、不动向量表）
 
-适用：`PADUEX5_V3.0.bin`、`PADUEX4_V3.0.bin`（以及旧版 paduex5_1.7 / paduex4_1.0）。
+适用：`PADUEX5_V3.1.bin`、`PADUEX4_V3.1.bin`（以及 V3.0 与旧版 paduex5_1.7 / paduex4_1.0）。
 
 ## 思路
 
@@ -64,14 +64,14 @@ tab_2p: 0B 0E 0D 11 10 14 08 1D 06 55
 
 GET_MODE 回包 `47 mode A2 HVer FWmajor FWminor` 在 `0x08006148` 组装，四个常量都是独立的 `movs` 立即数：
 
-| 地址 | 原厂 V2.13 | V3.0 | 含义 |
+| 地址 | 原厂 V2.13 | V3.0 / V3.1 | 含义 |
 |---|---|---|---|
 | `0x0800615E` | `movs r1,#0x13` | 五键 `0x13`，四键 `0x14` | HVer |
 | `0x08006164` | `movs r1,#2` | `movs r1,#3` | FW major |
-| `0x0800616A` | `movs r1,#12` | `movs r1,#0` | FW minor |
+| `0x0800616A` | `movs r1,#12` | `movs r1,#0` / `movs r1,#1` | FW minor |
 
 原厂 2.12 / 2.13 的 bin 里 minor 常量都是 12，所以原厂固件上位机一律显示 `2.12`。
-旧版 paduex5_1.7 / paduex4_1.0 分别上报 2.17 / 2.18；V3.0 两款都上报 3.0，由 HVer 区分五键 / 四键。
+旧版 paduex5_1.7 / paduex4_1.0 分别上报 2.17 / 2.18；V3.0 两款都上报 3.0、V3.1 上报 3.1，由 HVer 区分五键 / 四键。
 `firmware/tests/emu_get_mode.py` 跑真实的 USB 命令分发函数验证回包。
 
 ## 已知限制
