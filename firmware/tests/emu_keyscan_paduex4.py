@@ -8,8 +8,8 @@ handed to the USB report builders.
 Used to validate PADUEX4 images (fifth key never reported) and to show that
 keys 0..3 behave exactly as on the 5-key image.
 
-  python3 firmware/tests/emu_keyscan_paduex4.py firmware/PADUEX4_V3.1.bin     # expect 4-key behaviour
-  python3 firmware/tests/emu_keyscan_paduex4.py firmware/PADUEX5_V3.1.bin    # control: K5 must still report
+  python3 firmware/tests/emu_keyscan_paduex4.py firmware/PADUEX4_V3.2.bin     # expect 4-key behaviour
+  python3 firmware/tests/emu_keyscan_paduex4.py firmware/PADUEX5_V3.2.bin    # control: K5 must still report
 
 Only printf, the USB packet senders and the LED driver are stubbed (they touch
 peripherals); the scan loop, SetKeyBit, the debounce helper and the dispatcher
@@ -90,7 +90,7 @@ class Board:
 
 
 def main() -> int:
-    img_path = Path(sys.argv[1] if len(sys.argv) > 1 else "firmware/PADUEX4_V3.1.bin")
+    img_path = Path(sys.argv[1] if len(sys.argv) > 1 else "firmware/PADUEX4_V3.2.bin")
     img = img_path.read_bytes()
     four_key = "paduex4" in img_path.name.lower() or "4key" in img_path.name.lower()
     fails = 0

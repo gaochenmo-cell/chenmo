@@ -2,7 +2,7 @@
 """
 Build PADUEX5_V3.1.bin (5-key board).
 
-Base   : legacy/PADUEX5_V3.0.bin
+Base   : PADUEX5_V3.0.bin (same directory)
 Patches:
   1. SET_SENS persistence (0x08004BD8..0x08004C04, 44 bytes, in place).
      The stock SET_SENS handler (App_Config_Command_Report) copies the 20 values
@@ -120,7 +120,7 @@ def build_persist() -> bytes:
 
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
-    src = (root / "legacy" / "PADUEX5_V3.0.bin").read_bytes()
+    src = (root / "PADUEX5_V3.0.bin").read_bytes()
     buf = bytearray(src)
     assert len(buf) == SIZE
 

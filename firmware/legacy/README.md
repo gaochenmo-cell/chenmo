@@ -1,10 +1,12 @@
 # 旧版固件归档
 
-V3.1 之前的镜像、构建脚本和分析文档。日常只需要上一级目录的 `PADUEX5_V3.1.bin` / `PADUEX4_V3.1.bin`。
+V3.2 之前的镜像、构建脚本和分析文档。日常只需要上一级目录的 `PADUEX5_V3.2.bin` / `PADUEX4_V3.2.bin`。
 
 | 文件 | 上报版本 | 说明 |
 |---|---|---|
-| `PADUEX5_V3.0.bin` | V3.0 | V3.1 五键版的前身，是 `build_paduex5_v3.1.py` 的输入；灵敏度 `SET_SENS` 只写 RAM，拔插后恢复 800 |
+| `PADUEX5_V3.1.bin` | V3.1 | V3.2 五键版的前身，是 `build_paduex5_v3.2.py` 的输入；`SET_SENS` 已把灵敏度页写进 Flash，但上电初始化 `0x080064DE..0x080064F4` 又把表填成 200，拔插后仍是 200 |
+| `PADUEX4_V3.1.bin` | V3.1 | V3.1 四键版，同样上电重置灵敏度 |
+| `PADUEX5_V3.0.bin` | V3.0 | V3.1 五键版的前身，是 `patches/build_paduex5_v3.1.py` 的输入；灵敏度 `SET_SENS` 只写 RAM，拔插后恢复 200 |
 | `PADUEX4_V3.0.bin` | V3.0 | V3.1 四键版的前身，同样不保存灵敏度 |
 | `paduex5_1.7.bin` | 2.17 | V3.0 五键版的前身，与 `PADUEX5_V3.0.bin` 仅版本字节（`0x08006164`、`0x0800616A`）不同 |
 | `paduex4_1.0.bin` | 2.18 | V3.0 四键版的前身，与 `PADUEX4_V3.0.bin` 仅版本字节与 HVer 字节（`0x0800615E`）不同 |

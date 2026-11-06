@@ -14,7 +14,7 @@
 
 第二段循环的边界是 `0x08006BE2: cmp r4, #0x24`（36）。五键板只用 0～19，20～35 本来就不存在。
 
-## 补丁（相对同版本的五键镜像，V3.0 起；V3.1 为 `build_paduex4_v3.1.py`）
+## 补丁（相对同版本的五键镜像，V3.0 起；V3.2 为 `build_paduex4_v3.2.py`）
 
 | 地址 | 原 | 新 | 作用 |
 |---|---|---|---|
@@ -26,7 +26,7 @@
 向量表、启动、USB 命令、Flash 读写、`Report_Normal` 改键、`SendPacket` 有界等待、灵敏度掉电保存全部与同版本的 `PADUEX5_V3.x.bin` 相同。
 HVer 常量只在组装 GET_MODE 回包时使用，固件其它逻辑不读它。
 
-`build_paduex4_v3.1.py` 以 `PADUEX5_V3.1.bin` 为输入（V3.0 版脚本在 `legacy/patches/`），断言：输入是对应的五键镜像（扫描函数入口、循环边界、两处 `bl SetKeyBit`、HVer 与版本字节）、
+`build_paduex4_v3.2.py` 以 `PADUEX5_V3.2.bin` 为输入（V3.0 / V3.1 版脚本在 `legacy/patches/`），断言：输入是对应的五键镜像（扫描函数入口、循环边界、两处 `bl SetKeyBit`、HVer 与版本字节）、
 输出体积 37072、`0x14C == 0x080084A5`、前 0x200 字节不变、差异恰好就是上面两个地址。
 
 ## 验证（Unicorn，跑镜像里的真实代码）
@@ -36,19 +36,19 @@ HVer 常量只在组装 GET_MODE 回包时使用，固件其它逻辑不读它�
 
 ```bash
 python3 firmware/patches/build_paduex4_v3.0.py
-python3 firmware/tests/emu_keyscan_paduex4.py firmware/PADUEX4_V3.1.bin   # 52/52：K1～K4 正常，K5 永不上报
-python3 firmware/tests/emu_keyscan_paduex4.py firmware/PADUEX5_V3.1.bin   # 对照组 52/52：五键镜像上 K5 能触发
-python3 firmware/tests/emu_report_normal.py firmware/PADUEX4_V3.1.bin     # 25/25 改键逻辑未受影响
-python3 firmware/tests/emu_keymap_e2e.py firmware/PADUEX4_V3.1.bin        # 21/21 改键存 Flash / 重启链路未受影响
-python3 firmware/tests/emu_get_mode.py firmware/PADUEX4_V3.1.bin          # 回包 47 mode A2 14 03 01
+python3 firmware/tests/emu_keyscan_paduex4.py firmware/PADUEX4_V3.2.bin   # 52/52：K1～K4 正常，K5 永不上报
+python3 firmware/tests/emu_keyscan_paduex4.py firmware/PADUEX5_V3.2.bin   # 对照组 52/52：五键镜像上 K5 能触发
+python3 firmware/tests/emu_report_normal.py firmware/PADUEX4_V3.2.bin     # 25/25 改键逻辑未受影响
+python3 firmware/tests/emu_keymap_e2e.py firmware/PADUEX4_V3.2.bin        # 21/21 改键存 Flash / 重启链路未受影响
+python3 firmware/tests/emu_get_mode.py firmware/PADUEX4_V3.2.bin          # 回包 47 mode A2 14 03 02
 ```
 
 ## 不刷这个固件会怎样
 
 第五个孔没插板时，K5 的 ADC 输入悬空 / 被上下拉固定，通常读数低于默认阈值 200，不会触发。
-若真机上发现 K5 误触发（悬空噪声），刷 `PADUEX4_V3.1.bin`，或暂时用 `KEYCOUNT=5` 的界面把 K5 四路灵敏度设到 4095。
+若真机上发现 K5 误触发（悬空噪声），刷 `PADUEX4_V3.2.bin`，或暂时用 `KEYCOUNT=5` 的界面把 K5 四路灵敏度设到 4095。
 
 ## 已知限制
 
 - 四键模式下方向与 K1～K4 的对应关系：K1=↑、K2=←、K3=→、K4=↓（真机实测）；只影响上位机显示，不影响固件。
-- 刷回五键板请用 `PADUEX5_V3.1.bin`，`PADUEX4_V3.1.bin` 上 K5 永远无效。
+- 刷回五键板请用 `PADUEX5_V3.2.bin`，`PADUEX4_V3.2.bin` 上 K5 永远无效。

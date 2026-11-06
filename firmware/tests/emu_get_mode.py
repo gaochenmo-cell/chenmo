@@ -8,8 +8,10 @@ its shared reply buffer (AppUser + 0x11E):
 
 Expected per image (given on the command line, defaults below):
 
-    PADUEX5_V3.1.bin   -> HVer 0x13, FW 3.1
-    PADUEX4_V3.1.bin   -> HVer 0x14, FW 3.1
+    PADUEX5_V3.2.bin   -> HVer 0x13, FW 3.2
+    PADUEX4_V3.2.bin   -> HVer 0x14, FW 3.2
+    legacy/PADUEX5_V3.1 -> HVer 0x13, FW 3.1
+    legacy/PADUEX4_V3.1 -> HVer 0x14, FW 3.1
     legacy/PADUEX5_V3.0 -> HVer 0x13, FW 3.0
     legacy/PADUEX4_V3.0 -> HVer 0x14, FW 3.0
     legacy/paduex5_1.7 -> HVer 0x13, FW 2.17
@@ -18,7 +20,7 @@ Expected per image (given on the command line, defaults below):
 
 Only printf is stubbed; the dispatcher and reply builder are the bytes from the .bin.
 
-  python3 firmware/tests/emu_get_mode.py firmware/PADUEX5_V3.1.bin 13 3 1
+  python3 firmware/tests/emu_get_mode.py firmware/PADUEX5_V3.2.bin 13 3 2
 """
 from __future__ import annotations
 
@@ -43,6 +45,8 @@ LIT_CTX = 0x080061F8             # ldr.w sb, [pc, #0x240] @ 0x08005FB4 -> ctx; A
 SCRATCH = 0x20004000
 
 EXPECT = {
+    "PADUEX5_V3.2.bin": (0x13, 3, 2),
+    "PADUEX4_V3.2.bin": (0x14, 3, 2),
     "PADUEX5_V3.1.bin": (0x13, 3, 1),
     "PADUEX4_V3.1.bin": (0x14, 3, 1),
     "PADUEX5_V3.0.bin": (0x13, 3, 0),
@@ -82,7 +86,7 @@ def get_mode(image: bytes, config_mode: int) -> bytes:
 
 
 def main() -> int:
-    img_path = Path(sys.argv[1] if len(sys.argv) > 1 else "firmware/PADUEX5_V3.1.bin")
+    img_path = Path(sys.argv[1] if len(sys.argv) > 1 else "firmware/PADUEX5_V3.2.bin")
     if len(sys.argv) >= 5:
         want = (int(sys.argv[2], 16), int(sys.argv[3]), int(sys.argv[4]))
     else:

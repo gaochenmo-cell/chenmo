@@ -1,70 +1,73 @@
-# V3.1：灵敏度掉电保存（SET_SENS type 0 写入 Flash）
+# 灵敏度掉电保存：V3.1（SET_SENS 写 Flash）+ V3.2（上电不再重置为 200）
 
-适用：`PADUEX5_V3.1.bin`、`PADUEX4_V3.1.bin`。构建脚本 `build_paduex5_v3.1.py`（输入 `legacy/PADUEX5_V3.0.bin`）、`build_paduex4_v3.1.py`（输入 `PADUEX5_V3.1.bin`）。
+适用：`PADUEX5_V3.2.bin`、`PADUEX4_V3.2.bin`。构建脚本 `build_paduex5_v3.2.py`（输入 `legacy/PADUEX5_V3.1.bin`）、`build_paduex4_v3.2.py`（输入 `PADUEX5_V3.2.bin`）。V3.1 的脚本与镜像在 `legacy/`。
 
 ## 现象
 
-上位机灵敏度页「保存」后设备立即按新阈值工作，但拔掉 USB 再插上，读回的灵敏度全部变成出厂值 800。键盘 / 手柄模式、五键 / 四键固件都复现；灯色和延迟释放不受影响。
+上位机灵敏度页「保存」后设备立即按新阈值工作，拔掉 USB 再插上，读回的灵敏度全部变回 200。键盘 / 手柄模式、五键 / 四键固件都复现；颜色（含按键映射）、延迟释放和工作模式都能保住。真机日志（V3.1 四键）：保存 `2304 3034` → ACK `57 4F 4B` → 即时回读一致 → 拔插 → `GET_SENS` 回 20 × `00 C8`。
 
-## 根因：原厂固件只把颜色、消抖写进 Flash
+## 根因有两处，原厂固件都有
 
-`App_Config_Command_Report`（`0x080049E0`）处理 `SET_SENS`（`57 'R' 'I' 'T' type …`）的流程：
+### 1. `SET_SENS` 只对颜色、消抖写 Flash（V3.1 修复）
 
-1. 校验 CRC8，不符回 `57 46 49`；
-2. 按 `type & 0x0F` 选表：1 → `Color`（`0x20001B16`），2 → `DTick`（`Color + 0x48`），其他 → `Sensi`（`Color - 0x48`），指针放在 `r7`；
-3. 把 20 个大端 u16 写进该表（RAM）；
-4. **只对 type 1 / 2 调用 `App_Set_Flash_Cofnig`**，type 0 直接跳到 ACK：
+`App_Config_Command_Report`（`0x080049E0`）校验 CRC8、把 20 个 u16 写进 RAM 表后：
 
 ```
-08004bd8  ldrb r0,[r5,#4] ; and r0,#0xf ; cmp r0,#1 ; bne 4bee
-08004be2  movs r2,#0x24 ; ldr r1,=Color ; ldr r0,=0x08010800 ; bl App_Set_Flash_Cofnig ; b 4c04
-08004bee  ldrb r0,[r5,#4] ; and r0,#0xf ; cmp r0,#2 ; bne 4c04
-08004bf8  movs r2,#0x24 ; ldr r1,=Color ; adds r1,#0x48 ; ldr r0,=0x08011000 ; bl App_Set_Flash_Cofnig
-08004c04  movs r0,#0x57 … (ACK 57 4F 4B crc type)
+08004bd8  cmp type,#1 → App_Set_Flash_Cofnig(0x08010800, Color, 36)
+08004bee  cmp type,#2 → App_Set_Flash_Cofnig(0x08011000, DTick, 36)
+其他（含 type 0 灵敏度）→ 直接回 ACK
 ```
 
-整个镜像只有这两处调用 `App_Set_Flash_Cofnig`，也没有别的代码写 `0x08010000`。上电时 `0x08006492` 处 `App_Get_Flash_Cofnig(0x08010000, Sensi, 默认表 0x0800CE94, 36)` 读 SENSI 页：页头魔数 `0xA55A` + CRC16 校验失败（页从未写过，全 `FF`）就回退到内置默认表，即 20 × 800。
+V3.1 把 `0x08004BD8..0x08004C04` 改为按 type 算页地址 `0x08010800 + (type-1)*0x800` 后统一 `bl App_Set_Flash_Cofnig(addr, r7, 36)`（r7 = 固件已选好的表指针），type 0 → `0x08010000`。页格式与原厂 type 1 / 2 完全同构：`[0]=0xA55A`、`[1..36]` 数据、`[37]=CRC16(前 74 字节)`，由同一个 `App_Set_Flash_Cofnig` 生成、同一个 `App_Get_Flash_Cofnig` 校验。
 
-页校验只看魔数和 CRC16，与 HVer / FVer 常量无关；V3.0 改 HVer、FVer、键扫描边界都没有触及这里。原厂 V2.13（`legacy/paduex5_1.6`）、paduex5_1.7、V3.0 在 Unicorn 下行为一致：`emu_set_sens.py` 在这三个镜像上都是 6 项失败，全部是 Sensi 的 Flash 写入与重启后读回。
+### 2. 上电加载后又把灵敏度表填成 200（V3.2 修复）
 
-## 补丁（`0x08004BD8..0x08004C04`，44 字节原地替换）
-
-`r7` 已经是本次 type 对应的表指针，页地址可以从 type 推出：`0x08010800 + (type - 1) * 0x800`（0 → `0x08010000`，1 → `0x08010800`，2 → `0x08011000`）。
+上电配置加载函数 `0x08006470`（`main` 调一次）：
 
 ```
-08004bd8  ldrb r0,[r5,#4]
-08004bda  and  r0,r0,#0xf
-08004bde  cmp  r0,#2
-08004be0  bhi  0x08004c04          ; 未知 type：维持原厂行为（只写 RAM）
-08004be2  subs r0,#1
-08004be4  lsls r0,r0,#11           ; (type-1)*0x800
-08004be6  ldr  r3,[pc,#0x128]      ; =0x08010800（原厂 type 1 分支用的同一个字面量 0x08004D10）
-08004be8  add  r0,r3
-08004bea  mov  r1,r7
-08004bec  movs r2,#0x24            ; 36 个半字（与原厂一致）
-08004bee  bl   App_Set_Flash_Cofnig (0x080053F0)
-08004bf2  nop × 9
-08004c04  （原厂 ACK，未改）
+08006492  App_Get_Flash_Cofnig(0x08010000, Sensi, 默认表 0x0800CE94 (36×800), 36)
+0800649e  App_Get_Flash_Cofnig(0x08010800, Color, 默认色表, 36)
+080064ac  App_Get_Flash_Cofnig(0x08011000, DTick, 默认表 3, 36)
+080064b8  打印三张表
+080064d2  AppUser+0x1DA/0x1DB = 0
+080064de  movs r4,#0 ; b 64f0
+080064e2  movs r1,#0xC8          ; 200
+080064e4  ldr  r0,=Color ; subs r0,#0x48   ; → Sensi
+080064e8  strh.w r1,[r0,r4,lsl #1]
+080064ec  adds r4,#1 ; uxtb ; cmp r4,#0x24 ; blt 64e2
+080064f4  pop {r4,pc}
 ```
 
-另把 GET_MODE 回包的 FW minor 常量 `0x0800616A` 从 0 改为 1，上报 `V3.1`。
+`0x080064DE..0x080064F4` 这个循环在加载完成**之后**无条件把 `Sensi[0..35]` 写成 200。原厂从不写 SENSI 页，所以加载永远得到默认表 800，这个循环是原厂把阈值定成 200 的方式——它也解释了为什么用户看到的"出厂值"是 200 而不是默认表里的 800，以及上位机 `DEFAULT_SENSI` 从 800 改成 200 的历史。V3.1 的页写对了（真机 WMODE、COLOR 页都保得住，同一套 `App_Set_Flash_Cofnig`），但每次上电这个循环都把刚加载的值冲掉。
 
-与 V3.0 的差异共 36 字节：`0x08004BD8..0x08004C04` 内 35 字节 + `0x0800616A`。向量表、`0x14C == 0x080084A5`、体积 37072、Flash 驱动、`App_Set_Flash_Cofnig` 本身都没有改动；没有新增 USB 命令、Flash 写入代码或 RAM 变量。四键版 `PADUEX4_V3.1.bin` 在此基础上仍只改 `0x0800615E`（HVer 0x14）和 `0x08006BE2`（扫描边界 0x10）两个字节。
+Unicorn 之前只模拟了三次 `App_Get_Flash_Cofnig`，没跑完整的 `0x08006470`，所以没看到这一步。
+
+## V3.2 补丁
+
+| 地址 | 原来 | 现在 | 说明 |
+|---|---|---|---|
+| `0x080064DE..0x080064F4`（22 字节） | `Sensi[i] = 200` 循环 | 11 × `nop` | 保留加载结果；函数仍从 `0x080064F4 pop {r4,pc}` 返回 |
+| `0x0800CE94..0x0800CEDC`（72 字节数据） | 36 × 800 | 36 × 200 | 唯一引用是 `0x08006500` 字面量（加载 SENSI 页的默认表）。页空白或校验失败时回退 200，与原来的上电行为一致 |
+| `0x0800616A` | `movs r1,#1` | `movs r1,#2` | GET_MODE 上报 V3.2 |
+
+相对 V3.1 共 94 字节差异（22 + 72 + 1，其中 `nop` 与原字节重合的不计）。向量表、`0x14C == 0x080084A5`、体积 37072、USB 命令、Flash 驱动不变；四键版仍只多改 `0x0800615E`（HVer 0x14）与 `0x08006BE2`（扫描边界）。
 
 ## 验证
 
+`firmware/tests/emu_set_sens.py` 现在跑的是镜像的真实代码：USB 分发器 `0x08005FAC` → `App_Config_Command_Report` → `App_Set_Flash_Cofnig` → Flash 驱动（解锁 / 擦页 / 半字编程 / 上锁 / 2 KB 读改写）；上电跑完整的 `0x08006470`。Flash 控制器按真实语义建模：上锁或 PG 未置位的写被拒绝并置 PRGMERR，编程只能 1→0（结果 = 旧值 AND 新值，想置 1 记错误），PER+START 按 ADDR 擦 2 KB 页为 FF。
+
 ```bash
-python3 firmware/patches/build_paduex5_v3.1.py
-python3 firmware/patches/build_paduex4_v3.1.py
-python3 firmware/tests/emu_set_sens.py firmware/PADUEX5_V3.1.bin           # 31/31：三张表 写 → 复位 → 读回一致
-python3 firmware/tests/emu_set_sens.py firmware/PADUEX4_V3.1.bin           # 31/31
-python3 firmware/tests/emu_set_sens.py firmware/legacy/PADUEX5_V3.0.bin    # 对照：6 项失败（Sensi 不落 Flash）
-python3 firmware/tests/emu_set_sens.py firmware/legacy/paduex5_1.6.bin     # 对照：原厂同样 6 项失败
+python3 firmware/tests/emu_set_sens.py firmware/PADUEX5_V3.2.bin          # 36/36
+python3 firmware/tests/emu_set_sens.py firmware/PADUEX4_V3.2.bin          # 36/36
+python3 firmware/tests/emu_set_sens.py firmware/legacy/PADUEX5_V3.1.bin   # 5 项失败：页写对了（A55A+CRC16 有效、擦→写→锁无错误），上电后 Sensi == 200
+python3 firmware/tests/emu_set_sens.py firmware/legacy/PADUEX5_V3.0.bin   # 9 项失败：Sensi 从不写 Flash
+python3 firmware/tests/emu_set_sens.py firmware/legacy/paduex5_1.6.bin    # 9 项失败：原厂同上
 ```
 
-`emu_set_sens.py` 用镜像里的真实 `App_Config_Command_Report` / `App_Get_Flash_Cofnig` / `App_Set_Flash_Cofnig`，只给 Flash 擦写与 printf 打桩：空 Flash 上电 → 默认 800；SET_SENS type 0/1/2 → 断言 `App_Set_Flash_Cofnig` 的页地址、表指针、长度，断言擦除 + 写入 128 半字、页头 `A55A`；RAM 清零后重新上电 → GET_SENS 等于写入值；type 3 不碰 Flash；CRC 错误的包回 `57 46 49` 且不写 Flash。其他回归（`emu_report_normal`、`emu_keymap_e2e`、`emu_keyscan_paduex4`、`emu_get_mode`）在两个 V3.1 镜像上全部通过。
+V3.1 的 5 项失败与真机日志逐条对应：ACK 正常、即时回读一致、页内容正确，拔插后 200。
 
-## 上位机配合（3.1.0.0）
+## 上位机配合（3.2.0.0）
 
-- 保存后立即 GET_SENS 回读并逐项比较，不一致弹「保存未生效（Kx-y：写入 a，设备回读 b）」，日志记录完整 SET 报文、ACK、回读值。
-- 固件版本 < V3.1 时保存灵敏度会提示「固件只把灵敏度写进 RAM，拔掉 USB 后恢复出厂值，请升级到 V3.1」，左上角版本标签也加注。
+- 「保存设置」：SET_SENS → ACK → 即时回读 → **SET_MODE（当前模式）让板子复位 → 等待重新枚举（≤ 12 s）→ 再 GET_SENS 比对**。只有重启后的回读才来自 Flash。一致弹「设备已重启，重启后回读与保存值一致，已确认写入 Flash」；不一致弹「重启后数值没有保住（Kx-y：保存 a，重启后 b）」并按固件版本给出升级或发日志的提示。
+- GET_SENS 回包无效（无应答 / RAW 帧 / CRC 错）时弹错误并保持界面原值，不填默认值；每笔 TX / RX 原始 64 字节 hex 都在 `PADUEX5.log`。
+- 固件 < V3.2 时版本标签加注「建议升级 V3.2（灵敏度不掉电保存）」。
