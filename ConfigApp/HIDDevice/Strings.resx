@@ -219,6 +219,18 @@
   <data name="Map.Pad.DR" xml:space="preserve">
     <value>↘ DR</value>
   </data>
+  <data name="Map.Pad.L" xml:space="preserve">
+    <value>← Left</value>
+  </data>
+  <data name="Map.Pad.U" xml:space="preserve">
+    <value>↑ Up</value>
+  </data>
+  <data name="Map.Pad.D" xml:space="preserve">
+    <value>↓ Down</value>
+  </data>
+  <data name="Map.Pad.R" xml:space="preserve">
+    <value>→ Right</value>
+  </data>
   <data name="Map.NoDevice" xml:space="preserve">
     <value>No device connected.</value>
   </data>
@@ -270,6 +282,9 @@ Save anyway? It will take effect after flashing paduex3_1.7.</value>
   </data>
   <data name="Ver.Tag.Paduex3_17" xml:space="preserve">
     <value> (paduex3_1.7)</value>
+  </data>
+  <data name="Ver.Tag.Paduex4_10" xml:space="preserve">
+    <value> (paduex4_1.0)</value>
   </data>
   <data name="Ver.Tag.Stock212" xml:space="preserve">
     <value> (stock V2.12/V2.13 or paduex3_1.6)</value>

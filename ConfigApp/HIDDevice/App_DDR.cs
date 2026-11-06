@@ -72,6 +72,7 @@ namespace ConfigAppNS
             if (!mFwValid) return "";
             string tag = "";
             if (mFwMajor == 2 && mFwMinor == 17) tag = L.Get("Ver.Tag.Paduex3_17");
+            else if (mFwMajor == 2 && mFwMinor == 18) tag = L.Get("Ver.Tag.Paduex4_10");
             else if (mFwMajor == 2 && mFwMinor == 12) tag = L.Get("Ver.Tag.Stock212");
             if (mDevUid != DeviceProtocol.ID_DDR) tag += L.Get("Ver.Tag.UidMismatch");
             if (mDevHVer != DeviceProtocol.HVER_KNOWN) tag += L.Get("Ver.Tag.HVerUnknown");
@@ -111,7 +112,11 @@ namespace ConfigAppNS
 
         private byte DefaultOffset = 0x01;			//V1.0.0.18:20241012(1)Change ADX Save Issue
         ///-------------------------------------------------------------------------------------------
-        private const string AppName = "PADUEX5";
+        // Config.ini KEYCOUNT=4|5 (default 5). Same code, same protocol; only the pad grid,
+        // the key-map rows and the window title change. Read once at start-up (ReadAppConfig).
+        private static int KeyCount = KEY_COUNT_5KEY;
+        private static bool FourKeyMode { get { return KeyCount == 4; } }
+        private static string AppName { get { return FourKeyMode ? "PADUEX4" : "PADUEX5"; } }
         private static readonly string HostVer = "v" + System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString();
         private enum ConnState { None, Device, Ota }
         private ConnState mConnState = ConnState.None;
@@ -517,6 +522,89 @@ namespace ConfigAppNS
         private const int SENSORS_PER_KEY = 4;
         private const int CONFIG_VALUE_COUNT = KEY_COUNT_5KEY * SENSORS_PER_KEY; // 20 — FW DATA_LEN/2
         private Panel[] fiveKeyFillers = null;
+
+        /// =============================================================================================
+        /// ==== 4-key (KEYCOUNT=4) layout: same board, only connectors K1..K4 populated ====
+        ///   [    ] [1 ↑ ] [    ]
+        ///   [2 ← ] [    ] [3 → ]
+        ///   [    ] [4 ↓ ] [    ]
+        /// Firmware key index 0..3 (Btn_K1..K4) → arrow. Key index 4 (K5) is never shown; its 4
+        /// config slots are still transferred unchanged so the 20-value packets stay intact.
+        /// Mapping K1=↑, K2=←, K3=→, K4=↓ confirmed on the real 4-key pad (2026-11-05).
+        /// Arrow colours follow the direction, not the K number (see FourKeyArrowColors).
+        /// =============================================================================================
+        private static readonly PadKeyPainter.PadKeyKind[] FourKeyKinds = new PadKeyPainter.PadKeyKind[] {
+            PadKeyPainter.PadKeyKind.Up, PadKeyPainter.PadKeyKind.Left,
+            PadKeyPainter.PadKeyKind.Right, PadKeyPainter.PadKeyKind.Down
+        };
+
+        private static string FourKeyCaptionKey(PadKeyPainter.PadKeyKind kind)
+        {
+            switch (kind)
+            {
+                case PadKeyPainter.PadKeyKind.Up: return "Map.Pad.U";
+                case PadKeyPainter.PadKeyKind.Down: return "Map.Pad.D";
+                case PadKeyPainter.PadKeyKind.Left: return "Map.Pad.L";
+                default: return "Map.Pad.R";
+            }
+        }
+
+        private static Point FourKeyCell(PadKeyPainter.PadKeyKind kind, int x0, int x1, int x2, int y0, int y1, int y2)
+        {
+            switch (kind)
+            {
+                case PadKeyPainter.PadKeyKind.Up: return new Point(x1, y0);
+                case PadKeyPainter.PadKeyKind.Down: return new Point(x1, y2);
+                case PadKeyPainter.PadKeyKind.Left: return new Point(x0, y1);
+                default: return new Point(x2, y1);
+            }
+        }
+
+        // 4-key arrow colours: idle white (dark theme) / dark grey (light theme); pressed = red for
+        // left/right, green for up/down. Same 3-layer chevron + glow, only the colours change.
+        private static readonly Color FourKeyPressRed = Color.FromArgb(0xEF, 0x44, 0x44);
+        private static readonly Color FourKeyPressGreen = Color.FromArgb(0x22, 0xC5, 0x5E);
+
+        private static Color FourKeyPressColor(PadKeyPainter.PadKeyKind kind)
+        {
+            return kind == PadKeyPainter.PadKeyKind.Left || kind == PadKeyPainter.PadKeyKind.Right
+                ? FourKeyPressRed : FourKeyPressGreen;
+        }
+
+        private void FourKeyIdleColors(out Color tip, out Color mid, out Color back, out Color glow)
+        {
+            if (bDarkMode)
+            {
+                tip = Color.White;
+                mid = Color.FromArgb(0xE5, 0xE7, 0xEB);
+                back = Color.FromArgb(0x9C, 0xA3, 0xAF);
+                glow = Color.White;
+            }
+            else
+            {
+                tip = Color.FromArgb(0x4B, 0x55, 0x63);
+                mid = Color.FromArgb(0x37, 0x41, 0x51);
+                back = Color.FromArgb(0x1F, 0x29, 0x37);
+                glow = Color.FromArgb(0x9C, 0xA3, 0xAF);
+            }
+        }
+
+        /// <summary>Firmware key index (0..4) of a pad glyph, in either layout; -1 if not shown.</summary>
+        private static int KeyIndexOfKind(PadKeyPainter.PadKeyKind kind)
+        {
+            if (FourKeyMode)
+                return Array.IndexOf(FourKeyKinds, kind);
+            int k = (int)kind;
+            return k < KEY_COUNT_5KEY ? k : -1;
+        }
+
+        /// <summary>Is firmware key index k one of the keys this build shows / edits?</summary>
+        private static bool IsVisibleKey(int k) { return k >= 0 && k < KeyCount; }
+
+        private string PadKeyCaptionKey(int k)
+        {
+            return FourKeyMode && k < FourKeyKinds.Length ? FourKeyCaptionKey(FourKeyKinds[k]) : MapPadKeys[k];
+        }
         // Design canvas at 96 DPI — all layout math uses S(designPx)
         private const int DesignW = 1040;
         private const int DesignH = 780;
@@ -563,7 +651,8 @@ namespace ConfigAppNS
 
         private void EncodeKeyMapIntoColor(bool clear)
         {
-            for (int k = 0; k < KEY_COUNT_5KEY; k++)
+            // Keys this build does not show (K5 in 4-key mode) keep whatever slot value was read
+            for (int k = 0; k < KeyCount; k++)
                 ColorBuffer[k * 4 + 1] = clear ? 0 : ((MAP_TAG << 8) | (KeyMappingBuffer[k] & 0x7F));
         }
 
@@ -704,19 +793,39 @@ namespace ConfigAppNS
             int padW = step * 3 - gap;
             Size cellSize = new Size(cell, cell);
 
-            Btn_K1.Location = new Point(x0, y0);
-            Btn_K2.Location = new Point(x2, y0);
-            Btn_K3.Location = new Point(x1, y1);
-            Btn_K4.Location = new Point(x0, y2);
-            Btn_K5.Location = new Point(x2, y2);
+            Point[] fillerPos;
+            if (FourKeyMode)
+            {
+                // Cross: K1 ↑, K2 ←, K3 →, K4 ↓ ; K5 unused (see FourKeyKinds)
+                Btn_K1.Location = FourKeyCell(FourKeyKinds[0], x0, x1, x2, y0, y1, y2);
+                Btn_K2.Location = FourKeyCell(FourKeyKinds[1], x0, x1, x2, y0, y1, y2);
+                Btn_K3.Location = FourKeyCell(FourKeyKinds[2], x0, x1, x2, y0, y1, y2);
+                Btn_K4.Location = FourKeyCell(FourKeyKinds[3], x0, x1, x2, y0, y1, y2);
+                Btn_K5.Location = new Point(x2, y2);
+                Btn_K5.Enabled = false;
+                Btn_K5.Visible = false;
+                fillerPos = new Point[] {
+                    new Point(x0, y0), new Point(x2, y0), new Point(x1, y1), new Point(x0, y2), new Point(x2, y2)
+                };
+            }
+            else
+            {
+                Btn_K1.Location = new Point(x0, y0);
+                Btn_K2.Location = new Point(x2, y0);
+                Btn_K3.Location = new Point(x1, y1);
+                Btn_K4.Location = new Point(x0, y2);
+                Btn_K5.Location = new Point(x2, y2);
+                Btn_K5.Enabled = true;
+                Btn_K5.Visible = true;
+                fillerPos = new Point[] {
+                    new Point(x1, y0), new Point(x0, y1), new Point(x2, y1), new Point(x1, y2)
+                };
+            }
             Btn_K1.Size = Btn_K2.Size = Btn_K3.Size = Btn_K4.Size = Btn_K5.Size = cellSize;
-            Btn_K1.Enabled = Btn_K2.Enabled = Btn_K3.Enabled = Btn_K4.Enabled = Btn_K5.Enabled = true;
-            Btn_K1.Visible = Btn_K2.Visible = Btn_K3.Visible = Btn_K4.Visible = Btn_K5.Visible = true;
+            Btn_K1.Enabled = Btn_K2.Enabled = Btn_K3.Enabled = Btn_K4.Enabled = true;
+            Btn_K1.Visible = Btn_K2.Visible = Btn_K3.Visible = Btn_K4.Visible = true;
             InvalidatePadKeyButtons();
 
-            Point[] fillerPos = new Point[] {
-                new Point(x1, y0), new Point(x0, y1), new Point(x2, y1), new Point(x1, y2)
-            };
             if (fiveKeyFillers == null)
             {
                 fiveKeyFillers = new Panel[fillerPos.Length];
@@ -979,9 +1088,10 @@ namespace ConfigAppNS
             for (int i = 0; i < KEY_COUNT_5KEY; i++)
             {
                 Label lb = new Label();
-                lb.Text = L.Get(MapPadKeys[i]);
+                lb.Text = L.Get(PadKeyCaptionKey(i));
                 lb.Location = new Point(S(16), S(128) + i * S(42));
                 lb.Size = new Size(S(100), S(28));
+                lb.Visible = IsVisibleKey(i);
                 groupBox_Map.Controls.Add(lb);
                 mapKeyLabels[i] = lb;
 
@@ -989,6 +1099,8 @@ namespace ConfigAppNS
                 cb.DropDownStyle = ComboBoxStyle.DropDownList;
                 cb.Location = new Point(S(130), S(126) + i * S(42));
                 cb.Size = new Size(S(200), S(28));
+                cb.Visible = IsVisibleKey(i);
+                cb.Enabled = IsVisibleKey(i);
                 FillHidUsageCombo(cb);
                 int captured = i;
                 cb.SelectedIndexChanged += (s, e) =>
@@ -1139,7 +1251,7 @@ namespace ConfigAppNS
             SyncMapCombosFromBuffer();
             Sensor_Panel_Display_ReFlash();
             bool tagged = false;
-            for (int k = 0; k < KEY_COUNT_5KEY; k++)
+            for (int k = 0; k < KeyCount; k++)
                 tagged |= ((ColorBuffer[k * 4 + 1] >> 8) & 0xFF) == MAP_TAG;
             MessageBox.Show(L.Get(tagged ? "Map.ReadOk" : "Map.ReadDefault"),
                 AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -1616,24 +1728,39 @@ namespace ConfigAppNS
         {
             if (padKeyVectorWired)
                 return;
-            PadKeyPainter.WireButton(Btn_K1, PadKeyPainter.PadKeyKind.UpperLeft);
-            PadKeyPainter.WireButton(Btn_K2, PadKeyPainter.PadKeyKind.UpperRight);
-            PadKeyPainter.WireButton(Btn_K3, PadKeyPainter.PadKeyKind.Center);
-            PadKeyPainter.WireButton(Btn_K4, PadKeyPainter.PadKeyKind.DownLeft);
+            if (FourKeyMode)
+            {
+                PadKeyPainter.WireButton(Btn_K1, FourKeyKinds[0]);
+                PadKeyPainter.WireButton(Btn_K2, FourKeyKinds[1]);
+                PadKeyPainter.WireButton(Btn_K3, FourKeyKinds[2]);
+                PadKeyPainter.WireButton(Btn_K4, FourKeyKinds[3]);
+            }
+            else
+            {
+                PadKeyPainter.WireButton(Btn_K1, PadKeyPainter.PadKeyKind.UpperLeft);
+                PadKeyPainter.WireButton(Btn_K2, PadKeyPainter.PadKeyKind.UpperRight);
+                PadKeyPainter.WireButton(Btn_K3, PadKeyPainter.PadKeyKind.Center);
+                PadKeyPainter.WireButton(Btn_K4, PadKeyPainter.PadKeyKind.DownLeft);
+            }
             PadKeyPainter.WireButton(Btn_K5, PadKeyPainter.PadKeyKind.DownRight);
             padKeyVectorWired = true;
         }
 
         internal PadKeyPainter.PadKeyPaintArgs GetPadKeyPaintArgs(PadKeyPainter.PadKeyKind kind)
         {
-            int key = (int)kind;
+            int key = KeyIndexOfKind(kind);
             int selected = SensorIndex / SENSORS_PER_KEY;
             Color cellBg = pal.CardBg;
             Color outline = pal.PadOutline;
             bool triggered = key >= 0 && key < padKeyActive.Length && padKeyActive[key];
-            Color triggerFill = GetPadLedColor(key);
+            // 5-key: cyan idle set, pressed = the key's LED colour.
+            // 4-key: white idle set, pressed = red (←/→) or green (↑/↓) by direction.
+            Color triggerFill = FourKeyMode ? FourKeyPressColor(kind) : GetPadLedColor(key);
             if (triggered)
                 triggerFill = Color.FromArgb(220, triggerFill);
+            Color arrowTip = pal.ArrowTip, arrowMid = pal.ArrowMid, arrowBack = pal.ArrowBack, arrowGlow = pal.ArrowGlow;
+            if (FourKeyMode)
+                FourKeyIdleColors(out arrowTip, out arrowMid, out arrowBack, out arrowGlow);
             return new PadKeyPainter.PadKeyPaintArgs
             {
                 CellBackground = cellBg,
@@ -1641,10 +1768,10 @@ namespace ConfigAppNS
                 SelectedFill = pal.Selected,
                 SelectedGradientEnd = pal.SelectedGradientEnd,
                 GlowColor = pal.Glow,
-                ArrowTip = pal.ArrowTip,
-                ArrowMid = pal.ArrowMid,
-                ArrowBack = pal.ArrowBack,
-                ArrowGlow = pal.ArrowGlow,
+                ArrowTip = arrowTip,
+                ArrowMid = arrowMid,
+                ArrowBack = arrowBack,
+                ArrowGlow = arrowGlow,
                 BorderColor = pal.Border,
                 Selected = key == selected,
                 Triggered = triggered,
@@ -1798,7 +1925,7 @@ namespace ConfigAppNS
             if (btn_MapDefault != null) btn_MapDefault.Text = L.Get("Map.Default");
             if (mapKeyLabels != null)
                 for (int i = 0; i < mapKeyLabels.Length; i++)
-                    mapKeyLabels[i].Text = L.Get(MapPadKeys[i]);
+                    mapKeyLabels[i].Text = L.Get(PadKeyCaptionKey(i));
             RelocalizeHidUsageCombos();
             UpdateDebugButtonText();
             UpdateThemeToggleText();
@@ -1934,6 +2061,10 @@ namespace ConfigAppNS
             // string ("PADUEX5 V1.0.0.44") that was shown next to the real assembly version.
             string theme = AppConfig.Read("THEME");
             bDarkMode = theme != null && theme.Trim().Equals("DARK", StringComparison.OrdinalIgnoreCase);
+            // KEYCOUNT=4 → 4-key cross layout (PADUEX4); anything else → 5-key (PADUEX5)
+            string keys = AppConfig.Read("KEYCOUNT");
+            KeyCount = keys != null && keys.Trim() == "4" ? 4 : KEY_COUNT_5KEY;
+            DebugLog.Log("KEYCOUNT={0} -> {1}-key layout ({2})", keys ?? "(unset)", KeyCount, AppName);
             ///------------------------------------------------------------------------------------------
             UpdateWindowTitle();
             ///------------------------------------------------------------------------------------------
@@ -2225,11 +2356,16 @@ namespace ConfigAppNS
         /// =============================================================================================
         private void Load_Default_Sens()
         {
+            // Start-up fills every slot. Afterwards only the keys this build shows are reset: in
+            // 4-key mode the K5 slots (16..19, plus DTick quirk slot 4) keep what was last read
+            // from the board so "Save" writes them back unchanged.
+            bool startup = !layoutReady;
             for (int i = 0; i < CONFIG_VALUE_COUNT; i++)
             {
+                if (!startup && !IsVisibleKey(i / SENSORS_PER_KEY)) continue;
                 SensiBuffer[i] = DEFAULT_SENSI_TAB[i];
                 if (!IsMapSlot(i)) ColorBuffer[i] = DEFAULT_COLOR_TAB[i];   // slot +1 = keymap (paduex3_1.7)
-                DTickBuffer[i] = DEFAULT_DTICK_TAB[i];
+                if (startup || IsVisibleKey(i)) DTickBuffer[i] = DEFAULT_DTICK_TAB[i];
             }
         }
         /// =============================================================================================
