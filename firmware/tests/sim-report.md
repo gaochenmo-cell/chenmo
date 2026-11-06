@@ -6,7 +6,7 @@
 
 | 能证明 | 不能证明 |
 |--------|----------|
-| paduex3_1.3 与原厂同体积、向量合法、仅改 SendPacket | 客户板真实 OTA/ISP 刷写 |
+| paduex5_1.3 与原厂同体积、向量合法、仅改 SendPacket | 客户板真实 OTA/ISP 刷写 |
 | 改色协议 CRC/ACK、灯板 GRB×25 逻辑输出与 UI 一致 | WS2812 真实电时序 |
 | 模式位 KBS/HID×1P/2P 编解码与复位写 Flash | USB 重新枚举 PID |
 | 改键 GET/SET_MAPP 往返与 0x08011800 持久化模型 | 真机 HID usage 注入游戏 |
@@ -17,8 +17,8 @@
 
 ## 明细
 
-- ✅ **paduex3_1.3 size == stock** — `37072`
-- ✅ **paduex3_1.3 size == paduex3_1.2**
+- ✅ **paduex5_1.3 size == stock** — `37072`
+- ✅ **paduex5_1.3 size == paduex5_1.2**
 - ✅ **vector SP in SRAM** — `0x20002a20`
 - ✅ **vector Reset in APP** — `0x8004261`
 - ✅ **does not reach config page** — `0x800d0d0`
@@ -30,7 +30,7 @@
 - ✅ **Mapping_Load BL unchanged vs 1.2** — `fff780fc`
 - ✅ **COLOR page addr 0x08010800 still in image**
 - ✅ **MAPP page addr 0x08011800 still in image**
-- ✅ **build_paduex3_1.3.py reproducible**
+- ✅ **build_paduex5_1.3.py reproducible**
 - ✅ **SET_COLOR CRC valid** — `cs=51`
 - ✅ **SET_COLOR device ACK** — `574f4b5101`
 - ✅ **COLOR saved to flash page model**
@@ -61,7 +61,7 @@
 - ✅ **HID+2P → HID PID family 0x577x** — `VID 0x4D47 PID 0x5771/72`
 - ✅ **WMODE flash page written**
 - ✅ **stock FW: GET_MAPP fails (no protocol)**
-- ✅ **paduex3: GET_MAPP header**
+- ✅ **paduex5: GET_MAPP header**
 - ✅ **default map 5Key = W X A D S** — `[26, 27, 4, 7, 22]`
 - ✅ **SET_MAPP CRC**
 - ✅ **SET_MAPP ACK** — `4f4f4b81`
@@ -73,6 +73,6 @@
 
 ## 发给客户前建议
 
-1. 用本仓库 **OTA** 在自有一块板上刷 `paduex3_1.3.bin`，确认仍能被 PADUEX5 识别。
+1. 用本仓库 **OTA** 在自有一块板上刷 `paduex5_1.3.bin`，确认仍能被 PADUEX5 识别。
 2. 再测：改色（红/白/蓝）、键盘↔手柄模式、改键保存后拔插。
-3. 勿用 ISP 刷 paduex3_1.1；ISP 请用 paduex3_1.3（37072 字节 @ `0x08004000`）。
+3. 勿用 ISP 刷 paduex5_1.1；ISP 请用 paduex5_1.3（37072 字节 @ `0x08004000`）。

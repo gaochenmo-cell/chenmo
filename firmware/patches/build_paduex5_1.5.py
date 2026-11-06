@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Build paduex3_1.5.bin from paduex3_1.2.bin — same size.
+Build paduex5_1.5.bin from paduex5_1.2.bin — same size.
 
-Root cause of paduex3_1.2/1.3/1.4 brick after OTA jump:
+Root cause of paduex5_1.2/1.3/1.4 brick after OTA jump:
   Boot hook at 0x080064B0 was written as BL + 6 NOPs = 16 bytes, which
   overwrote not only the first memcpy(0x24) block but also the next
   `movs r2,#0x24` / `ldr r1,[pc,#…]` of the *second* memcpy. Execution
@@ -12,7 +12,7 @@ Root cause of paduex3_1.2/1.3/1.4 brick after OTA jump:
 Fix: shrink boot hook to BL + 4 NOPs = 12 bytes (covers only the first
 memcpy), restore stock bytes at 0x080064BC..0x080064BF.
 
-Also restore SendPacket bodies to paduex3_1.2 (drop 1.3/1.4 timeout rewrite)
+Also restore SendPacket bodies to paduex5_1.2 (drop 1.3/1.4 timeout rewrite)
 so this image is “1.2 remappable + boot fix only”.
 """
 from __future__ import annotations
@@ -46,15 +46,15 @@ def thumb_bl(frm: int, to: int) -> bytes:
 
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
-    src = root / "paduex3_1.2.bin"
+    src = root / "paduex5_1.2.bin"
     stock_path = Path("/tmp/uandancedance/V2.13/5KEY_2P_V2.13.bin")
-    dst = root / "paduex3_1.5.bin"
+    dst = root / "paduex5_1.5.bin"
     if not src.exists():
-        print("missing paduex3_1.2.bin", file=sys.stderr)
+        print("missing paduex5_1.2.bin", file=sys.stderr)
         return 1
     if not stock_path.exists():
-        # fall back: paduex3_1.0 has stock boot bytes
-        stock_path = root / "paduex3_1.0.bin"
+        # fall back: paduex5_1.0 has stock boot bytes
+        stock_path = root / "paduex5_1.0.bin"
     stock = stock_path.read_bytes()
     buf = bytearray(src.read_bytes())
     assert len(buf) == len(stock) == 37072
@@ -70,8 +70,8 @@ def main() -> int:
     buf[va_to_off(0x080064BC) : va_to_off(0x080064C0)] = restored
     print("  boot hook: BL Mapping_Load + 4 NOPs (12B); restored 64BC..64BF")
 
-    # --- Ensure SendPacket == paduex3_1.2 (undo any 1.3/1.4 edit if present) ---
-    # Building from paduex3_1.2 already has stock wait loops; nothing to do.
+    # --- Ensure SendPacket == paduex5_1.2 (undo any 1.3/1.4 edit if present) ---
+    # Building from paduex5_1.2 already has stock wait loops; nothing to do.
     # Sanity: push.w present
     assert buf[va_to_off(0x08005D08) : va_to_off(0x08005D08) + 4] == bytes.fromhex(
         "2de9f041"

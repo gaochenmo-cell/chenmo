@@ -1,6 +1,6 @@
-# paduex3_1.1 Mapping (source-level intent)
+# paduex5_1.1 Mapping (source-level intent)
 
-Binary patcher: `build_paduex3_1.1.py`. Equivalent C changes on `uandancedance`:
+Binary patcher: `build_paduex5_1.1.py`. Equivalent C changes on `uandancedance`:
 
 ## Flash
 

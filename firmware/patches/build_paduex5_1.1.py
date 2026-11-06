@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Build paduex3_1.1.bin from paduex3_1.0.bin (5KEY PADUEX5).
+Build paduex5_1.1.bin from paduex5_1.0.bin (5KEY PADUEX5).
 
 On-device keyboard remapping:
   - Report_Normal loads HID usage from Mapping[12] (uint16) @ 0x20001BB0
@@ -109,8 +109,8 @@ def fill_nop(buf: bytearray, start: int, end: int) -> None:
 
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
-    src_path = root / "paduex3_1.0.bin"
-    dst_path = root / "paduex3_1.1.bin"
+    src_path = root / "paduex5_1.0.bin"
+    dst_path = root / "paduex5_1.1.bin"
     buf = bytearray(src_path.read_bytes())
     print(f"base {src_path.name} ({len(buf)} bytes)")
 

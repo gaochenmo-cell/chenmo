@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Build paduex3_1.3.bin from paduex3_1.2.bin — same size, fix sticky-key USB TX wait.
+Build paduex5_1.3.bin from paduex5_1.2.bin — same size, fix sticky-key USB TX wait.
 
 Root cause: App_USB_KBS_SendPacket / App_USB_HID_SendPacket spin forever on
 g_*_tx_completed. When the IN endpoint is busy, the main loop stalls for
@@ -168,10 +168,10 @@ def build_sendpacket(
 
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
-    src = root / "paduex3_1.2.bin"
-    dst = root / "paduex3_1.3.bin"
+    src = root / "paduex5_1.2.bin"
+    dst = root / "paduex5_1.3.bin"
     if not src.exists():
-        print("missing paduex3_1.2.bin — run build_paduex3_1.2.py first", file=sys.stderr)
+        print("missing paduex5_1.2.bin — run build_paduex5_1.2.py first", file=sys.stderr)
         return 1
 
     buf = bytearray(src.read_bytes())
@@ -242,7 +242,7 @@ def main() -> int:
 
     assert len(buf) == orig_len
     dst.write_bytes(buf)
-    print(f"wrote {dst} ({len(buf)} bytes) SAME as paduex3_1.2/1.0")
+    print(f"wrote {dst} ({len(buf)} bytes) SAME as paduex5_1.2/1.0")
 
     md = Cs(CS_ARCH_ARM, CS_MODE_THUMB)
     for name, va, n in [("KBS", KBS_FN, 56), ("HID", HID_FN, 60)]:

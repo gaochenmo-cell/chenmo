@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Build paduex3_1.7.bin = paduex3_1.6.bin (stock V2.13 + SendPacket timeout) + keyboard remap.
+Build paduex5_1.7.bin = paduex5_1.6.bin (stock V2.13 + SendPacket timeout) + keyboard remap.
 
 Design — zero new USB commands, zero new flash code, zero new RAM:
   The firmware only ever reads AppUser.Color[key*4] for the LED colour; the
   three sibling slots Color[key*4+1..3] are transferred, persisted (page
   0x08010800) and loaded at boot by the stock GET/SET_SENS(type 1) path but
-  never used. paduex3_1.7 reads the keyboard usage from Color[key*4+1]:
+  never used. paduex5_1.7 reads the keyboard usage from Color[key*4+1]:
 
       value = 0x4B00 | usage   ->  use `usage`            ("K" tag)
       anything else            ->  stock 1P/2P table      (old hosts wrote 0..7 here)
@@ -14,7 +14,7 @@ Design — zero new USB commands, zero new flash code, zero new RAM:
   Only Report_Normal (main.c, the 1P/2P if/else chain) is rewritten. The new
   code + both stock tables fit inside the old 1P chain (0x08005D72..0x08005DCA);
   the old 2P chain becomes unreachable and is left untouched. The vector table,
-  boot sequence and every other function are byte-identical to paduex3_1.6/stock.
+  boot sequence and every other function are byte-identical to paduex5_1.6/stock.
 """
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ TAB_2P = [0x0B, 0x0E, 0x0D, 0x11, 0x10, 0x14, 0x08, 0x1D, 0x06, 0x55]  # h k j n
 MAP_TAG = 0x4B
 
 # GET_MODE reply: stock "V2.13" still hard-codes FW_VERSION_MINOR = 12 (movs r1,#0xc @ 0x0800616A),
-# so the host cannot tell stock / paduex3 apart. paduex3_1.7 reports 2.17.
+# so the host cannot tell stock / paduex5 apart. paduex5_1.7 reports 2.17.
 FW_MINOR_SITE = 0x0800616A
 FW_MINOR_NEW = 17
 
@@ -80,7 +80,7 @@ COND_EQ, COND_NE = 0x0, 0x1
 
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
-    src = root / "paduex3_1.6.bin"
+    src = root / "paduex5_1.6.bin"
     buf = bytearray(src.read_bytes())
     assert len(buf) == 37072
 
@@ -145,9 +145,9 @@ def main() -> int:
     diffs = [BASE + i for i, (a, b) in enumerate(zip(base, buf)) if a != b]
     for va in diffs:
         assert LOOKUP <= va < CHAIN1P_END or va == FW_MINOR_SITE, hex(va)
-    print(f"diff vs paduex3_1.6: {len(diffs)} bytes, all inside {LOOKUP:#x}..{CHAIN1P_END:#x} + FW minor byte")
+    print(f"diff vs paduex5_1.6: {len(diffs)} bytes, all inside {LOOKUP:#x}..{CHAIN1P_END:#x} + FW minor byte")
 
-    dst = root / "paduex3_1.7.bin"
+    dst = root / "paduex5_1.7.bin"
     dst.write_bytes(buf)
     print(f"wrote {dst} ({len(buf)} bytes)")
 

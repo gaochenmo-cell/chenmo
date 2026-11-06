@@ -2,27 +2,33 @@
 
 ## 下载
 
-- [`dist/PADUEX5/`](./dist/PADUEX5/) → `PADUEX5.exe`（1.0.0.63）
+- [`dist/PADUEX5/`](./dist/PADUEX5/) → `PADUEX5.exe`（1.0.0.64）
 - [`dist/PADUEX5-win-release.zip`](./dist/PADUEX5-win-release.zip)
+
+## 上位机 1.0.0.64 —— 五键固件改名 paduex5、踩踏高亮跟随灯色
+
+- 五键固件系列 **paduex3 → paduex5**（与四键 paduex4 对齐）：`firmware/paduex3_1.7.bin` → `firmware/paduex5_1.7.bin`、`paduex3_1.6.bin` → `paduex5_1.6.bin`（`git mv`，bin 内容与 SHA-256 不变），`paduex3_1.0～1.5` 及补丁脚本 / 文档 / 测试同步改名；上位机对 FVer 2.17 标注 `(paduex5_1.7)`、2.12 标注 `(原厂 V2.12/V2.13 或 paduex5_1.6)`。**paduex5 = 五键，paduex4 = 四键**。
+- 踩踏高亮颜色与真机灯条一致：踩下时该键箭头 / 圆环 / 发光颜色 = 该键在「调色」页当前的灯色（红 `#EF4444`、绿 `#22C55E`、蓝 `#3B82F6`、黄 `#FACC15`、紫 `#A855F7`、青 `#22D3EE`、白 `#FFFFFF`），五键 / 四键模式都生效；调色页改色后（未保存也）立即跟随，重新连接设备后以设备读回的值为准。灯色为 0 / 未知或尚未从设备读到灯色时回退到原默认高亮色（五键琥珀 `#F59E0B`，四键 ← / → 红、↑ / ↓ 绿）。默认（未踩）状态颜色不变。
+- 四键模式「按键映射」页说明由「五个踏板」改为「四个踏板」（按键数动态显示）。
 
 ## 上位机 1.0.0.63 —— 四键真机校正
 
 - 键位映射按真机实测改为 **K1 = ↑、K2 = ←、K3 = →、K4 = ↓**（K5 隐藏）。
 - 四键模式箭头颜色：默认白色（白天模式深灰 `#374151`）；踩下时 ← / → 红 `#EF4444`、↑ / ↓ 绿 `#22C55E`（发光同色），按方向决定、与 K 编号无关；三层 chevron 造型与发光不变。五键模式样式不动。
-- 四键固件改为独立系列 **paduex4**：`firmware/paduex3_1.8_4key.bin` → `firmware/paduex4_1.0.bin`（bin 内容不变），脚本 / 文档 / 测试同步改名；上位机对 FVer 2.18 标注 `(paduex4_1.0)`。**paduex3 = 五键，paduex4 = 四键**；五键固件 paduex3_1.7 不变。
+- 四键固件改为独立系列 **paduex4**：`firmware/paduex3_1.8_4key.bin` → `firmware/paduex4_1.0.bin`（bin 内容不变），脚本 / 文档 / 测试同步改名；上位机对 FVer 2.18 标注 `(paduex4_1.0)`。**paduex3 = 五键，paduex4 = 四键**（1.0.0.64 起五键系列改名 paduex5）；五键固件 paduex3_1.7 不变。
 
 ## 上位机 1.0.0.62 —— 四键跳舞机
 
 - 同一份程序通过 `Config.ini` 的 `KEYCOUNT=4|5`（默认 5）切换四键 / 五键界面。`KEYCOUNT=4`：窗口标题 **PADUEX4**，踏板区改为十字布局（上 / 下 / 左 / 右，复用青色霓虹 chevron 只改旋转角度），第五键按钮隐藏，「按键映射」页只有 4 行；灵敏度 / 调色 / 延迟释放 / 协议 / OTA / 配色 / 字体 / 多语言与五键版完全一致。
 - 键位对应（1.0.0.62 的推断，已被 1.0.0.63 真机实测修正）：K1 = ←、K2 = ↑、K3 = ↓、K4 = →。
 - 协议不变：仍是 20 × u16 的报文，第五键（K5）四个槽位读到什么就原样写回；「默认设置」只重置前四键。
-- 固件 **`firmware/paduex4_1.0.bin`**（仅四键机，1.0.0.62 时名为 `paduex3_1.8_4key.bin`）：paduex3_1.7 + 2 字节 —— 键扫描循环边界 `0x08006BE2` 由 36 个传感器改为 16 个，K5 在键盘 / 手柄 / RAW 流里永不上报；版本字节改 18，上位机显示 `FVer=2.18 (paduex4_1.0)`。Unicorn 跑真实键扫描代码验证（`firmware/tests/emu_keyscan_paduex4.py`，52/52，对照 1.7 上 K5 会触发）。五键板请继续用 paduex3_1.7。
+- 固件 **`firmware/paduex4_1.0.bin`**（仅四键机，1.0.0.62 时名为 `paduex3_1.8_4key.bin`）：paduex5_1.7 + 2 字节 —— 键扫描循环边界 `0x08006BE2` 由 36 个传感器改为 16 个，K5 在键盘 / 手柄 / RAW 流里永不上报；版本字节改 18，上位机显示 `FVer=2.18 (paduex4_1.0)`。Unicorn 跑真实键扫描代码验证（`firmware/tests/emu_keyscan_paduex4.py`，52/52，对照 1.7 上 K5 会触发）。五键板请继续用 paduex5_1.7。
 
 ## 上位机 1.0.0.61
 
 - 字体：全部界面统一为「微软雅黑」（Microsoft YaHei UI → Microsoft YaHei → 系统默认回退）并整体放大：正文/按钮/标签 10.5pt、Tab 标题 11pt、分组标题 11pt 加粗、左上角版本行 10pt、灵敏度/消抖数值 12pt。字体在主题应用处集中设置（`UiFont.cs`），不再逐控件硬编码。
 - 五键箭头：四个斜角键改为三层叠加的 V 形 chevron「速度感」箭头，青色/蓝青渐变（`#22D3EE → #06B6D4 → #0E7490`）带外发光，前层亮、后层渐暗渐透明，按键位旋转到对应方向；中心键改为同风格青色霓虹圆环。白天模式同一造型、颜色略深。选中/踩踏高亮逻辑不变（踩踏时按该键灯色着色）。
-- 固件命名：`grok` 统一改为 `paduex3`：`firmware/paduex3_1.6.bin`、`firmware/paduex3_1.7.bin`（内容与版本号不变，SHA-256 与原 `grok1.7.bin` 一致），补丁脚本/文档/界面文案同步；上位机对 FVer 2.17 标注 `(paduex3_1.7)`。
+- 固件命名：`grok` 统一改为 `paduex3`：`firmware/paduex3_1.6.bin`、`firmware/paduex3_1.7.bin`（内容与版本号不变，SHA-256 与原 `grok1.7.bin` 一致），补丁脚本/文档/界面文案同步；上位机对 FVer 2.17 标注 `(paduex3_1.7)`。（1.0.0.64 起再改名为 `paduex5_*`。）
 - 微调：按键映射页提示文字留出三行高度；固件升级对话框提示区加高、「最大允许」标签加宽，避免放大字体后截断。
 
 ## 上位机 1.0.0.60
@@ -38,11 +44,11 @@
 ## 上位机 1.0.0.58
 
 - 界面国际化：全部文案抽到 `ConfigApp/HIDDevice/Strings.resx`（英文）/ `Strings.zh-CN.resx`（简体中文），编译后生成 `zh-CN\PADUEX5.resources.dll` 语言文件。`Config.ini` 的 `LANGUAGE=AUTO|CN|EN`，默认 `AUTO` 跟随 Windows 显示语言；右上角「语言」菜单可切换（跟随系统 / 简体中文 / English），立即生效并写回 `Config.ini`。白天/黑夜主题下文案一致。
-- 固件版本显示修正：不再残留上一块板子 / 读取失败前的旧版本；读 GET_MODE 时先暂停 RAW 调试流、多次重试并校验 UID；只对已知版本加标注（2.17 = paduex3_1.7；2.12 = 原厂 V2.12/V2.13 或 paduex3_1.6），不再把 2.16 误标成 paduex3_1.6；窗口标题不再拼接 `Config.ini` 里过期的 `NAME=PADUEX5 V1.0.0.44`。
+- 固件版本显示修正：不再残留上一块板子 / 读取失败前的旧版本；读 GET_MODE 时先暂停 RAW 调试流、多次重试并校验 UID；只对已知版本加标注（2.17 = paduex5_1.7；2.12 = 原厂 V2.12/V2.13 或 paduex5_1.6），不再把 2.16 误标成 paduex5_1.6；窗口标题不再拼接 `Config.ini` 里过期的 `NAME=PADUEX5 V1.0.0.44`。
 
 ## 上位机 1.0.0.57
 
-- paduex3_1.7 固件上报 `FVer=2.17`，上位机标注 `(paduex3_1.7)`；固件不支持改键时保存映射前会提醒。
+- paduex5_1.7 固件上报 `FVer=2.17`，上位机标注 `(paduex5_1.7)`；固件不支持改键时保存映射前会提醒。
 
 ## 上位机 1.0.0.56
 
@@ -50,20 +56,20 @@
 
 ## 上位机 1.0.0.55
 
-- 「按键映射」页改为通过颜色表槽位 `Color[key*4+1]` 读写键位（paduex3_1.7 固件），新增「默认设置」。
+- 「按键映射」页改为通过颜色表槽位 `Color[key*4+1]` 读写键位（paduex5_1.7 固件），新增「默认设置」。
 
 ## 上位机 1.0.0.54
 
 - 白天/黑夜配色改为 Laverita 同款（灰阶底 + 蓝色主按钮 + 红色「默认」+ 琥珀色选中键），分组卡片、标签页、进度条全部扁平化。
 
 - 去掉「Num 1P/2P」选择：1P/2P 由游戏按插入顺序自动分配，固件自 V2.12 起也不再接受上位机设定的 1P/2P 位。
-- 升级前校验固件 USB 中断向量（0x14C），拒绝 paduex3_1.0～1.5。
+- 升级前校验固件 USB 中断向量（0x14C），拒绝 paduex5_1.0～1.5。
 
 ## 固件
 
-五键板只刷 **`firmware/paduex3_1.7.bin`**（官方 V2.13 + 防粘键 + 键盘改键）。保守版 `paduex3_1.6.bin` 仅防粘键。四键机刷 `firmware/paduex4_1.0.bin`（= 1.7 + 屏蔽第五键；paduex3 = 五键系列，paduex4 = 四键系列）。
+五键板只刷 **`firmware/paduex5_1.7.bin`**（官方 V2.13 + 防粘键 + 键盘改键）。保守版 `paduex5_1.6.bin` 仅防粘键。四键机刷 `firmware/paduex4_1.0.bin`（= 1.7 + 屏蔽第五键；paduex5 = 五键系列，paduex4 = 四键系列）。
 
-**paduex3_1.0～1.5 全部禁止**：它们覆盖了 USB 中断向量，OTA 后无 USB。详见 [`firmware/patches/paduex3_1.0-Vector-Brick.md`](./firmware/patches/paduex3_1.0-Vector-Brick.md)。
+**paduex5_1.0～1.5 全部禁止**：它们覆盖了 USB 中断向量，OTA 后无 USB。详见 [`firmware/patches/paduex5_1.0-Vector-Brick.md`](./firmware/patches/paduex5_1.0-Vector-Brick.md)。
 
 ## 本地编译
 
