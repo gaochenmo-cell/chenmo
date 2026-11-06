@@ -284,13 +284,13 @@ Save anyway? It will take effect after upgrading the firmware.</value>
     <value>Device version not read — click "Read Mode" to retry.</value>
   </data>
   <data name="Ver.Tag.Paduex5_17" xml:space="preserve">
-    <value> (previous 5-key firmware, upgrade to V3.0)</value>
+    <value> (previous 5-key firmware, upgrade to V3.2)</value>
   </data>
   <data name="Ver.Tag.Paduex4_10" xml:space="preserve">
-    <value> (previous 4-key firmware, upgrade to V3.0)</value>
+    <value> (previous 4-key firmware, upgrade to V3.2)</value>
   </data>
   <data name="Ver.Tag.Stock212" xml:space="preserve">
-    <value> (stock V2.12/V2.13, upgrade to V3.0)</value>
+    <value> (stock V2.12/V2.13, upgrade to V3.2)</value>
   </data>
   <data name="Ver.Tag.Board5" xml:space="preserve">
     <value> (PADUEX5)</value>
@@ -298,11 +298,47 @@ Save anyway? It will take effect after upgrading the firmware.</value>
   <data name="Ver.Tag.Board4" xml:space="preserve">
     <value> (PADUEX4)</value>
   </data>
+  <data name="Ver.Tag.UpgradeSensi" xml:space="preserve">
+    <value>, upgrade to V3.2 (sensitivity not kept across power cycles)</value>
+  </data>
+  <data name="Cfg.WriteOkVerified" xml:space="preserve">
+    <value>Saved. Read back from the device and verified.</value>
+  </data>
+  <data name="Cfg.WriteOkSensiVolatile" xml:space="preserve">
+    <value>Saved and verified, but firmware {0} resets the sensitivity to 200 at every power-up. Upgrade the firmware to V3.2 to keep it.</value>
+  </data>
+  <data name="Cfg.WriteNotApplied" xml:space="preserve">
+    <value>Save did not take effect ({0}). See PADUEX5.log for the packets.</value>
+  </data>
+  <data name="Cfg.VerifyReadFail" xml:space="preserve">
+    <value>read-back after save failed</value>
+  </data>
+  <data name="Cfg.VerifyMismatch" xml:space="preserve">
+    <value>K{0}-{1}: sent {2}, device reports {3}</value>
+  </data>
+  <data name="Cfg.WriteOkRebootVerified" xml:space="preserve">
+    <value>Saved. The board was restarted and the values read back from it match: they are stored in flash.</value>
+  </data>
+  <data name="Cfg.WriteLostAfterReboot" xml:space="preserve">
+    <value>Saved and acknowledged, but after restarting the board the values did not survive ({0}). {1}</value>
+  </data>
+  <data name="Cfg.RebootHintOldFw" xml:space="preserve">
+    <value>Firmware {0} resets the sensitivity table at power-up. Upgrade the firmware to V3.2 (Firmware Upgrade button).</value>
+  </data>
+  <data name="Cfg.RebootHintLog" xml:space="preserve">
+    <value>Please send PADUEX5.log from the program folder.</value>
+  </data>
+  <data name="Cfg.RebootNoDevice" xml:space="preserve">
+    <value>the board did not reconnect within 12 s; unplug and plug it back in</value>
+  </data>
+  <data name="Cfg.RebootReadFail" xml:space="preserve">
+    <value>the read after the restart failed</value>
+  </data>
+  <data name="Cfg.RebootMismatch" xml:space="preserve">
+    <value>K{0}-{1}: saved {2}, after restart {3}</value>
+  </data>
   <data name="Cfg.ReadOk" xml:space="preserve">
     <value>Read complete.</value>
-  </data>
-  <data name="Cfg.WriteOk" xml:space="preserve">
-    <value>Write complete.</value>
   </data>
   <data name="Cfg.ReadCsError" xml:space="preserve">
     <value>Read config checksum error ({0}, {1}).</value>
@@ -318,9 +354,9 @@ Save anyway? It will take effect after upgrading the firmware.</value>
   </data>
   <data name="Ota.Tips" xml:space="preserve">
     <value>How to:
-1. Pick PADUEX5_V3.0.bin for the 5-key pad or PADUEX4_V3.0.bin for the 4-key pad
+1. Pick PADUEX5_V3.2.bin for the 5-key pad or PADUEX4_V3.2.bin for the 4-key pad
 2. Keep USB connected; do not unplug, power off or close this window while upgrading
-3. On failure the board stays in Bootloader - just retry. ISP: PADUEX5_V3.0.bin / PADUEX4_V3.0.bin or stock V2.13 only</value>
+3. On failure the board stays in Bootloader - just retry. ISP: PADUEX5_V3.2.bin / PADUEX4_V3.2.bin or stock V2.13 only</value>
   </data>
   <data name="Ota.Addr" xml:space="preserve">
     <value>APP address: 0x{0}</value>
@@ -362,7 +398,7 @@ Save anyway? It will take effect after upgrading the firmware.</value>
     <value>This image is longer than the stock image ({0} &gt; {1} bytes).
 
 This OTA window writes the whole image and is normally fine.
-If you use the vendor ISP/IPS tool instead: flash PADUEX5_V3.0.bin / PADUEX4_V3.0.bin or stock V2.13 at 0x08004000, otherwise the tail may be truncated and USB will stop enumerating.</value>
+If you use the vendor ISP/IPS tool instead: flash PADUEX5_V3.2.bin / PADUEX4_V3.2.bin or stock V2.13 at 0x08004000, otherwise the tail may be truncated and USB will stop enumerating.</value>
   </data>
   <data name="Ota.SizeWarnTitle" xml:space="preserve">
     <value>PADUEX5 Size Notice</value>
@@ -383,7 +419,7 @@ If you use the vendor ISP/IPS tool instead: flash PADUEX5_V3.0.bin / PADUEX4_V3.
     <value>Reset vector is outside the APP region (0x08004000~0x0800F800). Rejected to prevent bricking.</value>
   </data>
   <data name="Ota.V.BadUsbVector" xml:space="preserve">
-    <value>USB interrupt vector (0x14C) of this image has been overwritten. Rejected. Use PADUEX5_V3.0.bin / PADUEX4_V3.0.bin or stock V2.13.</value>
+    <value>USB interrupt vector (0x14C) of this image has been overwritten. Rejected. Use PADUEX5_V3.2.bin / PADUEX4_V3.2.bin or stock V2.13.</value>
   </data>
   <data name="Ota.SelectFirst" xml:space="preserve">
     <value>Please select a firmware file first.</value>
@@ -394,11 +430,13 @@ If you use the vendor ISP/IPS tool instead: flash PADUEX5_V3.0.bin / PADUEX4_V3.
 File: {0}
 Size: {1} bytes
 Address: 0x{2}
+Firmware in file: {3}
+Board now: {4}
 
 Please note:
 - Do not unplug USB, power off or close this window while upgrading
 - The board jumps to the new image only after the write and CRC pass; on failure it stays in Bootloader and you can retry
-- Use PADUEX5_V3.0.bin (5-key) or PADUEX4_V3.0.bin (4-key)
+- Use PADUEX5_V3.2.bin (5-key) or PADUEX4_V3.2.bin (4-key)
 
 Start now?</value>
   </data>
@@ -418,7 +456,7 @@ Keep USB connected, close this message and press "Start Upgrade" again. It norma
     <value>Upgrade complete</value>
   </data>
   <data name="Ota.Success" xml:space="preserve">
-    <value>Firmware upgraded successfully! The device has jumped to the new firmware.</value>
+    <value>Firmware written and the board was told to jump to it. Close this window: the version the board reports will then be compared with the file.</value>
   </data>
   <data name="Ota.P.Detect" xml:space="preserve">
     <value>Detecting device…</value>
@@ -515,5 +553,70 @@ Keep USB connected, close this message and press "Start Upgrade" again. It norma
   </data>
   <data name="Ver.Tag.HVerUnknown" xml:space="preserve">
     <value> [unknown HVer]</value>
+  </data>
+  <data name="Ota.FileVer" xml:space="preserve">
+    <value>firmware in file: {0} ({1})</value>
+  </data>
+  <data name="Ota.FileVerUnknown" xml:space="preserve">
+    <value>firmware in file: unknown (no version constants at 0x215E/0x216A)</value>
+  </data>
+  <data name="Ota.BoardVer" xml:space="preserve">
+    <value>{0} ({1})</value>
+  </data>
+  <data name="Ota.BoardVerUnknown" xml:space="preserve">
+    <value>unknown (not read)</value>
+  </data>
+  <data name="Ota.Kind5" xml:space="preserve">
+    <value>PADUEX5 5-key</value>
+  </data>
+  <data name="Ota.Kind4" xml:space="preserve">
+    <value>PADUEX4 4-key</value>
+  </data>
+  <data name="Ota.KindUnknown" xml:space="preserve">
+    <value>HVer 0x{0:X2}</value>
+  </data>
+  <data name="Ota.NoVersionInFile" xml:space="preserve">
+    <value>This file has no recognisable PADUEX version constants; the result cannot be verified after the upgrade.</value>
+  </data>
+  <data name="Ota.NoVersionConfirm" xml:space="preserve">
+    <value>The selected file has no PADUEX5 / PADUEX4 version constants (offsets 0x215E / 0x2164 / 0x216A). It may not be a firmware for this board.
+
+Flash it anyway?</value>
+  </data>
+  <data name="Ota.HVerMismatch" xml:space="preserve">
+    <value>The file is a {0} firmware, but the connected board reports {1}.
+
+A 5-key image on a 4-key board leaves K5 floating; a 4-key image on a 5-key board disables K5.
+
+Flash it anyway?</value>
+  </data>
+  <data name="Ota.Downgrade" xml:space="preserve">
+    <value>The file is firmware {0}, older than the {1} currently on the board.
+
+Flash the older version anyway?</value>
+  </data>
+  <data name="Ota.SameVersion" xml:space="preserve">
+    <value>The board already reports firmware {0}, the same version as the file. After the upgrade it will not be possible to tell from the version whether anything was written.
+
+Flash it anyway?</value>
+  </data>
+  <data name="Ota.E.DataWrite" xml:space="preserve">
+    <value>Data packet could not be sent (block {0}, offset {1} in block)</value>
+  </data>
+  <data name="Ota.VerifyNoDevice" xml:space="preserve">
+    <value>The upgrade finished, but the board did not come back as a PADUEX device within {0} s. Unplug and re-plug the USB cable, then check the version in the top-left corner.</value>
+  </data>
+  <data name="Ota.VerifyOk" xml:space="preserve">
+    <value>Upgrade verified: the board now reports firmware {0}, as in the file.</value>
+  </data>
+  <data name="Ota.VerifyMismatch" xml:space="preserve">
+    <value>Firmware version unchanged: the file is {0} but the board still reports {1}. The upgrade may not have been written.
+
+Check that you selected the .bin from the new release folder and run the upgrade again. Details are in PADUEX5.log.</value>
+  </data>
+  <data name="Cfg.SensiOldFwConfirm" xml:space="preserve">
+    <value>Firmware {0} does not keep the sensitivity: it resets to 200 at every power-up. Upgrade to V3.2 first (Firmware Upgrade button).
+
+Write the values anyway? They stay active until the board is unplugged.</value>
   </data>
 </root>

@@ -64,7 +64,9 @@ namespace ConfigAppNS
         }
 
         // Known firmware versions:
-        //   3.0  current release (HVer 0x13 = 5-key PADUEX5, 0x14 = 4-key PADUEX4)
+        //   3.2  current release (HVer 0x13 = 5-key PADUEX5, 0x14 = 4-key PADUEX4)
+        //   3.1  SET_SENS(sensitivity) wrote the flash page, but boot still reset the table to 200
+        //   3.0  first V3 release; SET_SENS(sensitivity) only reached RAM
         //   2.17 previous 5-key image, 2.18 previous 4-key image
         //   2.12 stock V2.12 / V2.13 (stock never bumped its minor constant)
         // Anything else is shown as-is. UID / HVer mismatches are annotated, never rejected.
@@ -76,6 +78,7 @@ namespace ConfigAppNS
             {
                 if (mDevHVer == DeviceProtocol.HVER_4KEY) tag = L.Get("Ver.Tag.Board4");
                 else if (mDevHVer == DeviceProtocol.HVER_5KEY) tag = L.Get("Ver.Tag.Board5");
+                if (!FwPersistsSensitivity()) tag += L.Get("Ver.Tag.UpgradeSensi");
             }
             else if (mFwMajor == 2 && mFwMinor == 17) tag = L.Get("Ver.Tag.Paduex5_17");
             else if (mFwMajor == 2 && mFwMinor == 18) tag = L.Get("Ver.Tag.Paduex4_10");
@@ -87,6 +90,15 @@ namespace ConfigAppNS
         private bool FwHasKeyMap()
         {
             return mFwValid && (mFwMajor >= 3 || (mFwMajor == 2 && mFwMinor >= 17));
+        }
+        /// <summary>
+        /// Stock V2.13 and every image up to V3.0 never write the sensitivity page; V3.1 writes
+        /// it but its boot code still overwrites the loaded table with 200. On all of them the
+        /// sensitivity reads back as 200 after a power cycle. V3.2 keeps the saved values.
+        /// </summary>
+        private bool FwPersistsSensitivity()
+        {
+            return mFwValid && (mFwMajor > 3 || (mFwMajor == 3 && mFwMinor >= 2));
         }
 
         private void ResetDeviceVersion()
@@ -2060,13 +2072,18 @@ namespace ConfigAppNS
 
         private byte Write_Config_PausingDebug(byte configType, int[] configOut, int len)
         {
+            return Write_Config_PausingDebug(configType, configOut, len, false);
+        }
+
+        private byte Write_Config_PausingDebug(byte configType, int[] configOut, int len, bool verifyByReboot)
+        {
             bool wasDebug = bDebugModesFG;
             if (wasDebug)
             {
                 SetDeviceRawDebugMode(false);
                 Thread.Sleep(80);
             }
-            byte result = Write_Config_Value(configType, configOut, len);
+            byte result = Write_Config_Value(configType, configOut, len, verifyByReboot);
             if (wasDebug)
             {
                 Thread.Sleep(80);
@@ -2427,6 +2444,15 @@ namespace ConfigAppNS
 
         private byte Read_Config_Value(byte ConfigType, int[] ConfigOut, int Len)
         {
+            return Read_Config_Core(ConfigType, ConfigOut, Len, false);
+        }
+
+        /// <summary>
+        /// GET_SENS. With <paramref name="quiet"/> nothing is shown to the user (used for the
+        /// read-back check after a save); the outcome still goes to the log.
+        /// </summary>
+        private byte Read_Config_Core(byte ConfigType, int[] ConfigOut, int Len, bool quiet)
+        {
             //-------------------------------------------------------------------------------------------
             byte index = 0;
             byte ReportIndex = 0x00;
@@ -2479,14 +2505,15 @@ namespace ConfigAppNS
                     {
                         ConfigOut[ConfigOutIndex + i] = ((InputReportBuf[ReportIndex + SyncLen + (i * 2 + 0)] << 8) | (InputReportBuf[ReportIndex + SyncLen + (i * 2 + 1)]));
                     }
-                    DebugLog.Log("GET_SENS type {0:X2}: OK crc={1:X2}", ConfigType, CS);
+                    DebugLog.Log("GET_SENS type {0:X2}: OK crc={1:X2} values={2}", ConfigType, CS, ValuesText(ConfigOut, Len));
                     if ((ConfigType & 0x0F) == 0x01 && ConfigOut == ColorBuffer)
                         MarkAllPadLedKnown(true);   // pad highlight now follows the board's LED colours
                 }
                 else
                 {
                     DebugLog.Log("GET_SENS type {0:X2}: CRC error calc={1:X2} got={2:X2}", ConfigType, CS, InputReportBuf[ReportIndex + PktLen - 1]);
-                    MessageBox.Show(L.F("Cfg.ReadCsError", CS.ToString("X02"), InputReportBuf[ReportIndex + PktLen - 1].ToString("X02")), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    if (!quiet)
+                        MessageBox.Show(L.F("Cfg.ReadCsError", CS.ToString("X02"), InputReportBuf[ReportIndex + PktLen - 1].ToString("X02")), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return 0;
                 }
                 //---------------------------------------------------------------------------------------
@@ -2498,13 +2525,53 @@ namespace ConfigAppNS
                            : kind == ReplyKind.NoData ? L.Get("Ver.Fail.HidRead")
                            : kind == ReplyKind.Empty ? L.Get("Ver.Fail.NoReply")
                            : HexHead(InputReportBuf, ReportIndex, 5);
-                MessageBox.Show(L.F("Cfg.ReadError", why), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
+                if (!quiet)
+                    MessageBox.Show(L.F("Cfg.ReadError", why), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return 0;
             }
             //-------------------------------------------------------------------------------------------
-            MessageBox.Show(L.Get("Cfg.ReadOk"), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+            if (!quiet)
+                MessageBox.Show(L.Get("Cfg.ReadOk"), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
             return 1;
             //-------------------------------------------------------------------------------------------
+        }
+
+        private static string ValuesText(int[] values, int len)
+        {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < len && i < values.Length; i++)
+            {
+                if (i > 0) sb.Append(i % SENSORS_PER_KEY == 0 ? " | " : " ");
+                sb.Append(values[i]);
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Read the table back right after a SET_SENS and compare it with what was sent.
+        /// Returns null when every value matches, otherwise a short description of the first
+        /// difference (key / sensor, sent, read). A failed read-back is reported as well.
+        /// </summary>
+        private string Verify_Config_Written(byte ConfigType, int[] Sent, int Len)
+        {
+            int[] back = new int[CONFIG_VALUE_COUNT];
+            Thread.Sleep(50);
+            if (Read_Config_Core(ConfigType, back, Len, true) == 0)
+            {
+                DebugLog.Log("VERIFY type {0:X2}: read-back failed", ConfigType);
+                return L.Get("Cfg.VerifyReadFail");
+            }
+            for (int i = 0; i < Len; i++)
+            {
+                if (back[i] != Sent[i])
+                {
+                    DebugLog.Log("VERIFY type {0:X2}: MISMATCH at [{1}] sent={2} read={3}; sent={4}; read={5}",
+                        ConfigType, i, Sent[i], back[i], ValuesText(Sent, Len), ValuesText(back, Len));
+                    return L.F("Cfg.VerifyMismatch", i / SENSORS_PER_KEY + 1, (char)('A' + i % SENSORS_PER_KEY), Sent[i], back[i]);
+                }
+            }
+            DebugLog.Log("VERIFY type {0:X2}: read-back matches", ConfigType);
+            return null;
         }
 
         /// =============================================================================================
@@ -2515,7 +2582,17 @@ namespace ConfigAppNS
         //Data: 03 E8 03 E8 03 E8 03E8 03E8 03E8 03E8 03E8 03E8 03E8 03E8 03E8 03E8 03E8 03E8 03E8 
         //CS  : FA
         //RSP : 57 4F 4B FA 00
-        private byte Write_Config_Value(byte ConfigType, int[] ConfigOut,int Len)
+        private byte Write_Config_Value(byte ConfigType, int[] ConfigOut, int Len)
+        {
+            return Write_Config_Value(ConfigType, ConfigOut, Len, false);
+        }
+
+        /// <param name="verifyByReboot">
+        /// After the ACK and the RAM read-back, restart the board (SET_MODE with its current
+        /// mode, which the firmware answers with a reset), wait for it to enumerate again and
+        /// read the table once more. Only that second read proves the values came from flash.
+        /// </param>
+        private byte Write_Config_Value(byte ConfigType, int[] ConfigOut, int Len, bool verifyByReboot)
         {
             //-------------------------------------------------------------------------------------------
             byte index = 0;
@@ -2545,6 +2622,8 @@ namespace ConfigAppNS
             Txd_CS = USBCtrl.UPDATE_CRC(0,SendByteBuf, index);
             SendByteBuf[index++] = Txd_CS;
             //-------------------------------------------------------------------------------------------
+            DebugLog.Log("SET_SENS type {0:X2}: values={1} fw={2}", ConfigType, ValuesText(ConfigOut, Len),
+                mFwValid ? FwVersionText() : "?");
             ReplyKind kind = Transact("SET_SENS type " + ConfigType.ToString("X2"), SendByteBuf, index,
                 DeviceProtocol.CMD_SET_SENS, 100, InputReportBuf);
             //-------------------------------------------------------------------------------------------
@@ -2563,9 +2642,121 @@ namespace ConfigAppNS
                 return 0;
             }
             //-------------------------------------------------------------------------------------------
-            MessageBox.Show(L.Get("Cfg.WriteOk"), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+            // The ACK only says the packet was accepted. Read the table back and compare, so a
+            // save that did not take effect is visible immediately instead of after a re-plug.
+            string verify = Verify_Config_Written(ConfigType, ConfigOut, Len);
+            if (verify != null)
+            {
+                MessageBox.Show(L.F("Cfg.WriteNotApplied", verify), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return 0;
+            }
+            if (!verifyByReboot)
+            {
+                MessageBox.Show(L.Get("Cfg.WriteOkVerified"), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return 1;
+            }
+            //-------------------------------------------------------------------------------------------
+            // The RAM read-back above is what the board holds right now, not what it will load at
+            // the next power-up. Restart it and read the table again: that read comes from flash.
+            string rebootResult = Verify_Config_AfterReboot(ConfigType, ConfigOut, Len);
+            if (rebootResult != null)
+            {
+                // Version re-read after the restart: a known pre-V3.2 image explains a lost
+                // sensitivity table by itself; anything else needs the log.
+                string hint = (ConfigType & 0x0F) == 0x00 && mFwValid && !FwPersistsSensitivity()
+                    ? L.F("Cfg.RebootHintOldFw", FwVersionText())
+                    : L.Get("Cfg.RebootHintLog");
+                MessageBox.Show(L.F("Cfg.WriteLostAfterReboot", rebootResult, hint), L.Get("Msg.SystemTitle"),
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return 0;
+            }
+            MessageBox.Show(L.Get("Cfg.WriteOkRebootVerified"), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
             return 1;
             //-------------------------------------------------------------------------------------------
+        }
+
+        private const int REBOOT_WAIT_MS = 12000;
+        private const int REBOOT_POLL_MS = 250;
+
+        /// <summary>Mode byte the board reported last (player bits + USB mode radio buttons).</summary>
+        private byte CurrentWorkMode()
+        {
+            byte mode = mDevicePlayerBits;
+            if (radioButton_HID.Checked) mode |= (byte)UserMode.DDR_HID;
+            else if (radioButton_IO4.Checked) mode |= (byte)UserMode.DDR_IO4;
+            else mode |= (byte)UserMode.DDR_KBS;
+            return mode;
+        }
+
+        /// <summary>
+        /// SET_MODE with the current mode (the firmware stores it and resets), wait for the
+        /// board to come back, read the table and compare it with what was saved.
+        /// Returns null when the values survived the restart, otherwise a description.
+        /// </summary>
+        private string Verify_Config_AfterReboot(byte ConfigType, int[] Sent, int Len)
+        {
+            byte[] cmd = new byte[64];
+            cmd[0] = (byte)UserCommand.SET_MODE;
+            cmd[1] = CurrentWorkMode();
+            DebugLog.Log("REBOOT-VERIFY type {0:X2}: TX slot{1} SET_MODE {2} to restart the board", ConfigType, mDeviceIndex, DebugLog.Hex(cmd, 0, 2));
+            USBCtrl.USBLib_DeviceCtrlOutput(mDeviceIndex, 0, 64, cmd);
+            //-------------------------------------------------------------------------------------------
+            Thread.Sleep(400);                 // let the old handle go away before probing
+            int waited = WaitForDeviceBack(REBOOT_WAIT_MS);
+            if (waited < 0)
+            {
+                DebugLog.Log("REBOOT-VERIFY type {0:X2}: board did not come back within {1} ms (device={2}, version={3})",
+                    ConfigType, REBOOT_WAIT_MS, bDeviceStatusFG, mFwValid);
+                return L.Get("Cfg.RebootNoDevice");
+            }
+            DebugLog.Log("REBOOT-VERIFY type {0:X2}: board back after {1} ms, fw={2}", ConfigType, waited, FwVersionText());
+            //-------------------------------------------------------------------------------------------
+            int[] back2 = new int[CONFIG_VALUE_COUNT];
+            Thread.Sleep(150);
+            if (Read_Config_Core(ConfigType, back2, Len, true) == 0)
+            {
+                DebugLog.Log("REBOOT-VERIFY type {0:X2}: GET_SENS after restart failed", ConfigType);
+                return L.Get("Cfg.RebootReadFail");
+            }
+            for (int i = 0; i < Len; i++)
+            {
+                if (back2[i] != Sent[i])
+                {
+                    DebugLog.Log("REBOOT-VERIFY type {0:X2}: LOST at [{1}] saved={2} after restart={3}; saved={4}; after restart={5}",
+                        ConfigType, i, Sent[i], back2[i], ValuesText(Sent, Len), ValuesText(back2, Len));
+                    return L.F("Cfg.RebootMismatch", i / SENSORS_PER_KEY + 1, (char)('A' + i % SENSORS_PER_KEY), Sent[i], back2[i]);
+                }
+            }
+            DebugLog.Log("REBOOT-VERIFY type {0:X2}: values survived the restart (read from flash)", ConfigType);
+            return null;
+        }
+
+        /// <summary>
+        /// Drop the current handle and poll until the board enumerates again and GET_MODE
+        /// succeeds. WM_DEVICECHANGE arrives on this thread, so messages are pumped while
+        /// polling instead of blocking in Sleep. Returns the elapsed milliseconds, or -1 on timeout.
+        /// </summary>
+        private int WaitForDeviceBack(int timeoutMs)
+        {
+            Cursor = Cursors.WaitCursor;
+            DateTime t0 = DateTime.Now;
+            try
+            {
+                bDeviceStatusFG = false;
+                USBCtrl.USBLib_Disconnect();
+                while (true)
+                {
+                    Application.DoEvents();
+                    Thread.Sleep(REBOOT_POLL_MS);
+                    if (!bDeviceStatusFG) Find_USB_Deivce();
+                    if (bDeviceStatusFG && mFwValid) return (int)(DateTime.Now - t0).TotalMilliseconds;
+                    if ((DateTime.Now - t0).TotalMilliseconds >= timeoutMs) return -1;
+                }
+            }
+            finally
+            {
+                Cursor = Cursors.Default;
+            }
         }
 
         /// =============================================================================================
@@ -3020,22 +3211,34 @@ namespace ConfigAppNS
             byte ConfigType = 0x00;
             //-------------------------------------------------------------------------------------------
             byte result = 0x00;
+            // Every save from this button ends with a board restart and a second read, so the
+            // user sees right away whether the values are really in flash (see Write_Config_Value).
             if (tabControl1.SelectedIndex == 0)
             {
                 ConfigType |= 0x00;
-                result = Write_Config_PausingDebug(ConfigType, SensiBuffer, CONFIG_VALUE_COUNT);
+                // Up to V3.1 the board forgets the sensitivity at the next power-up; say so
+                // before writing, so nobody is surprised by the post-restart comparison.
+                if (mFwValid && !FwPersistsSensitivity())
+                {
+                    DebugLog.Log("SET_SENS type 00: firmware {0} does not keep the sensitivity across power-up, asking before writing", FwVersionText());
+                    DialogResult r = MessageBox.Show(L.F("Cfg.SensiOldFwConfirm", FwVersionText()), L.Get("App.Name"),
+                        MessageBoxButtons.OKCancel, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+                    DebugLog.Log("SET_SENS type 00: user chose {0}", r);
+                    if (r != DialogResult.OK) return;
+                }
+                result = Write_Config_PausingDebug(ConfigType, SensiBuffer, CONFIG_VALUE_COUNT, true);
             }
             //-------------------------------------------------------------------------------------------
             else if (tabControl1.SelectedIndex == 1)
             {
                 ConfigType |= 0x01;
-                result = Write_Config_PausingDebug(ConfigType, ColorBuffer, CONFIG_VALUE_COUNT);
+                result = Write_Config_PausingDebug(ConfigType, ColorBuffer, CONFIG_VALUE_COUNT, true);
             }
             //-------------------------------------------------------------------------------------------
             else if (tabControl1.SelectedIndex == 2)
             {
                 ConfigType |= 0x02;
-                result = Write_Config_PausingDebug(ConfigType, DTickBuffer, CONFIG_VALUE_COUNT);
+                result = Write_Config_PausingDebug(ConfigType, DTickBuffer, CONFIG_VALUE_COUNT, true);
             }
             //-------------------------------------------------------------------------------------------
             if (result != 0)
@@ -3053,10 +3256,57 @@ namespace ConfigAppNS
         private void Btn_OTA_Click(object sender, EventArgs e)
         {
             // Firmware upgrade dialog; it switches the board into OTA mode itself.
-            App_OTA ota = new App_OTA();
+            bool hadVersion = mFwValid;
+            int hverBefore = mDevHVer, majorBefore = mFwMajor, minorBefore = mFwMinor;
+            App_OTA ota = new App_OTA(mFwValid, mDevHVer, mFwMajor, mFwMinor);
             ota.ShowDialog(this);
-            // Refresh device state after upgrade window closes
-            Find_USB_Deivce();
+            FirmwareImageInfo flashed = ota.FlashedImage;
+            if (flashed == null)
+            {
+                // Nothing was written (cancelled / failed); just refresh the device state.
+                Find_USB_Deivce();
+                return;
+            }
+            Verify_Firmware_AfterOta(flashed, hadVersion, hverBefore, majorBefore, minorBefore);
+        }
+
+        private const int OTA_RETURN_WAIT_MS = 15000;
+
+        /// <summary>
+        /// The bootloader has no read command, so the only end-to-end proof that an upgrade took
+        /// is the version the new APP reports. Wait for the board to enumerate as the APP again,
+        /// read GET_MODE and compare HVer / FVer with the constants in the file that was flashed.
+        /// </summary>
+        private void Verify_Firmware_AfterOta(FirmwareImageInfo flashed, bool hadVersion, int hverBefore, int majorBefore, int minorBefore)
+        {
+            string before = hadVersion ? string.Format("HVer={0:X2} FVer={1}", hverBefore, FirmwareImageInfo.VersionText(majorBefore, minorBefore)) : "unknown";
+            DebugLog.Log("OTA-VERIFY: waiting for the APP to enumerate; file {0}; board before OTA {1}", flashed.VersionLogText(), before);
+            int waited = WaitForDeviceBack(OTA_RETURN_WAIT_MS);
+            if (waited < 0)
+            {
+                DebugLog.Log("OTA-VERIFY: NO DEVICE within {0} ms (device={1}, version={2})", OTA_RETURN_WAIT_MS, bDeviceStatusFG, mFwValid);
+                MessageBox.Show(L.F("Ota.VerifyNoDevice", OTA_RETURN_WAIT_MS / 1000), L.Get("App.Name"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            string now = string.Format("HVer={0:X2} FVer={1}", mDevHVer, FwVersionText());
+            if (!flashed.HasVersion)
+            {
+                DebugLog.Log("OTA-VERIFY: file had no version bytes; board now {0} (was {1}), back after {2} ms", now, before, waited);
+                return;
+            }
+            if (flashed.SameVersionAs(mDevHVer, mFwMajor, mFwMinor))
+            {
+                bool unchanged = hadVersion && hverBefore == mDevHVer && majorBefore == mFwMajor && minorBefore == mFwMinor;
+                DebugLog.Log("OTA-VERIFY: OK board reports {0} as in the file{1}, back after {2} ms",
+                    now, unchanged ? " (same as before the upgrade, so a non-write cannot be told apart)" : "", waited);
+                MessageBox.Show(L.F("Ota.VerifyOk", FwVersionText()), L.Get("App.Name"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            DebugLog.Log("OTA-VERIFY: MISMATCH file {0}; board now {1}; before {2}; back after {3} ms",
+                flashed.VersionLogText(), now, before, waited);
+            MessageBox.Show(
+                L.F("Ota.VerifyMismatch", flashed.VersionText(), FwVersionText()),
+                L.Get("App.Name"), MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
 
         /// =============================================================================================

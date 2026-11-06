@@ -16,7 +16,7 @@ Only flash peripheral / printf are stubbed; CRC8, CRC16, flash_read, the USB
 command parser, the flash config helpers and the report builder are the bytes
 from the .bin.
 
-  python3 firmware/tests/emu_keymap_e2e.py firmware/PADUEX5_V3.0.bin
+  python3 firmware/tests/emu_keymap_e2e.py firmware/PADUEX5_V3.2.bin
 """
 from __future__ import annotations
 
@@ -180,7 +180,7 @@ def host_paint_key(colors: list[int], key: int, code: int) -> list[int]:
 
 
 def main() -> int:
-    img = Path(sys.argv[1] if len(sys.argv) > 1 else "firmware/PADUEX5_V3.0.bin").read_bytes()
+    img = Path(sys.argv[1] if len(sys.argv) > 1 else "firmware/PADUEX5_V3.2.bin").read_bytes()
     fails = 0
 
     def check(name: str, ok: bool, detail: str = "") -> None:
@@ -255,7 +255,7 @@ def main() -> int:
     host_set(board, 0x01, colors)
     check("reset to default -> H K J N M", [board.press(1 << k)[0] for k in range(5)] == default_2p)
 
-    print(f"\n{Path(sys.argv[1] if len(sys.argv) > 1 else 'PADUEX5_V3.0.bin').name}: {'ALL PASS' if fails == 0 else f'{fails} FAIL'}")
+    print(f"\n{Path(sys.argv[1] if len(sys.argv) > 1 else 'PADUEX5_V3.2.bin').name}: {'ALL PASS' if fails == 0 else f'{fails} FAIL'}")
     return 1 if fails else 0
 
 
