@@ -13,7 +13,7 @@
 
 ## 灯色仿真预览
 
-![LED sim](/opt/cursor/artifacts/sim-report/led-color-sim.png)
+![LED sim](./led-color-sim.png)
 
 ## 明细
 

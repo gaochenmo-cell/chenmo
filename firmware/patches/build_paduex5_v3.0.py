@@ -1,0 +1,181 @@
+#!/usr/bin/env python3
+"""
+Build PADUEX5_V3.0.bin (5-key board).
+
+Base   : legacy/paduex5_1.6.bin = stock 5KEY_2P_V2.13.bin + bounded SendPacket wait
+Patches:
+  1. Report_Normal keyboard remap (0x08005D72..0x08005DCA, 88 bytes).
+     The firmware only reads AppUser.Color[key*4] for the LED colour; Color[key*4+1]
+     is transferred and persisted by the stock GET/SET_SENS(type 1) path but never
+     used. The remap reads the keyboard usage from that slot:
+         value = 0x4B00 | usage  ->  use `usage`
+         anything else           ->  stock 1P/2P table
+     The new code plus both stock tables fit inside the old 1P chain; the old 2P
+     chain becomes unreachable and is left untouched.
+  2. GET_MODE reply version bytes: FW major 2 -> 3 (0x08006164), minor -> 0 (0x0800616A).
+     Stock V2.13 still reports 2.12, paduex5_1.7 reported 2.17.
+
+Vector table, boot sequence, USB commands, flash code and every other function are
+byte-identical to the base. The build asserts the diff set, 0x14C == 0x080084A5 and
+size 37072, and checks that the result differs from legacy/paduex5_1.7.bin only in the
+two version bytes.
+"""
+from __future__ import annotations
+
+import struct
+import sys
+from pathlib import Path
+
+from capstone import CS_ARCH_ARM, CS_MODE_THUMB, Cs
+
+BASE = 0x08004000
+SIZE = 37072
+USB_VECTOR_OFF = 0x14C
+USB_VECTOR = 0x080084A5
+
+APPUSER = 0x200019D0
+COLOR_OFF = 0x146           # AppUser.Color  (== 0x20001B16 - APPUSER)
+CONFIGMODE = 0x20000008
+
+LOOKUP = 0x08005D72         # start of "ldr r0,=ConfigMode / and 0xf0 / bne 2P"
+JOIN = 0x08005DCA           # and.w r0, r5, #0x80  (shift-bit handling, shared tail)
+CHAIN1P_END = 0x08005DCA
+LIT_APPUSER = 0x08005E64
+LIT_CONFIGMODE = 0x08005E68
+
+TAB_1P = [0x1A, 0x1B, 0x04, 0x07, 0x16, 0x14, 0x08, 0x1D, 0x06, 0x55]  # w x a d s q e z c *
+TAB_2P = [0x0B, 0x0E, 0x0D, 0x11, 0x10, 0x14, 0x08, 0x1D, 0x06, 0x55]  # h k j n m q e z c *
+MAP_TAG = 0x4B
+
+# GET_MODE reply builder (0x08006148): 47 mode A2 13 major minor
+FW_MAJOR_SITE = 0x08006164  # movs r1, #2
+FW_MINOR_SITE = 0x0800616A  # movs r1, #12
+FW_MAJOR_NEW = 3
+FW_MINOR_NEW = 0
+
+
+def off(va: int) -> int:
+    return va - BASE
+
+
+def ldr_pc(addr: int, rt: int, lit: int) -> bytes:
+    pc = (addr + 4) & ~3
+    d = lit - pc
+    assert 0 <= d <= 1020 and d % 4 == 0, (hex(addr), hex(lit))
+    return struct.pack("<H", 0x4800 | (rt << 8) | (d // 4))
+
+
+def adr(addr: int, rd: int, target: int) -> bytes:
+    pc = (addr + 4) & ~3
+    d = target - pc
+    assert 0 <= d <= 1020 and d % 4 == 0, (hex(addr), hex(target))
+    return struct.pack("<H", 0xA000 | (rd << 8) | (d // 4))
+
+
+def b_n(addr: int, target: int) -> bytes:
+    imm = (target - (addr + 4)) // 2
+    assert -1024 <= imm <= 1023
+    return struct.pack("<H", 0xE000 | (imm & 0x7FF))
+
+
+def bcond(addr: int, cond: int, target: int) -> bytes:
+    imm = (target - (addr + 4)) // 2
+    assert -128 <= imm <= 127
+    return struct.pack("<H", 0xD000 | (cond << 8) | (imm & 0xFF))
+
+
+COND_EQ, COND_NE = 0x0, 0x1
+
+
+def build_remap() -> bytearray:
+    code = bytearray()
+
+    def here() -> int:
+        return LOOKUP + len(code)
+
+    def emit(b: bytes) -> None:
+        code.extend(b)
+
+    emit(ldr_pc(here(), 0, LIT_APPUSER))                 # ldr  r0, =AppUser
+    emit(struct.pack("<H", 0x00E1))                      # lsls r1, r4, #3        (Index*8)
+    emit(struct.pack("<H", 0x1840))                      # adds r0, r0, r1
+    emit(struct.pack("<HH", 0xF8B0, 0x5000 | (COLOR_OFF + 2)))  # ldrh.w r5, [r0, #0x148]  Color[Index*4+1]
+    emit(struct.pack("<H", 0x0A28))                      # lsrs r0, r5, #8
+    emit(struct.pack("<H", 0x2800 | MAP_TAG))            # cmp  r0, #0x4B
+    bne_at = len(code)
+    emit(b"\x00\x00")                                    # bne  fallback (patched below)
+    emit(struct.pack("<H", 0xB2ED))                      # uxtb r5, r5
+    emit(b_n(here(), JOIN))                              # b    join
+    fallback = here()
+    struct.pack_into("<H", code, bne_at, struct.unpack("<H", bcond(LOOKUP + bne_at, COND_NE, fallback))[0])
+    emit(ldr_pc(here(), 0, LIT_CONFIGMODE))              # ldr  r0, =ConfigMode
+    emit(struct.pack("<H", 0x7800))                      # ldrb r0, [r0]
+    # layout after this point: adr(2) lsrs(2) beq(2) adds(2) ldrb(2) b(2) [pad] tab (4-aligned)
+    tab = (here() + 12 + 3) & ~3
+    emit(adr(here(), 1, tab))                            # adr  r1, tab_1p
+    emit(struct.pack("<H", 0x0900))                      # lsrs r0, r0, #4        ((ConfigMode & 0xF0) >> 4)
+    pick = here() + 4
+    emit(bcond(here(), COND_EQ, pick))                   # beq  pick (1P)
+    emit(struct.pack("<H", 0x310A))                      # adds r1, #10           (2P table)
+    assert here() == pick
+    emit(struct.pack("<H", 0x5D0D))                      # ldrb r5, [r1, r4]
+    emit(b_n(here(), JOIN))                              # b    join
+    while here() < tab:
+        emit(b"\x00\xbf")                                # nop
+    assert here() == tab
+    emit(bytes(TAB_1P) + bytes(TAB_2P))
+    while here() < CHAIN1P_END:
+        emit(b"\x00\xbf" if CHAIN1P_END - here() >= 2 else b"\x00")
+    assert len(code) == CHAIN1P_END - LOOKUP, len(code)
+    return code
+
+
+def main() -> int:
+    root = Path(__file__).resolve().parents[1]
+    src = (root / "legacy" / "paduex5_1.6.bin").read_bytes()
+    buf = bytearray(src)
+    assert len(buf) == SIZE
+
+    # Pre-checks: stock Report_Normal / GET_MODE shape
+    assert struct.unpack_from("<I", buf, off(LIT_APPUSER))[0] == APPUSER
+    assert struct.unpack_from("<I", buf, off(LIT_CONFIGMODE))[0] == CONFIGMODE
+    assert buf[off(JOIN):off(JOIN) + 4] == bytes.fromhex("05f08000")        # and.w r0, r5, #0x80
+    assert buf[off(LOOKUP):off(LOOKUP) + 2] == bytes.fromhex("3d48")        # ldr r0, [pc, #0xf4]
+    assert buf[off(0x08005D7E):off(0x08005D7E) + 4] == bytes.fromhex("0cb91a25")  # cbnz r4 / movs r5,#0x1a
+    assert struct.unpack_from("<I", buf, USB_VECTOR_OFF)[0] == USB_VECTOR
+    assert buf[off(0x08006148):off(0x08006148) + 2] == bytes([0x47, 0x20])          # movs r0, #0x47
+    assert buf[off(0x0800615E):off(0x0800615E) + 2] == bytes([0x13, 0x21])          # movs r1, #0x13 (HVer)
+    assert buf[off(FW_MAJOR_SITE):off(FW_MAJOR_SITE) + 2] == bytes([0x02, 0x21])    # movs r1, #2
+    assert buf[off(FW_MINOR_SITE):off(FW_MINOR_SITE) + 2] == bytes([0x0C, 0x21])    # movs r1, #12
+
+    buf[off(LOOKUP):off(CHAIN1P_END)] = build_remap()
+    buf[off(FW_MAJOR_SITE)] = FW_MAJOR_NEW
+    buf[off(FW_MINOR_SITE)] = FW_MINOR_NEW
+
+    # Post-checks
+    assert len(buf) == SIZE
+    assert buf[:0x200] == src[:0x200], "vector table / early code must not change"
+    assert struct.unpack_from("<I", buf, USB_VECTOR_OFF)[0] == USB_VECTOR
+    diffs = [BASE + i for i, (a, b) in enumerate(zip(src, buf)) if a != b]
+    for va in diffs:
+        assert LOOKUP <= va < CHAIN1P_END or va in (FW_MAJOR_SITE, FW_MINOR_SITE), hex(va)
+    print(f"diff vs paduex5_1.6: {len(diffs)} bytes, all inside {LOOKUP:#x}..{CHAIN1P_END:#x} + version bytes")
+
+    prev = root / "legacy" / "paduex5_1.7.bin"
+    if prev.exists():
+        pd = [BASE + i for i, (a, b) in enumerate(zip(prev.read_bytes(), buf)) if a != b]
+        assert pd == [FW_MAJOR_SITE, FW_MINOR_SITE], [hex(d) for d in pd]
+        print("diff vs paduex5_1.7: version bytes only")
+
+    dst = root / "PADUEX5_V3.0.bin"
+    dst.write_bytes(buf)
+    print(f"wrote {dst} ({len(buf)} bytes), 0x14C = {struct.unpack_from('<I', buf, USB_VECTOR_OFF)[0]:#010x}")
+
+    md = Cs(CS_ARCH_ARM, CS_MODE_THUMB)
+    for insn in md.disasm(bytes(buf[off(FW_MAJOR_SITE):off(FW_MINOR_SITE) + 2]), FW_MAJOR_SITE):
+        print(f"  {insn.address:#010x}: {insn.mnemonic}\t{insn.op_str}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
