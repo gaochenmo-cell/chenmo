@@ -64,8 +64,9 @@ namespace ConfigAppNS
         }
 
         // Known firmware versions:
-        //   3.1  current release (HVer 0x13 = 5-key PADUEX5, 0x14 = 4-key PADUEX4)
-        //   3.0  first V3 release; SET_SENS(sensitivity) only reached RAM, lost on power cycle
+        //   3.2  current release (HVer 0x13 = 5-key PADUEX5, 0x14 = 4-key PADUEX4)
+        //   3.1  SET_SENS(sensitivity) wrote the flash page, but boot still reset the table to 200
+        //   3.0  first V3 release; SET_SENS(sensitivity) only reached RAM
         //   2.17 previous 5-key image, 2.18 previous 4-key image
         //   2.12 stock V2.12 / V2.13 (stock never bumped its minor constant)
         // Anything else is shown as-is. UID / HVer mismatches are annotated, never rejected.
@@ -91,13 +92,13 @@ namespace ConfigAppNS
             return mFwValid && (mFwMajor >= 3 || (mFwMajor == 2 && mFwMinor >= 17));
         }
         /// <summary>
-        /// Stock V2.13 and every image up to V3.0 write the colour and debounce tables to
-        /// flash on SET_SENS but keep the sensitivity table in RAM only, so it reverts to
-        /// the built-in 800 after a power cycle. V3.1 persists all three tables.
+        /// Stock V2.13 and every image up to V3.0 never write the sensitivity page; V3.1 writes
+        /// it but its boot code still overwrites the loaded table with 200. On all of them the
+        /// sensitivity reads back as 200 after a power cycle. V3.2 keeps the saved values.
         /// </summary>
         private bool FwPersistsSensitivity()
         {
-            return mFwValid && (mFwMajor > 3 || (mFwMajor == 3 && mFwMinor >= 1));
+            return mFwValid && (mFwMajor > 3 || (mFwMajor == 3 && mFwMinor >= 2));
         }
 
         private void ResetDeviceVersion()
@@ -2071,13 +2072,18 @@ namespace ConfigAppNS
 
         private byte Write_Config_PausingDebug(byte configType, int[] configOut, int len)
         {
+            return Write_Config_PausingDebug(configType, configOut, len, false);
+        }
+
+        private byte Write_Config_PausingDebug(byte configType, int[] configOut, int len, bool verifyByReboot)
+        {
             bool wasDebug = bDebugModesFG;
             if (wasDebug)
             {
                 SetDeviceRawDebugMode(false);
                 Thread.Sleep(80);
             }
-            byte result = Write_Config_Value(configType, configOut, len);
+            byte result = Write_Config_Value(configType, configOut, len, verifyByReboot);
             if (wasDebug)
             {
                 Thread.Sleep(80);
@@ -2576,7 +2582,17 @@ namespace ConfigAppNS
         //Data: 03 E8 03 E8 03 E8 03E8 03E8 03E8 03E8 03E8 03E8 03E8 03E8 03E8 03E8 03E8 03E8 03E8 
         //CS  : FA
         //RSP : 57 4F 4B FA 00
-        private byte Write_Config_Value(byte ConfigType, int[] ConfigOut,int Len)
+        private byte Write_Config_Value(byte ConfigType, int[] ConfigOut, int Len)
+        {
+            return Write_Config_Value(ConfigType, ConfigOut, Len, false);
+        }
+
+        /// <param name="verifyByReboot">
+        /// After the ACK and the RAM read-back, restart the board (SET_MODE with its current
+        /// mode, which the firmware answers with a reset), wait for it to enumerate again and
+        /// read the table once more. Only that second read proves the values came from flash.
+        /// </param>
+        private byte Write_Config_Value(byte ConfigType, int[] ConfigOut, int Len, bool verifyByReboot)
         {
             //-------------------------------------------------------------------------------------------
             byte index = 0;
@@ -2634,24 +2650,105 @@ namespace ConfigAppNS
                 MessageBox.Show(L.F("Cfg.WriteNotApplied", verify), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return 0;
             }
-            //-------------------------------------------------------------------------------------------
-            // Up to V3.0 the firmware keeps the sensitivity table in RAM only (colour and debounce
-            // are written to flash); say so, otherwise the user discovers it at the next power-up.
-            if ((ConfigType & 0x0F) == 0x00 && !FwPersistsSensitivity())
+            if (!verifyByReboot)
             {
-                if (!mFwValid) ReadDeviceMode();
-                if (!FwPersistsSensitivity())
-                {
-                    DebugLog.Log("SET_SENS type 00: firmware {0} does not persist sensitivity (needs V3.1)",
-                        mFwValid ? FwVersionText() : "?");
-                    MessageBox.Show(L.F("Cfg.WriteOkSensiVolatile", mFwValid ? FwVersionText() : "?"),
-                        L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return 1;
-                }
+                MessageBox.Show(L.Get("Cfg.WriteOkVerified"), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return 1;
             }
-            MessageBox.Show(L.Get("Cfg.WriteOkVerified"), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+            //-------------------------------------------------------------------------------------------
+            // The RAM read-back above is what the board holds right now, not what it will load at
+            // the next power-up. Restart it and read the table again: that read comes from flash.
+            string rebootResult = Verify_Config_AfterReboot(ConfigType, ConfigOut, Len);
+            if (rebootResult != null)
+            {
+                // Version re-read after the restart: a known pre-V3.2 image explains a lost
+                // sensitivity table by itself; anything else needs the log.
+                string hint = (ConfigType & 0x0F) == 0x00 && mFwValid && !FwPersistsSensitivity()
+                    ? L.F("Cfg.RebootHintOldFw", FwVersionText())
+                    : L.Get("Cfg.RebootHintLog");
+                MessageBox.Show(L.F("Cfg.WriteLostAfterReboot", rebootResult, hint), L.Get("Msg.SystemTitle"),
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return 0;
+            }
+            MessageBox.Show(L.Get("Cfg.WriteOkRebootVerified"), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
             return 1;
             //-------------------------------------------------------------------------------------------
+        }
+
+        private const int REBOOT_WAIT_MS = 12000;
+        private const int REBOOT_POLL_MS = 250;
+
+        /// <summary>Mode byte the board reported last (player bits + USB mode radio buttons).</summary>
+        private byte CurrentWorkMode()
+        {
+            byte mode = mDevicePlayerBits;
+            if (radioButton_HID.Checked) mode |= (byte)UserMode.DDR_HID;
+            else if (radioButton_IO4.Checked) mode |= (byte)UserMode.DDR_IO4;
+            else mode |= (byte)UserMode.DDR_KBS;
+            return mode;
+        }
+
+        /// <summary>
+        /// SET_MODE with the current mode (the firmware stores it and resets), wait for the
+        /// board to come back, read the table and compare it with what was saved.
+        /// Returns null when the values survived the restart, otherwise a description.
+        /// </summary>
+        private string Verify_Config_AfterReboot(byte ConfigType, int[] Sent, int Len)
+        {
+            byte[] cmd = new byte[64];
+            cmd[0] = (byte)UserCommand.SET_MODE;
+            cmd[1] = CurrentWorkMode();
+            DebugLog.Log("REBOOT-VERIFY type {0:X2}: TX slot{1} SET_MODE {2} to restart the board", ConfigType, mDeviceIndex, DebugLog.Hex(cmd, 0, 2));
+            USBCtrl.USBLib_DeviceCtrlOutput(mDeviceIndex, 0, 64, cmd);
+            //-------------------------------------------------------------------------------------------
+            // The board drops off the bus and enumerates again; WM_DEVICECHANGE arrives on this
+            // thread, so pump messages while polling instead of blocking in Sleep.
+            Cursor = Cursors.WaitCursor;
+            bool back = false;
+            int waited = 0;
+            try
+            {
+                Thread.Sleep(400);                 // let the old handle go away before probing
+                bDeviceStatusFG = false;
+                USBCtrl.USBLib_Disconnect();
+                for (; waited < REBOOT_WAIT_MS; waited += REBOOT_POLL_MS)
+                {
+                    Application.DoEvents();
+                    Thread.Sleep(REBOOT_POLL_MS);
+                    if (!bDeviceStatusFG) Find_USB_Deivce();
+                    if (bDeviceStatusFG && mFwValid) { back = true; break; }
+                }
+            }
+            finally
+            {
+                Cursor = Cursors.Default;
+            }
+            if (!back)
+            {
+                DebugLog.Log("REBOOT-VERIFY type {0:X2}: board did not come back within {1} ms (device={2}, version={3})",
+                    ConfigType, REBOOT_WAIT_MS, bDeviceStatusFG, mFwValid);
+                return L.Get("Cfg.RebootNoDevice");
+            }
+            DebugLog.Log("REBOOT-VERIFY type {0:X2}: board back after ~{1} ms, fw={2}", ConfigType, waited, FwVersionText());
+            //-------------------------------------------------------------------------------------------
+            int[] back2 = new int[CONFIG_VALUE_COUNT];
+            Thread.Sleep(150);
+            if (Read_Config_Core(ConfigType, back2, Len, true) == 0)
+            {
+                DebugLog.Log("REBOOT-VERIFY type {0:X2}: GET_SENS after restart failed", ConfigType);
+                return L.Get("Cfg.RebootReadFail");
+            }
+            for (int i = 0; i < Len; i++)
+            {
+                if (back2[i] != Sent[i])
+                {
+                    DebugLog.Log("REBOOT-VERIFY type {0:X2}: LOST at [{1}] saved={2} after restart={3}; saved={4}; after restart={5}",
+                        ConfigType, i, Sent[i], back2[i], ValuesText(Sent, Len), ValuesText(back2, Len));
+                    return L.F("Cfg.RebootMismatch", i / SENSORS_PER_KEY + 1, (char)('A' + i % SENSORS_PER_KEY), Sent[i], back2[i]);
+                }
+            }
+            DebugLog.Log("REBOOT-VERIFY type {0:X2}: values survived the restart (read from flash)", ConfigType);
+            return null;
         }
 
         /// =============================================================================================
@@ -3106,22 +3203,24 @@ namespace ConfigAppNS
             byte ConfigType = 0x00;
             //-------------------------------------------------------------------------------------------
             byte result = 0x00;
+            // Every save from this button ends with a board restart and a second read, so the
+            // user sees right away whether the values are really in flash (see Write_Config_Value).
             if (tabControl1.SelectedIndex == 0)
             {
                 ConfigType |= 0x00;
-                result = Write_Config_PausingDebug(ConfigType, SensiBuffer, CONFIG_VALUE_COUNT);
+                result = Write_Config_PausingDebug(ConfigType, SensiBuffer, CONFIG_VALUE_COUNT, true);
             }
             //-------------------------------------------------------------------------------------------
             else if (tabControl1.SelectedIndex == 1)
             {
                 ConfigType |= 0x01;
-                result = Write_Config_PausingDebug(ConfigType, ColorBuffer, CONFIG_VALUE_COUNT);
+                result = Write_Config_PausingDebug(ConfigType, ColorBuffer, CONFIG_VALUE_COUNT, true);
             }
             //-------------------------------------------------------------------------------------------
             else if (tabControl1.SelectedIndex == 2)
             {
                 ConfigType |= 0x02;
-                result = Write_Config_PausingDebug(ConfigType, DTickBuffer, CONFIG_VALUE_COUNT);
+                result = Write_Config_PausingDebug(ConfigType, DTickBuffer, CONFIG_VALUE_COUNT, true);
             }
             //-------------------------------------------------------------------------------------------
             if (result != 0)

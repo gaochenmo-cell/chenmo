@@ -284,13 +284,13 @@ Save anyway? It will take effect after upgrading the firmware.</value>
     <value>Device version not read — click "Read Mode" to retry.</value>
   </data>
   <data name="Ver.Tag.Paduex5_17" xml:space="preserve">
-    <value> (previous 5-key firmware, upgrade to V3.1)</value>
+    <value> (previous 5-key firmware, upgrade to V3.2)</value>
   </data>
   <data name="Ver.Tag.Paduex4_10" xml:space="preserve">
-    <value> (previous 4-key firmware, upgrade to V3.1)</value>
+    <value> (previous 4-key firmware, upgrade to V3.2)</value>
   </data>
   <data name="Ver.Tag.Stock212" xml:space="preserve">
-    <value> (stock V2.12/V2.13, upgrade to V3.1)</value>
+    <value> (stock V2.12/V2.13, upgrade to V3.2)</value>
   </data>
   <data name="Ver.Tag.Board5" xml:space="preserve">
     <value> (PADUEX5)</value>
@@ -299,13 +299,13 @@ Save anyway? It will take effect after upgrading the firmware.</value>
     <value> (PADUEX4)</value>
   </data>
   <data name="Ver.Tag.UpgradeSensi" xml:space="preserve">
-    <value>, upgrade to V3.1 (sensitivity not kept across power cycles)</value>
+    <value>, upgrade to V3.2 (sensitivity not kept across power cycles)</value>
   </data>
   <data name="Cfg.WriteOkVerified" xml:space="preserve">
     <value>Saved. Read back from the device and verified.</value>
   </data>
   <data name="Cfg.WriteOkSensiVolatile" xml:space="preserve">
-    <value>Saved and verified, but firmware {0} keeps the sensitivity table in RAM only: it reverts to the factory value after the USB cable is unplugged. Upgrade the firmware to V3.1 to keep it.</value>
+    <value>Saved and verified, but firmware {0} resets the sensitivity to 200 at every power-up. Upgrade the firmware to V3.2 to keep it.</value>
   </data>
   <data name="Cfg.WriteNotApplied" xml:space="preserve">
     <value>Save did not take effect ({0}). See PADUEX5.log for the packets.</value>
@@ -315,6 +315,27 @@ Save anyway? It will take effect after upgrading the firmware.</value>
   </data>
   <data name="Cfg.VerifyMismatch" xml:space="preserve">
     <value>K{0}-{1}: sent {2}, device reports {3}</value>
+  </data>
+  <data name="Cfg.WriteOkRebootVerified" xml:space="preserve">
+    <value>Saved. The board was restarted and the values read back from it match: they are stored in flash.</value>
+  </data>
+  <data name="Cfg.WriteLostAfterReboot" xml:space="preserve">
+    <value>Saved and acknowledged, but after restarting the board the values did not survive ({0}). {1}</value>
+  </data>
+  <data name="Cfg.RebootHintOldFw" xml:space="preserve">
+    <value>Firmware {0} resets the sensitivity table at power-up. Upgrade the firmware to V3.2 (Firmware Upgrade button).</value>
+  </data>
+  <data name="Cfg.RebootHintLog" xml:space="preserve">
+    <value>Please send PADUEX5.log from the program folder.</value>
+  </data>
+  <data name="Cfg.RebootNoDevice" xml:space="preserve">
+    <value>the board did not reconnect within 12 s; unplug and plug it back in</value>
+  </data>
+  <data name="Cfg.RebootReadFail" xml:space="preserve">
+    <value>the read after the restart failed</value>
+  </data>
+  <data name="Cfg.RebootMismatch" xml:space="preserve">
+    <value>K{0}-{1}: saved {2}, after restart {3}</value>
   </data>
   <data name="Cfg.ReadOk" xml:space="preserve">
     <value>Read complete.</value>
@@ -333,9 +354,9 @@ Save anyway? It will take effect after upgrading the firmware.</value>
   </data>
   <data name="Ota.Tips" xml:space="preserve">
     <value>How to:
-1. Pick PADUEX5_V3.1.bin for the 5-key pad or PADUEX4_V3.1.bin for the 4-key pad
+1. Pick PADUEX5_V3.2.bin for the 5-key pad or PADUEX4_V3.2.bin for the 4-key pad
 2. Keep USB connected; do not unplug, power off or close this window while upgrading
-3. On failure the board stays in Bootloader - just retry. ISP: PADUEX5_V3.1.bin / PADUEX4_V3.1.bin or stock V2.13 only</value>
+3. On failure the board stays in Bootloader - just retry. ISP: PADUEX5_V3.2.bin / PADUEX4_V3.2.bin or stock V2.13 only</value>
   </data>
   <data name="Ota.Addr" xml:space="preserve">
     <value>APP address: 0x{0}</value>
@@ -377,7 +398,7 @@ Save anyway? It will take effect after upgrading the firmware.</value>
     <value>This image is longer than the stock image ({0} &gt; {1} bytes).
 
 This OTA window writes the whole image and is normally fine.
-If you use the vendor ISP/IPS tool instead: flash PADUEX5_V3.1.bin / PADUEX4_V3.1.bin or stock V2.13 at 0x08004000, otherwise the tail may be truncated and USB will stop enumerating.</value>
+If you use the vendor ISP/IPS tool instead: flash PADUEX5_V3.2.bin / PADUEX4_V3.2.bin or stock V2.13 at 0x08004000, otherwise the tail may be truncated and USB will stop enumerating.</value>
   </data>
   <data name="Ota.SizeWarnTitle" xml:space="preserve">
     <value>PADUEX5 Size Notice</value>
@@ -398,7 +419,7 @@ If you use the vendor ISP/IPS tool instead: flash PADUEX5_V3.1.bin / PADUEX4_V3.
     <value>Reset vector is outside the APP region (0x08004000~0x0800F800). Rejected to prevent bricking.</value>
   </data>
   <data name="Ota.V.BadUsbVector" xml:space="preserve">
-    <value>USB interrupt vector (0x14C) of this image has been overwritten. Rejected. Use PADUEX5_V3.1.bin / PADUEX4_V3.1.bin or stock V2.13.</value>
+    <value>USB interrupt vector (0x14C) of this image has been overwritten. Rejected. Use PADUEX5_V3.2.bin / PADUEX4_V3.2.bin or stock V2.13.</value>
   </data>
   <data name="Ota.SelectFirst" xml:space="preserve">
     <value>Please select a firmware file first.</value>
@@ -413,7 +434,7 @@ Address: 0x{2}
 Please note:
 - Do not unplug USB, power off or close this window while upgrading
 - The board jumps to the new image only after the write and CRC pass; on failure it stays in Bootloader and you can retry
-- Use PADUEX5_V3.1.bin (5-key) or PADUEX4_V3.1.bin (4-key)
+- Use PADUEX5_V3.2.bin (5-key) or PADUEX4_V3.2.bin (4-key)
 
 Start now?</value>
   </data>

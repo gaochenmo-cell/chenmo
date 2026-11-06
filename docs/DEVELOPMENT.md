@@ -15,10 +15,10 @@
 
 | 项 | 格式 | 示例 |
 |---|---|---|
-| 固件文件 | `PADUEX5_Vx.y.bin` / `PADUEX4_Vx.y.bin` | `PADUEX5_V3.1.bin` |
-| 固件上报 | GET_MODE 回包 FW major / minor 为整数 | `03 01` → 上位机显示 `V3.1` |
-| 上位机 | `AssemblyVersion` 三段式显示 | `PADUEX5 V3.1.0` |
-| 交付包 | `ConfigApp-PADUEX5-Vx.y.z-YYYYMMDD.zip` | `ConfigApp-PADUEX5-V3.1.0-20261106.zip` |
+| 固件文件 | `PADUEX5_Vx.y.bin` / `PADUEX4_Vx.y.bin` | `PADUEX5_V3.2.bin` |
+| 固件上报 | GET_MODE 回包 FW major / minor 为整数 | `03 02` → 上位机显示 `V3.2` |
+| 上位机 | `AssemblyVersion` 三段式显示 | `PADUEX5 V3.2.0` |
+| 交付包 | `ConfigApp-PADUEX5-Vx.y.z-YYYYMMDD.zip` | `ConfigApp-PADUEX5-V3.2.0-20261106.zip` |
 
 五键 / 四键固件版本号相同，由 GET_MODE 回包的 HVer 字节区分：`0x13` 五键、`0x14` 四键。
 
@@ -46,6 +46,7 @@
 | `0x08006148` | GET_MODE 回包组装：`0x0800615E` HVer、`0x08006164` FW major、`0x0800616A` FW minor（均为 `movs r1,#imm`） |
 | `0x080069CC` | 键扫描；`0x08006BE2 cmp r4,#imm` 为按下/释放循环边界（五键 0x24，四键 0x10） |
 | `0x080049E0` | `App_Config_Command_Report`（GET/SET_SENS 处理）；`0x08004BD8..0x08004C04` 为 SET_SENS 落 Flash 的分支（V3.1 改写） |
+| `0x08006470` | 上电配置加载（三次 `App_Get_Flash_Cofnig` + 打印）；`0x080064DE..0x080064F4` 原为 `Sensi[i]=200` 填充循环（V3.2 置 NOP）；`0x0800CE94` 为 SENSI 页的回退默认表（V3.2 由 800 改 200） |
 | `0x08004D38` / `0x080053F0` | `App_Get_Flash_Cofnig` / `App_Set_Flash_Cofnig` |
 
 ## 4. 固件补丁约束
@@ -63,7 +64,7 @@
 - 防粘键：`App_USB_KBS/HID_SendPacket` 原来 `while(g_*_tx_completed)` 死等；改为约 0x80000 次的有界循环，保留 6 寄存器 `push.w {r4-r8,lr}`（8 字节栈对齐）。
 - 键盘模式改键：`Color[key*4]` 决定灯色，`Color[key*4+1]` 原厂从不使用但随 GET/SET_SENS(type 1) 传输并存 Flash。写入 `0x4B00 | usage` 即为该键键值，否则走原厂 1P/2P 表（1P: W X A D S，2P: H K J N M）。仅键盘模式；usage ≤ 0x7F。详见 `firmware/patches/paduex5-keymap.md`。
 - 四键版：键扫描第二段循环边界 36 → 16 个传感器，K5 的 `KeyCode` bit4 永远不置位；HVer 字节 `0x13 → 0x14`。详见 `firmware/patches/paduex4-no-fifth-key.md`。
-- 灵敏度掉电保存（V3.1）：原厂 SET_SENS 只对 type 1（颜色）/ 2（消抖）调用 `App_Set_Flash_Cofnig`，type 0（灵敏度）只写 RAM，上电后 `App_Get_Flash_Cofnig(0x08010000)` 校验不过回退默认表 800。V3.1 把 `0x08004BD8..0x08004C04` 改为按 type 计算页地址 `0x08010800 + (type-1)*0x800` 后统一调用 `App_Set_Flash_Cofnig(addr, r7, 36)`。详见 `firmware/patches/paduex5-sens-persist.md`。
+- 灵敏度掉电保存（V3.1 + V3.2）：原厂 SET_SENS 只对 type 1（颜色）/ 2（消抖）调用 `App_Set_Flash_Cofnig`，type 0（灵敏度）只写 RAM。V3.1 把 `0x08004BD8..0x08004C04` 改为按 type 计算页地址 `0x08010800 + (type-1)*0x800` 后统一调用 `App_Set_Flash_Cofnig(addr, r7, 36)`，页能正确写入。但上电加载函数 `0x08006470` 在三次 `App_Get_Flash_Cofnig` 之后无条件执行 `for(i<36) Sensi[i]=200`（`0x080064DE..0x080064F4`），这才是设备上"出厂值 200"的来源（默认表 `0x0800CE94` 虽是 800，但随即被盖掉），也是 V3.1 拔插后仍回 200 的原因。V3.2 把该循环置 NOP、默认表改为 36×200（页空白时行为不变）、FW minor → 2。详见 `firmware/patches/paduex5-sens-persist.md`。
 - 版本字节：FW major 2 → 3，minor → 1（V3.0 为 0）。
 
 ### 已知固件事实
@@ -100,7 +101,7 @@
 
 要点：
 
-- `ReadDeviceMode()` 是唯一的 GET_MODE 入口；`mFwValid` 为 false 时不得使用 `mFwMajor/mFwMinor`。`FwVersionText()` 对 major ≥ 3 显示 `V3.1`，对 2.x 保留 `2.17` 写法；`FwTag()` 按 HVer 标注 `(PADUEX5)` / `(PADUEX4)`，旧版本提示升级；`FwHasKeyMap()` = V3.0+ 或 2.17+；`FwPersistsSensitivity()` = V3.1+。
+- `ReadDeviceMode()` 是唯一的 GET_MODE 入口；`mFwValid` 为 false 时不得使用 `mFwMajor/mFwMinor`。`FwVersionText()` 对 major ≥ 3 显示 `V3.2`，对 2.x 保留 `2.17` 写法；`FwTag()` 按 HVer 标注 `(PADUEX5)` / `(PADUEX4)`，旧版本提示升级；`FwHasKeyMap()` = V3.0+ 或 2.17+；`FwPersistsSensitivity()` = V3.1+。
 - 保存流程：`Write_Config_Value` 发 SET_SENS 并检查 ACK 后，调用 `Verify_Config_Written` 用 `Read_Config_Core(quiet)` 回读同一张表逐项比对，不一致弹「保存未生效」并在 `PADUEX5.log` 记下发送值与回读值；灵敏度在 `FwPersistsSensitivity()` 为 false 的固件上保存成功也会提示拔插后会恢复出厂值。
 - 四键 / 五键一套代码：`KeyCount`（`ReadAppConfig` 读 `KEYCOUNT`）、`FourKeyMode`、`AppName`、`FourKeyKinds[]`（K1=↑ K2=←  K3=→ K4=↓）。报文仍为 20 个 u16，四键模式下 K5 槽位原样回写。
 - 按键映射页：读取 = GET_SENS(1) 后解码 `Color[key*4+1]`；保存 = 先 GET 刷新灯色，再写 slot，再 SET_SENS(1)；默认 = slot 清 0。调色页涂色不碰 `+1` 槽位。
@@ -115,13 +116,13 @@
 ```bash
 python3 firmware/patches/build_paduex5_v3.1.py
 python3 firmware/patches/build_paduex4_v3.1.py
-python3 firmware/tests/emu_set_sens.py       firmware/PADUEX5_V3.1.bin   # 31 项：SET_SENS → 复位 → GET_SENS（legacy/PADUEX5_V3.0 上应有 6 项失败，作对照）
-python3 firmware/tests/emu_report_normal.py  firmware/PADUEX5_V3.1.bin   # 25 项
-python3 firmware/tests/emu_keymap_e2e.py     firmware/PADUEX5_V3.1.bin   # 21 项（legacy/paduex5_1.6 上应有 5 项失败，作对照）
-python3 firmware/tests/emu_keyscan_paduex4.py firmware/PADUEX4_V3.1.bin  # 52 项
-python3 firmware/tests/emu_keyscan_paduex4.py firmware/PADUEX5_V3.1.bin  # 52 项（对照）
-python3 firmware/tests/emu_get_mode.py       firmware/PADUEX5_V3.1.bin   # HVer 13 / FW 3.1
-python3 firmware/tests/emu_get_mode.py       firmware/PADUEX4_V3.1.bin   # HVer 14 / FW 3.1
+python3 firmware/tests/emu_set_sens.py       firmware/PADUEX5_V3.2.bin   # 36 项：严格 Flash 模型，SET_SENS → 复位（真实 0x08006470）→ GET_SENS（legacy/PADUEX5_V3.1 应有 5 项失败、V3.0 9 项，作对照）
+python3 firmware/tests/emu_report_normal.py  firmware/PADUEX5_V3.2.bin   # 25 项
+python3 firmware/tests/emu_keymap_e2e.py     firmware/PADUEX5_V3.2.bin   # 21 项（legacy/paduex5_1.6 上应有 5 项失败，作对照）
+python3 firmware/tests/emu_keyscan_paduex4.py firmware/PADUEX4_V3.2.bin  # 52 项
+python3 firmware/tests/emu_keyscan_paduex4.py firmware/PADUEX5_V3.2.bin  # 52 项（对照）
+python3 firmware/tests/emu_get_mode.py       firmware/PADUEX5_V3.2.bin   # HVer 13 / FW 3.2
+python3 firmware/tests/emu_get_mode.py       firmware/PADUEX4_V3.2.bin   # HVer 14 / FW 3.2
 ```
 
 上位机：`xbuild /p:Configuration=Release ConfigApp/HIDDeviceProject.sln` 编译通过；无设备时可在 Linux 用 mono + Xvfb 运行界面截图——把桩 `.so` 复制成 `hid.dll` / `setupapi.dll` / `kernel32.dll` / `user32.dll` 放到 exe 目录即可（mono 6 不读 `.config` 里的 dllmap），桩的 `CreateFile` 必须返回 mono 自己打开过的 fd。真机问题先看 `PADUEX5.log`。
@@ -129,4 +130,4 @@ python3 firmware/tests/emu_get_mode.py       firmware/PADUEX4_V3.1.bin   # HVer 
 ## 8. 待办
 
 - 手柄(HID)模式改键（目前只做了键盘模式）。
-- 已刷入 legacy/paduex5_1.0～1.5 的板子需 ISP/SWD 在 `0x08004000` 刷 `PADUEX5_V3.1.bin` 或官方 V2.13。
+- 已刷入 legacy/paduex5_1.0～1.5 的板子需 ISP/SWD 在 `0x08004000` 刷 `PADUEX5_V3.2.bin` 或官方 V2.13。
