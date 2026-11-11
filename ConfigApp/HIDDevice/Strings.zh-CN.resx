@@ -619,4 +619,33 @@
 
 仍要写入吗？写入的值在拔掉 USB 前有效。</value>
   </data>
+  <data name="Ota.SlowMode" xml:space="preserve">
+    <value>兼容模式：帧间放慢、每块等待 15 秒、不应答就重发</value>
+  </data>
+  <data name="Ota.SlowSwitched" xml:space="preserve">
+    <value>第一个数据块没有应答，已自动切换到兼容模式。
+
+帧间隔改为 10 ms，每块最多等 15 秒。失败后先读 Bootloader 的写指针，这一块没写进去就重发，最多 3 次。请保持 USB 连接，不要拔线。</value>
+  </data>
+  <data name="Ota.SlowSwitchedShort" xml:space="preserve">
+    <value>已切换到兼容模式，正在重发这一块…</value>
+  </data>
+  <data name="Ota.P.Retry" xml:space="preserve">
+    <value>重发第 {0} 块（{1}/{2}）</value>
+  </data>
+  <data name="Ota.P.BlockSkip" xml:space="preserve">
+    <value>第 {0} 块已经写入（写指针 0x{1}），跳过</value>
+  </data>
+  <data name="Ota.E.BlockNoAck" xml:space="preserve">
+    <value>数据块 {0}/{1} @0x{2} 无应答（已发 {3} 帧，等待 {4} ms）</value>
+  </data>
+  <data name="Ota.NoReply" xml:space="preserve">
+    <value>（完全没有回包）</value>
+  </data>
+  <data name="Ota.NonAck" xml:space="preserve">
+    <value>（设备回了 {0} 帧，但不是 ACK，最后一帧：{1}）</value>
+  </data>
+  <data name="Ota.Nack" xml:space="preserve">
+    <value>（设备回了 NACK）</value>
+  </data>
 </root>
