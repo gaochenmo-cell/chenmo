@@ -619,4 +619,33 @@ Check that you selected the .bin from the new release folder and run the upgrade
 
 Write the values anyway? They stay active until the board is unplugged.</value>
   </data>
+  <data name="Ota.SlowMode" xml:space="preserve">
+    <value>Compatibility mode: slower frames, 15 s wait per block, retry a block that does not answer</value>
+  </data>
+  <data name="Ota.SlowSwitched" xml:space="preserve">
+    <value>The first data block did not answer, so compatibility mode is now on.
+
+Frames are 10 ms apart and each block is given 15 s to answer. After a miss the host reads the bootloader write cursor and resends that block, up to 3 times. Keep the USB cable connected.</value>
+  </data>
+  <data name="Ota.SlowSwitchedShort" xml:space="preserve">
+    <value>Compatibility mode on, resending this block…</value>
+  </data>
+  <data name="Ota.P.Retry" xml:space="preserve">
+    <value>Resending block {0} ({1}/{2})</value>
+  </data>
+  <data name="Ota.P.BlockSkip" xml:space="preserve">
+    <value>Block {0} already written (cursor 0x{1}), skipped</value>
+  </data>
+  <data name="Ota.E.BlockNoAck" xml:space="preserve">
+    <value>Data block {0}/{1} at 0x{2} did not answer ({3} frames sent, waited {4} ms)</value>
+  </data>
+  <data name="Ota.NoReply" xml:space="preserve">
+    <value> (no report at all)</value>
+  </data>
+  <data name="Ota.NonAck" xml:space="preserve">
+    <value> (device sent {0} non-ACK report(s), last: {1})</value>
+  </data>
+  <data name="Ota.Nack" xml:space="preserve">
+    <value> (device NACKed)</value>
+  </data>
 </root>

@@ -28,6 +28,7 @@ namespace ConfigAppNS
             this.textLog = new System.Windows.Forms.TextBox();
             this.btnStart = new System.Windows.Forms.Button();
             this.btnClose = new System.Windows.Forms.Button();
+            this.checkSlow = new System.Windows.Forms.CheckBox();
             this.panelBanner.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -197,6 +198,17 @@ namespace ConfigAppNS
             this.btnClose.UseVisualStyleBackColor = true;
             this.btnClose.Click += new System.EventHandler(this.btnClose_Click);
             // 
+            // checkSlow — compatibility mode, off unless a block fails to answer
+            // 
+            this.checkSlow.AutoSize = false;
+            this.checkSlow.Font = new System.Drawing.Font("Microsoft YaHei UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.checkSlow.Location = new System.Drawing.Point(20, 448);
+            this.checkSlow.Name = "checkSlow";
+            this.checkSlow.Size = new System.Drawing.Size(520, 28);
+            this.checkSlow.TabIndex = 14;
+            this.checkSlow.Text = "";
+            this.checkSlow.UseVisualStyleBackColor = true;
+            // 
             // App_OTA
             // 
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.None;
@@ -204,6 +216,7 @@ namespace ConfigAppNS
             this.ClientSize = new System.Drawing.Size(560, 540);
             this.Controls.Add(this.btnClose);
             this.Controls.Add(this.btnStart);
+            this.Controls.Add(this.checkSlow);
             this.Controls.Add(this.textLog);
             this.Controls.Add(this.labelStatus);
             this.Controls.Add(this.labelPercent);
@@ -244,5 +257,6 @@ namespace ConfigAppNS
         private System.Windows.Forms.TextBox textLog;
         private System.Windows.Forms.Button btnStart;
         private System.Windows.Forms.Button btnClose;
+        private System.Windows.Forms.CheckBox checkSlow;
     }
 }
