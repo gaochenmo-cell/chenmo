@@ -1,7 +1,12 @@
 #include "key_engine.h"
-#include "board.h"
 #include "config.h"
+#ifdef HOST_TEST
+/* 宿主机回归（make test-host）用桩替换 GPIO，见 tests/host/host_stubs.h */
+#include "host_stubs.h"
+#else
+#include "board.h"
 #include "py32f002b_ll_bus.h"
+#endif
 
 static const uint16_t k_gear_travel[GEAR_COUNT] = GEAR_ACTUATION_TRAVEL;
 

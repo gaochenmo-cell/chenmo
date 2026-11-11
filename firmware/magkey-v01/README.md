@@ -96,6 +96,7 @@ MCU 的任何引脚都没有接到 DIN/DOUT，因此固件**无法**也不应产
 sudo apt-get install gcc-arm-none-eabi binutils-arm-none-eabi libnewlib-arm-none-eabi   # Debian/Ubuntu
 cd firmware/magkey-v01
 make            # 生成 build/magkey_v01.{elf,hex,bin,map,lst}
+make test-host  # 在 PC 上跑按键判定回归（档位阈值、快速触发、反极性、基线跟踪）
 make clean
 ```
 
@@ -168,5 +169,6 @@ firmware/magkey-v01/
 │   ├── light_chain.c/.h      游戏灯链预留接口（空实现）
 │   ├── systick.c/.h          1 ms 时基
 │   └── libc_stubs.c          _init/_fini 空实现
+├── tests/host/               宿主机回归（make test-host），桩替换 GPIO
 └── vendor/                   Puya 官方 CMSIS/LL 头文件、启动文件（BSD-3-Clause）
 ```

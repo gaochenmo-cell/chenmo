@@ -13,6 +13,7 @@ TARGET    := magkey_v01
 BUILD_DIR := build
 
 PREFIX ?= arm-none-eabi-
+HOST_CC ?= gcc
 CC      := $(PREFIX)gcc
 OBJCOPY := $(PREFIX)objcopy
 OBJDUMP := $(PREFIX)objdump
@@ -53,10 +54,17 @@ LDFLAGS := $(CPU) -specs=nano.specs -nostartfiles -T$(LDSCRIPT) \
 OBJECTS := $(addprefix $(BUILD_DIR)/,$(C_SOURCES:.c=.o)) \
            $(addprefix $(BUILD_DIR)/,$(ASM_SOURCES:.s=.o))
 
-.PHONY: all clean flash-pyocd flash-jlink flash-openocd
+.PHONY: all clean test-host flash-pyocd flash-jlink flash-openocd
 
 all: $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET).hex $(BUILD_DIR)/$(TARGET).bin $(BUILD_DIR)/$(TARGET).lst
 	$(SIZE) $<
+
+# 在 PC 上编译并运行按键判定回归（不需要交叉工具链，也不烧录）
+test-host:
+	@mkdir -p $(BUILD_DIR)
+	$(HOST_CC) -std=gnu11 -Wall -Wextra -Werror -DHOST_TEST -Itests/host -Isrc \
+	  tests/host/test_key_engine.c src/key_engine.c -o $(BUILD_DIR)/test_key_engine
+	$(BUILD_DIR)/test_key_engine
 
 $(BUILD_DIR)/%.o: %.c
 	@mkdir -p $(dir $@)
