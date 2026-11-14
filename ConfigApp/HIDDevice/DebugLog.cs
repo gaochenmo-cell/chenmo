@@ -6,7 +6,7 @@ using System.Windows.Forms;
 namespace ConfigAppNS
 {
     /// <summary>
-    /// Diagnostic log written next to the exe (PADUEX5.log). Enabled by default; Config.ini
+    /// Diagnostic log written next to the exe (YuanconDancepad.log). Enabled by default; Config.ini
     /// DEBUGLOG=0 turns it off. Every USB transaction (bytes sent, raw reply, verdict) is
     /// recorded so a failure on a real board can be diagnosed from the file alone.
     /// Logging must never break the UI: every public method swallows its own exceptions.
@@ -37,8 +37,8 @@ namespace ConfigAppNS
             {
                 if (path == null)
                 {
-                    try { path = System.IO.Path.Combine(Application.StartupPath, "PADUEX5.log"); }
-                    catch { path = "PADUEX5.log"; }
+                    try { path = System.IO.Path.Combine(Application.StartupPath, "YuanconDancepad.log"); }
+                    catch { path = "YuanconDancepad.log"; }
                 }
                 return path;
             }

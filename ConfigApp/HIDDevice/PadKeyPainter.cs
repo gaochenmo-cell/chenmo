@@ -50,9 +50,21 @@ namespace ConfigAppNS
         private static readonly Color DefaultMid = Color.FromArgb(0x06, 0xB6, 0xD4);
         private static readonly Color DefaultBack = Color.FromArgb(0x0E, 0x74, 0x90);
 
+        /// <summary>Which pad a button belongs to. Player 0 is the 1P USB slot, player 1 is the 2P slot.</summary>
+        internal sealed class PadKeyTag
+        {
+            public PadKeyKind Kind;
+            public int Player;
+        }
+
         internal static void WireButton(Button btn, PadKeyKind kind)
         {
-            btn.Tag = kind;
+            WireButton(btn, kind, 0);
+        }
+
+        internal static void WireButton(Button btn, PadKeyKind kind, int player)
+        {
+            btn.Tag = new PadKeyTag { Kind = kind, Player = player };
             btn.BackgroundImage = null;
             btn.FlatStyle = FlatStyle.Flat;
             btn.FlatAppearance.BorderSize = 1;
@@ -307,12 +319,13 @@ namespace ConfigAppNS
         private static void PadKeyButton_Paint(object sender, PaintEventArgs e)
         {
             Button btn = sender as Button;
-            if (btn == null || !(btn.Tag is PadKeyKind))
+            PadKeyTag tag = btn != null ? btn.Tag as PadKeyTag : null;
+            if (tag == null)
                 return;
 
             App_DDR form = btn.FindForm() as App_DDR;
             PadKeyPaintArgs args = form != null
-                ? form.GetPadKeyPaintArgs((PadKeyKind)btn.Tag)
+                ? form.GetPadKeyPaintArgs(tag.Kind, tag.Player)
                 : default(PadKeyPaintArgs);
 
             if (form == null)
@@ -323,7 +336,7 @@ namespace ConfigAppNS
 
             Color behind = btn.Parent != null ? btn.Parent.BackColor : args.CellBackground;
             e.Graphics.Clear(behind);
-            PaintKey(e.Graphics, btn.ClientRectangle, (PadKeyKind)btn.Tag, args);
+            PaintKey(e.Graphics, btn.ClientRectangle, tag.Kind, args);
         }
 
         /// <summary>Centre key: neon cyan ring in the same gradient as the chevrons — outer halo,

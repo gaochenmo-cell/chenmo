@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <root>
   <!--
-    UI strings for the PADUEX5 / PADUEX4 configuration tool. Keys are shared across cultures; see Localization.cs (class L).
+    UI strings for the YuanconDancepad configuration tool. Keys are shared across cultures; see Localization.cs (class L).
     Simplified Chinese.
   -->
   <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
@@ -63,7 +63,7 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="App.Name" xml:space="preserve">
-    <value>PADUEX5</value>
+    <value>YuanconDancepad</value>
   </data>
   <data name="App.AlreadyRunning" xml:space="preserve">
     <value>{0} 已经在运行。</value>
@@ -138,6 +138,18 @@
   <data name="Group.Edit" xml:space="preserve">
     <value>编辑</value>
   </data>
+  <data name="Edit.Target" xml:space="preserve">
+    <value>编辑 · {0}</value>
+  </data>
+  <data name="Pad.Online" xml:space="preserve">
+    <value>{0}  ·  {1}  ·  {2}</value>
+  </data>
+  <data name="Pad.OnlineNoVer" xml:space="preserve">
+    <value>{0}  ·  已连接</value>
+  </data>
+  <data name="Pad.Offline" xml:space="preserve">
+    <value>{0}  ·  未连接</value>
+  </data>
   <data name="Group.Mode" xml:space="preserve">
     <value>模式</value>
   </data>
@@ -190,7 +202,7 @@
     <value>键盘按键映射</value>
   </data>
   <data name="Map.Hint" xml:space="preserve">
-    <value>仅键盘模式，需固件 V3.0 及以上。映射随灯色一起保存在板子里。1P/2P 由游戏按插入顺序自动分配，无需设置。</value>
+    <value>仅键盘模式，需固件 V3.0 及以上。映射随灯色一起保存在板子里。1P 和 2P 是两块踏板，界面同时显示；点哪一块，读取和保存就针对哪一块。</value>
   </data>
   <data name="Map.KeyLabel" xml:space="preserve">
     <value>五个踏板对应 HID 键值（选好后点保存映射）：</value>
@@ -293,10 +305,21 @@
     <value> (原厂 V2.12/V2.13，建议升级 V3.2)</value>
   </data>
   <data name="Ver.Tag.Board5" xml:space="preserve">
-    <value> (PADUEX5 五键)</value>
+    <value> (五键)</value>
   </data>
   <data name="Ver.Tag.Board4" xml:space="preserve">
-    <value> (PADUEX4 四键)</value>
+    <value> (四键)</value>
+  </data>
+  <data name="Ver.Tag.Yuancon" xml:space="preserve">
+    <value> (YuanconDancepad)</value>
+  </data>
+  <data name="Cfg.RebootHintV4" xml:space="preserve">
+    <value>固件 {0} 掉电后不会保留灵敏度。</value>
+  </data>
+  <data name="Cfg.SensiV4Confirm" xml:space="preserve">
+    <value>固件 {0} 不会保存灵敏度，每次上电都恢复 200。
+
+仍要写入吗？写入的值在拔掉 USB 前有效。</value>
   </data>
   <data name="Ver.Tag.UpgradeSensi" xml:space="preserve">
     <value>，建议升级 V3.2（灵敏度不掉电保存）</value>
@@ -308,7 +331,7 @@
     <value>保存完成（已回读核对），但固件 {0} 每次上电都会把灵敏度重置为 200。请把固件升级到 V3.2。</value>
   </data>
   <data name="Cfg.WriteNotApplied" xml:space="preserve">
-    <value>保存未生效（{0}）。报文详情见 PADUEX5.log。</value>
+    <value>保存未生效（{0}）。报文详情见 YuanconDancepad.log。</value>
   </data>
   <data name="Cfg.VerifyReadFail" xml:space="preserve">
     <value>保存后回读失败</value>
@@ -326,7 +349,7 @@
     <value>固件 {0} 上电时会把灵敏度重置为出厂值，请点「固件升级」升级到 V3.2。</value>
   </data>
   <data name="Cfg.RebootHintLog" xml:space="preserve">
-    <value>请把程序目录下的 PADUEX5.log 发给我们。</value>
+    <value>请把程序目录下的 YuanconDancepad.log 发给我们。</value>
   </data>
   <data name="Cfg.RebootNoDevice" xml:space="preserve">
     <value>设备 12 秒内没有重新连接，请拔插 USB</value>
@@ -350,13 +373,13 @@
     <value>写入配置失败（{0}）。</value>
   </data>
   <data name="Ota.Title" xml:space="preserve">
-    <value>PADUEX5 固件升级</value>
+    <value>YuanconDancepad 固件升级</value>
   </data>
   <data name="Ota.Tips" xml:space="preserve">
     <value>操作提示：
-1. 五键机选择 PADUEX5_V3.2.bin，四键机选择 PADUEX4_V3.2.bin
+1. 五键机选择五键固件，四键机选择四键固件
 2. 保持 USB 连接，升级中勿拔线、勿关机、勿关闭本窗口
-3. 失败留在 Bootloader 可重试；ISP 请用 PADUEX5_V3.2.bin / PADUEX4_V3.2.bin 或官方 V2.13</value>
+3. 失败留在 Bootloader 可重试；ISP 请用五键固件、四键固件或官方 V2.13</value>
   </data>
   <data name="Ota.Addr" xml:space="preserve">
     <value>APP 地址: 0x{0}</value>
@@ -386,7 +409,7 @@
     <value>固件 (*.bin)|*.bin|所有文件 (*.*)|*.*</value>
   </data>
   <data name="Ota.CheckTitle" xml:space="preserve">
-    <value>PADUEX5 固件检查</value>
+    <value>YuanconDancepad 固件检查</value>
   </data>
   <data name="Ota.FileInfo" xml:space="preserve">
     <value>大小: {0} 字节  |  对齐后: {1} 字节</value>
@@ -398,10 +421,10 @@
     <value>此固件比原厂镜像长（{0} &gt; {1} 字节）。
 
 本窗口 OTA 会整包写入，一般可用。
-若改用厂家 ISP/IPS：请刷 PADUEX5_V3.2.bin / PADUEX4_V3.2.bin 或官方 V2.13，地址 0x08004000，否则可能截断末尾导致 USB 无法识别。</value>
+若改用厂家 ISP/IPS：请刷五键固件、四键固件或官方 V2.13，地址 0x08004000，否则可能截断末尾导致 USB 无法识别。</value>
   </data>
   <data name="Ota.SizeWarnTitle" xml:space="preserve">
-    <value>PADUEX5 体积提示</value>
+    <value>YuanconDancepad 体积提示</value>
   </data>
   <data name="Ota.ReadFail" xml:space="preserve">
     <value>读取固件失败: {0}</value>
@@ -419,13 +442,13 @@
     <value>固件复位向量不在 APP 区 (0x08004000~0x0800F800)，已拒绝以防变砖。</value>
   </data>
   <data name="Ota.V.BadUsbVector" xml:space="preserve">
-    <value>该固件的 USB 中断向量(0x14C)已被覆盖，已拒绝。请改用 PADUEX5_V3.2.bin / PADUEX4_V3.2.bin 或官方 V2.13。</value>
+    <value>该固件的 USB 中断向量(0x14C)已被覆盖，已拒绝。请改用五键固件、四键固件或官方 V2.13。</value>
   </data>
   <data name="Ota.SelectFirst" xml:space="preserve">
     <value>请先选择固件文件。</value>
   </data>
   <data name="Ota.Confirm" xml:space="preserve">
-    <value>即将升级 PADUEX5 固件。
+    <value>即将升级 YuanconDancepad 固件。
 
 文件: {0}
 大小: {1} 字节
@@ -436,12 +459,12 @@
 请注意：
 · 升级中请勿拔 USB、勿关机、勿关闭本窗口
 · 写完并 CRC 通过后才会跳转；失败则留在 Bootloader，可重试
-· 五键机刷 PADUEX5_V3.2.bin，四键机刷 PADUEX4_V3.2.bin
+· 五键机刷五键固件，四键机刷四键固件
 
 确认开始？</value>
   </data>
   <data name="Ota.ConfirmTitle" xml:space="preserve">
-    <value>PADUEX5 升级确认</value>
+    <value>YuanconDancepad 升级确认</value>
   </data>
   <data name="Ota.Failed" xml:space="preserve">
     <value>升级失败: {0}</value>
@@ -534,7 +557,7 @@
     <value>升级进行中，请勿关闭。中断可能导致需重新升级（Bootloader 仍可进入）。</value>
   </data>
   <data name="Ver.NotReadReason" xml:space="preserve">
-    <value>未读到设备版本（{0}）——点击「读取模式」重试。详情见 PADUEX5.log</value>
+    <value>未读到设备版本（{0}）——点击「读取模式」重试。详情见 YuanconDancepad.log</value>
   </data>
   <data name="Ver.Fail.HidRead" xml:space="preserve">
     <value>HID 读取失败，GetInputReport 无数据</value>
@@ -567,19 +590,19 @@
     <value>未知（未读到）</value>
   </data>
   <data name="Ota.Kind5" xml:space="preserve">
-    <value>PADUEX5 五键</value>
+    <value>五键</value>
   </data>
   <data name="Ota.Kind4" xml:space="preserve">
-    <value>PADUEX4 四键</value>
+    <value>四键</value>
   </data>
   <data name="Ota.KindUnknown" xml:space="preserve">
     <value>HVer 0x{0:X2}</value>
   </data>
   <data name="Ota.NoVersionInFile" xml:space="preserve">
-    <value>该文件里没有可识别的 PADUEX 版本常量，升级后无法核对结果。</value>
+    <value>该文件里没有可识别的版本常量，升级后无法核对结果。</value>
   </data>
   <data name="Ota.NoVersionConfirm" xml:space="preserve">
-    <value>所选文件里没有 PADUEX5 / PADUEX4 的版本常量（偏移 0x215E / 0x2164 / 0x216A），可能不是本板子的固件。
+    <value>所选文件里没有版本常量（偏移 0x215E / 0x2164 / 0x216A），可能不是本板子的固件。
 
 仍要刷写吗？</value>
   </data>
@@ -604,7 +627,7 @@
     <value>数据包发送失败（第 {0} 块，块内偏移 {1}）</value>
   </data>
   <data name="Ota.VerifyNoDevice" xml:space="preserve">
-    <value>升级流程已结束，但 {0} 秒内板子没有以 PADUEX 设备重新连接。请拔插 USB 后查看左上角的固件版本。</value>
+    <value>升级流程已结束，但 {0} 秒内板子没有重新连接。请拔插 USB 后查看左上角的固件版本。</value>
   </data>
   <data name="Ota.VerifyOk" xml:space="preserve">
     <value>升级已核对：板子现在上报固件 {0}，与文件一致。</value>
@@ -612,7 +635,7 @@
   <data name="Ota.VerifyMismatch" xml:space="preserve">
     <value>固件版本未变：文件是 {0}，板子仍上报 {1}，升级可能未写入。
 
-请确认选的是新发布目录里的 .bin 文件后重新升级。详情见 PADUEX5.log。</value>
+请确认选的是新发布目录里的 .bin 文件后重新升级。详情见 YuanconDancepad.log。</value>
   </data>
   <data name="Cfg.SensiOldFwConfirm" xml:space="preserve">
     <value>当前固件 {0} 不会保存灵敏度，每次上电都恢复 200。请先点「固件升级」升级到 V3.2。

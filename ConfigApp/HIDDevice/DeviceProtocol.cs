@@ -33,7 +33,7 @@ namespace ConfigAppNS
     }
 
     /// <summary>
-    /// What a PADUEX5 / PADUEX4 firmware image says about itself. The GET_MODE reply is built at
+    /// What a firmware image says about itself. The GET_MODE reply is built at
     /// 0x08006148 from four `movs r1,#imm` constants; relative to the APP base 0x08004000 the
     /// HVer, FW major and FW minor immediates sit at file offsets 0x215E, 0x2164 and 0x216A
     /// (each `imm 21`). Images that do not have that opcode pattern report HasVersion == false.
@@ -79,16 +79,17 @@ namespace ConfigAppNS
             return info;
         }
 
-        /// <summary>Same formatting as the main window: "V3.2" for major >= 3, "2.17" for the old images.</summary>
+        /// <summary>Same formatting as the main window: "V4" for 4.0, "V3.2" for major >= 3, "1.21" for the old images.</summary>
         public static string VersionText(int major, int minor)
         {
+            if (major >= 4 && minor == 0) return "V" + major;
             if (major >= 3) return "V" + major + "." + minor;
             return major.ToString() + "." + minor.ToString("D02");
         }
 
         public string VersionText() { return HasVersion ? VersionText(FwMajor, FwMinor) : "?"; }
 
-        /// <summary>For PADUEX5.log: "HVer=14 FVer=V3.2 (03 02)" or "version=unknown".</summary>
+        /// <summary>For YuanconDancepad.log: "HVer=14 FVer=V3.2 (03 02)" or "version=unknown".</summary>
         public string VersionLogText()
         {
             if (!HasVersion) return "version=unknown (no movs r1 pattern at 0x215E/0x2164/0x216A)";

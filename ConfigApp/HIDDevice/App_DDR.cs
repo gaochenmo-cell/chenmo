@@ -34,11 +34,22 @@ namespace ConfigAppNS
         //private bool bTouchTestMode = false;
         private bool bDarkMode = false;
         private bool bDebugModesFG = false;
-        private readonly bool[] padKeyActive = new bool[5];
+        // Live key lamps, one row per USB slot. Slot 0 is the 1P PID, slot 1 is the 2P PID.
+        private readonly bool[][] padKeyActive = new bool[][] { new bool[5], new bool[5] };
         private byte mDeviceIndex = 0;
-        // 1P/2P is fixed by firmware since V2.12 (DEFAULT_1P2P); games assign players by
-        // plug-in order, so the host no longer exposes it. Echo back whatever the device reports.
+        // Reference V1.21 ships as two builds that enumerate as different PIDs (1P in slot 0,
+        // 2P in slot 1). Both slots stay open. mDeviceIndex is only which pad Read/Save talk to.
+        // The mode byte's player bit is still echoed back; V2.12+ firmware ignores it.
         private byte mDevicePlayerBits = (byte)UserMode.DDR_2PS;
+        private readonly bool[] slotOnline = new bool[2];
+        private readonly ModeReply[] slotCache = new ModeReply[2];
+        private readonly string[] slotVersion = new string[2];
+        private Button[] pad2Buttons;
+        private Label[] padCaptions;
+        private Panel[] fiveKeyFillers2;
+        private readonly int[] padOriginX = new int[2];
+        private int padBlockW;
+        private int padEditTop;
 
         // Device identity from the last successful GET_MODE. mFwValid is cleared on
         // disconnect / OTA / failed read so a stale version is never shown or used.
@@ -59,12 +70,11 @@ namespace ConfigAppNS
         /// </summary>
         private string FwVersionText()
         {
-            if (mFwMajor >= 3) return "V" + mFwMajor + "." + mFwMinor;
-            return mFwMajor.ToString() + "." + mFwMinor.ToString("D02");
+            return FirmwareImageInfo.VersionText(mFwMajor, mFwMinor);
         }
 
         // Known firmware versions:
-        //   3.2  current release (HVer 0x13 = 5-key PADUEX5, 0x14 = 4-key PADUEX4)
+        //   3.2  sensitivity kept across power cycles (HVer 0x13 = 5-key, 0x14 = 4-key)
         //   3.1  SET_SENS(sensitivity) wrote the flash page, but boot still reset the table to 200
         //   3.0  first V3 release; SET_SENS(sensitivity) only reached RAM
         //   2.17 previous 5-key image, 2.18 previous 4-key image
@@ -74,7 +84,9 @@ namespace ConfigAppNS
         {
             if (!mFwValid) return "";
             string tag = "";
-            if (mFwMajor >= 3)
+            if (mFwMajor >= 4)
+                tag = L.Get("Ver.Tag.Yuancon");
+            else if (mFwMajor >= 3)
             {
                 if (mDevHVer == DeviceProtocol.HVER_4KEY) tag = L.Get("Ver.Tag.Board4");
                 else if (mDevHVer == DeviceProtocol.HVER_5KEY) tag = L.Get("Ver.Tag.Board5");
@@ -89,16 +101,19 @@ namespace ConfigAppNS
         }
         private bool FwHasKeyMap()
         {
-            return mFwValid && (mFwMajor >= 3 || (mFwMajor == 2 && mFwMinor >= 17));
+            // Key remap lives in the V3 images and in 2.17+. YuanconDancepad V4 is the
+            // renamed 1P/2P image and does not gain that feature from the version number.
+            return mFwValid && (mFwMajor == 3 || (mFwMajor == 2 && mFwMinor >= 17));
         }
         /// <summary>
         /// Stock V2.13 and every image up to V3.0 never write the sensitivity page; V3.1 writes
         /// it but its boot code still overwrites the loaded table with 200. On all of them the
         /// sensitivity reads back as 200 after a power cycle. V3.2 keeps the saved values.
+        /// YuanconDancepad V4 reports major 4 and is not that image.
         /// </summary>
         private bool FwPersistsSensitivity()
         {
-            return mFwValid && (mFwMajor > 3 || (mFwMajor == 3 && mFwMinor >= 2));
+            return mFwValid && mFwMajor == 3 && mFwMinor >= 2;
         }
 
         private void ResetDeviceVersion()
@@ -133,12 +148,20 @@ namespace ConfigAppNS
 
         private byte DefaultOffset = 0x01;			//V1.0.0.18:20241012(1)Change ADX Save Issue
         ///-------------------------------------------------------------------------------------------
-        // Config.ini KEYCOUNT=4|5 (default 5). Same code, same protocol; only the pad grid,
-        // the key-map rows and the window title change. Read once at start-up (ReadAppConfig).
+        // Config.ini KEYCOUNT=4|5 (default 5). Same code, same protocol; only the pad grid
+        // and the key-map rows change. Read once at start-up (ReadAppConfig).
         private static int KeyCount = KEY_COUNT_5KEY;
         private static bool FourKeyMode { get { return KeyCount == 4; } }
-        private static string AppName { get { return FourKeyMode ? "PADUEX4" : "PADUEX5"; } }
-        private static readonly string HostVer = "V" + System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString(3);
+        private static string AppName { get { return "YuanconDancepad"; } }
+        // 4.0.0.0 is shown as V4. A later 4.1.0 still uses the three-part form.
+        private static readonly string HostVer = FormatHostVer();
+        private static string FormatHostVer()
+        {
+            System.Version v = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            if (v != null && v.Minor == 0 && v.Build == 0)
+                return "V" + v.Major.ToString();
+            return "V" + (v == null ? "4" : v.ToString(3));
+        }
         private enum ConnState { None, Device, Ota }
         private ConnState mConnState = ConnState.None;
 
@@ -486,8 +509,8 @@ namespace ConfigAppNS
             ///------------------------------------------------------------------------------------------
             ReadAppConfig();
             L.LanguageChanged += (s, e) => { if (!IsDisposed) OnLanguageChanged(); };
-            DebugLog.Log("==== PADUEX5 {0} start, config={1}, lang={2}, log={3} ====",
-                HostVer, AppConfig.Path, L.Setting, DebugLog.Enabled ? "on" : "off");
+            DebugLog.Log("==== {0} {1} start, config={2}, lang={3}, log={4} ====",
+                AppName, HostVer, AppConfig.Path, L.Setting, DebugLog.Enabled ? "on" : "off");
             ///------------------------------------------------------------------------------------------
             USBCtrl.HIDLibraryLibChanged += HID_Event_Changed_Delegate;
             Find_USB_Deivce();
@@ -626,9 +649,10 @@ namespace ConfigAppNS
         {
             return FourKeyMode && k < FourKeyKinds.Length ? FourKeyCaptionKey(FourKeyKinds[k]) : MapPadKeys[k];
         }
-        // Design canvas at 96 DPI — all layout math uses S(designPx)
-        private const int DesignW = 1040;
-        private const int DesignH = 780;
+        // Design canvas at 96 DPI — all layout math uses S(designPx).
+        // Wide enough for the 1P pad and the 2P pad side by side, plus the existing tabs.
+        private const int DesignW = 1480;
+        private const int DesignH = 800;
         private const int TabStripH = 36;   // tab header height (design px) — fits the 11pt tab caption
         private float layoutScale = 1f;
         private bool layoutBusy = false;
@@ -723,6 +747,7 @@ namespace ConfigAppNS
             EnsureFirmwareUpgradeButton();
             EnsureLanguageToggleButton();
             EnsureThemeToggleButton();
+            EnsureDualPads();
             for (int i = 0; i < KEY_COUNT_5KEY; i++)
                 KeyMappingBuffer[i] = DefaultKeyMapping[i];
             EnsureKeyMappingUi();
@@ -803,96 +828,41 @@ namespace ConfigAppNS
             textBox_DTick.Location = new Point(S(270), S(92));
             textBox_DTick.Size = new Size(S(72), S(32));
 
-            // Pad 3×3
+            // Two pads, same 3×3 cell as before. 1P is the left grid (USB slot 0), 2P the right.
             int cell = S(140);
             int gap = S(6);
             int ox = S(12);
-            int oy = S(42);
-            int step = cell + gap;
-            int x0 = ox, x1 = ox + step, x2 = ox + step * 2;
-            int y0 = oy, y1 = oy + step, y2 = oy + step * 2;
-            int padW = step * 3 - gap;
-            Size cellSize = new Size(cell, cell);
-
-            Point[] fillerPos;
-            if (FourKeyMode)
-            {
-                // Cross: K1 ↑, K2 ←, K3 →, K4 ↓ ; K5 unused (see FourKeyKinds)
-                Btn_K1.Location = FourKeyCell(FourKeyKinds[0], x0, x1, x2, y0, y1, y2);
-                Btn_K2.Location = FourKeyCell(FourKeyKinds[1], x0, x1, x2, y0, y1, y2);
-                Btn_K3.Location = FourKeyCell(FourKeyKinds[2], x0, x1, x2, y0, y1, y2);
-                Btn_K4.Location = FourKeyCell(FourKeyKinds[3], x0, x1, x2, y0, y1, y2);
-                Btn_K5.Location = new Point(x2, y2);
-                Btn_K5.Enabled = false;
-                Btn_K5.Visible = false;
-                fillerPos = new Point[] {
-                    new Point(x0, y0), new Point(x2, y0), new Point(x1, y1), new Point(x0, y2), new Point(x2, y2)
-                };
-            }
-            else
-            {
-                Btn_K1.Location = new Point(x0, y0);
-                Btn_K2.Location = new Point(x2, y0);
-                Btn_K3.Location = new Point(x1, y1);
-                Btn_K4.Location = new Point(x0, y2);
-                Btn_K5.Location = new Point(x2, y2);
-                Btn_K5.Enabled = true;
-                Btn_K5.Visible = true;
-                fillerPos = new Point[] {
-                    new Point(x1, y0), new Point(x0, y1), new Point(x2, y1), new Point(x1, y2)
-                };
-            }
-            Btn_K1.Size = Btn_K2.Size = Btn_K3.Size = Btn_K4.Size = Btn_K5.Size = cellSize;
-            Btn_K1.Enabled = Btn_K2.Enabled = Btn_K3.Enabled = Btn_K4.Enabled = true;
-            Btn_K1.Visible = Btn_K2.Visible = Btn_K3.Visible = Btn_K4.Visible = true;
+            int oy = S(36);
+            int padW;
+            int padBottom = PlacePlayerPad(0, ox, oy, cell, gap, out padW);
+            int pad2X = ox + padW + S(18);
+            int padW2;
+            PlacePlayerPad(1, pad2X, oy, cell, gap, out padW2);
+            int padsRight = pad2X + padW2;
+            padOriginX[0] = ox;
+            padOriginX[1] = pad2X;
+            padBlockW = padW;
+            padEditTop = padBottom + S(10);
             InvalidatePadKeyButtons();
 
-            if (fiveKeyFillers == null)
-            {
-                fiveKeyFillers = new Panel[fillerPos.Length];
-                for (int i = 0; i < fillerPos.Length; i++)
-                {
-                    Panel p = new Panel();
-                    p.BackColor = Color.FromArgb(245, 245, 245);
-                    p.BorderStyle = BorderStyle.None;
-                    p.Enabled = false;
-                    p.Paint += FillerPanel_Paint;
-                    this.Controls.Add(p);
-                    p.SendToBack();
-                    fiveKeyFillers[i] = p;
-                }
-            }
-            for (int i = 0; i < fiveKeyFillers.Length; i++)
-            {
-                fiveKeyFillers[i].Location = fillerPos[i];
-                fiveKeyFillers[i].Size = cellSize;
-            }
-
-            // Edit
-            groupBox_Button.Location = new Point(ox, y2 + cell + S(10));
-            groupBox_Button.Size = new Size(padW, S(130));
-            Size editBtn = new Size(padW / 2 - S(24), S(36));
-            btn_default.Location = new Point(S(14), S(26));
-            Btn_ADJ.Location = new Point(S(14) + padW / 2, S(26));
-            btn_Read.Location = new Point(S(14), S(72));
-            btn_Save.Location = new Point(S(14) + padW / 2, S(72));
-            btn_default.Size = Btn_ADJ.Size = btn_Read.Size = btn_Save.Size = editBtn;
+            // Edit box stays the original single-pad size and sits under the pad Read/Save will use.
+            PlaceEditGroup();
 
             // Tabs — leave margin so right edge never clips
-            int tabX = ox + padW + S(16);
+            int tabX = padsRight + S(16);
             int tabW = S(DesignW - 12) - tabX; // fill to design right margin
             if (tabW < S(420)) tabW = S(420);
-            int tabH = (y2 + cell) - oy + S(10) + groupBox_Button.Height;
+            int tabH = (padBottom - oy) + S(10) + groupBox_Button.Height;
             tabControl1.Location = new Point(tabX, oy);
             tabControl1.Size = new Size(tabW, tabH);
             if (tabControl1.DrawMode == TabDrawMode.OwnerDrawFixed && tabControl1.TabPages.Count > 0)
                 tabControl1.ItemSize = new Size(Math.Max(S(80), (tabW - S(6)) / tabControl1.TabPages.Count), S(TabStripH));
 
-            // Mode full width under content
+            // Mode full width under content. Extra height holds the selected pad's version line.
             int modeY = Math.Max(groupBox_Button.Bottom, tabControl1.Bottom) + S(10);
             int modeW = tabX + tabW - ox;
             groupBox_Mode.Location = new Point(ox, modeY);
-            groupBox_Mode.Size = new Size(modeW, S(100));
+            groupBox_Mode.Size = new Size(modeW, S(124));
 
             groupBox_USBMode.Location = new Point(S(10), S(20));
             groupBox_USBMode.Size = new Size(S(240), S(64));
@@ -928,9 +898,145 @@ namespace ConfigAppNS
                 btnThemeToggle.Location = new Point(this.ClientSize.Width - S(220), S(8));
                 btnThemeToggle.BringToFront();
             }
-            label_Ver.AutoSize = true;
-            label_Ver.Location = new Point(ox + S(2), S(12));
+            label_Ver.AutoSize = false;
+            label_Ver.AutoEllipsis = true;
+            label_Ver.Location = new Point(ox + S(16), modeY + S(86));
+            label_Ver.Size = new Size(Math.Max(S(200), modeW - S(32)), S(28));
             label_Ver.BringToFront();
+        }
+
+        /// <summary>
+        /// Place one player grid. Returns the bottom of the grid. padWidth is the 3-cell width.
+        /// Player 0 uses the designer buttons; player 1 uses the buttons created in EnsureDualPads.
+        /// </summary>
+        private int PlacePlayerPad(int player, int originX, int oy, int cell, int gap, out int padWidth)
+        {
+            int step = cell + gap;
+            int x0 = originX, x1 = originX + step, x2 = originX + step * 2;
+            int y0 = oy, y1 = oy + step, y2 = oy + step * 2;
+            padWidth = step * 3 - gap;
+            Size cellSize = new Size(cell, cell);
+            Button[] keys = player == 0
+                ? new Button[] { Btn_K1, Btn_K2, Btn_K3, Btn_K4, Btn_K5 }
+                : pad2Buttons;
+
+            Point[] fillerPos;
+            if (FourKeyMode)
+            {
+                keys[0].Location = FourKeyCell(FourKeyKinds[0], x0, x1, x2, y0, y1, y2);
+                keys[1].Location = FourKeyCell(FourKeyKinds[1], x0, x1, x2, y0, y1, y2);
+                keys[2].Location = FourKeyCell(FourKeyKinds[2], x0, x1, x2, y0, y1, y2);
+                keys[3].Location = FourKeyCell(FourKeyKinds[3], x0, x1, x2, y0, y1, y2);
+                keys[4].Location = new Point(x2, y2);
+                keys[4].Enabled = false;
+                keys[4].Visible = false;
+                fillerPos = new Point[] {
+                    new Point(x0, y0), new Point(x2, y0), new Point(x1, y1), new Point(x0, y2), new Point(x2, y2)
+                };
+            }
+            else
+            {
+                keys[0].Location = new Point(x0, y0);
+                keys[1].Location = new Point(x2, y0);
+                keys[2].Location = new Point(x1, y1);
+                keys[3].Location = new Point(x0, y2);
+                keys[4].Location = new Point(x2, y2);
+                keys[4].Enabled = true;
+                keys[4].Visible = true;
+                fillerPos = new Point[] {
+                    new Point(x1, y0), new Point(x0, y1), new Point(x2, y1), new Point(x1, y2)
+                };
+            }
+            for (int i = 0; i < 4; i++)
+            {
+                keys[i].Size = cellSize;
+                keys[i].Enabled = true;
+                keys[i].Visible = true;
+            }
+            keys[4].Size = cellSize;
+
+            Panel[] fillers = player == 0 ? fiveKeyFillers : fiveKeyFillers2;
+            if (fillers == null || fillers.Length != fillerPos.Length)
+            {
+                if (fillers != null)
+                {
+                    foreach (Panel old in fillers)
+                    {
+                        this.Controls.Remove(old);
+                        old.Dispose();
+                    }
+                }
+                fillers = new Panel[fillerPos.Length];
+                for (int i = 0; i < fillerPos.Length; i++)
+                {
+                    Panel p = new Panel();
+                    p.BackColor = Color.FromArgb(245, 245, 245);
+                    p.BorderStyle = BorderStyle.None;
+                    p.Enabled = false;
+                    p.Paint += FillerPanel_Paint;
+                    this.Controls.Add(p);
+                    p.SendToBack();
+                    fillers[i] = p;
+                }
+                if (player == 0) fiveKeyFillers = fillers;
+                else fiveKeyFillers2 = fillers;
+            }
+            for (int i = 0; i < fillers.Length; i++)
+            {
+                fillers[i].Location = fillerPos[i];
+                fillers[i].Size = cellSize;
+                fillers[i].Visible = true;
+            }
+
+            if (padCaptions != null && player < padCaptions.Length && padCaptions[player] != null)
+            {
+                padCaptions[player].Location = new Point(originX + S(4), S(6));
+                padCaptions[player].BringToFront();
+            }
+            return y2 + cell;
+        }
+
+        private void PlaceEditGroup()
+        {
+            if (groupBox_Button == null || padBlockW <= 0)
+                return;
+            int player = mDeviceIndex == 1 ? 1 : 0;
+            groupBox_Button.Location = new Point(padOriginX[player], padEditTop);
+            groupBox_Button.Size = new Size(padBlockW, S(130));
+            Size editBtn = new Size(padBlockW / 2 - S(24), S(36));
+            btn_default.Location = new Point(S(14), S(26));
+            Btn_ADJ.Location = new Point(S(14) + padBlockW / 2, S(26));
+            btn_Read.Location = new Point(S(14), S(72));
+            btn_Save.Location = new Point(S(14) + padBlockW / 2, S(72));
+            btn_default.Size = Btn_ADJ.Size = btn_Read.Size = btn_Save.Size = editBtn;
+            groupBox_Button.BringToFront();
+        }
+
+        private void EnsureDualPads()
+        {
+            if (pad2Buttons != null)
+                return;
+            pad2Buttons = new Button[KEY_COUNT_5KEY];
+            for (int i = 0; i < KEY_COUNT_5KEY; i++)
+            {
+                int key = i;
+                Button b = new Button();
+                b.Name = "Btn_P2_K" + (i + 1);
+                b.TabStop = false;
+                b.Click += delegate { SelectPadKey(1, key); };
+                this.Controls.Add(b);
+                pad2Buttons[i] = b;
+            }
+            padCaptions = new Label[2];
+            for (int p = 0; p < 2; p++)
+            {
+                Label lb = new Label();
+                lb.Name = p == 0 ? "label_Pad1P" : "label_Pad2P";
+                lb.AutoSize = true;
+                lb.BackColor = Color.Transparent;
+                this.Controls.Add(lb);
+                padCaptions[p] = lb;
+            }
         }
 
         private void LayoutSensitivityColumns()
@@ -1436,10 +1542,13 @@ namespace ConfigAppNS
             ThemeChildren(this);
 
             // Form-level widgets sit directly on the page background
-            if (fiveKeyFillers != null)
+            Panel[][] fillerSets = new Panel[][] { fiveKeyFillers, fiveKeyFillers2 };
+            foreach (Panel[] set in fillerSets)
             {
-                foreach (Panel p in fiveKeyFillers)
+                if (set == null) continue;
+                foreach (Panel p in set)
                 {
+                    if (p == null) continue;
                     p.BackColor = pal.CardBg;
                     p.BorderStyle = BorderStyle.None;
                 }
@@ -1451,6 +1560,16 @@ namespace ConfigAppNS
                 label_Ver.BackColor = pal.FormBg;
                 label_Ver.ForeColor = pal.MutedText;
                 UiFont.Set(label_Ver, UiFont.Status);
+            }
+            if (padCaptions != null)
+            {
+                foreach (Label lb in padCaptions)
+                {
+                    if (lb == null) continue;
+                    lb.BackColor = pal.FormBg;
+                    lb.ForeColor = pal.Title;
+                    UiFont.Set(lb, UiFont.Status, FontStyle.Bold);
+                }
             }
             if (menuLanguage != null)
                 UiFont.Set(menuLanguage, UiFont.Body);
@@ -1749,36 +1868,47 @@ namespace ConfigAppNS
         {
             if (padKeyVectorWired)
                 return;
+            EnsureDualPads();
             if (FourKeyMode)
             {
-                PadKeyPainter.WireButton(Btn_K1, FourKeyKinds[0]);
-                PadKeyPainter.WireButton(Btn_K2, FourKeyKinds[1]);
-                PadKeyPainter.WireButton(Btn_K3, FourKeyKinds[2]);
-                PadKeyPainter.WireButton(Btn_K4, FourKeyKinds[3]);
+                PadKeyPainter.WireButton(Btn_K1, FourKeyKinds[0], 0);
+                PadKeyPainter.WireButton(Btn_K2, FourKeyKinds[1], 0);
+                PadKeyPainter.WireButton(Btn_K3, FourKeyKinds[2], 0);
+                PadKeyPainter.WireButton(Btn_K4, FourKeyKinds[3], 0);
+                for (int i = 0; i < 4; i++)
+                    PadKeyPainter.WireButton(pad2Buttons[i], FourKeyKinds[i], 1);
             }
             else
             {
-                PadKeyPainter.WireButton(Btn_K1, PadKeyPainter.PadKeyKind.UpperLeft);
-                PadKeyPainter.WireButton(Btn_K2, PadKeyPainter.PadKeyKind.UpperRight);
-                PadKeyPainter.WireButton(Btn_K3, PadKeyPainter.PadKeyKind.Center);
-                PadKeyPainter.WireButton(Btn_K4, PadKeyPainter.PadKeyKind.DownLeft);
+                PadKeyPainter.WireButton(Btn_K1, PadKeyPainter.PadKeyKind.UpperLeft, 0);
+                PadKeyPainter.WireButton(Btn_K2, PadKeyPainter.PadKeyKind.UpperRight, 0);
+                PadKeyPainter.WireButton(Btn_K3, PadKeyPainter.PadKeyKind.Center, 0);
+                PadKeyPainter.WireButton(Btn_K4, PadKeyPainter.PadKeyKind.DownLeft, 0);
+                PadKeyPainter.WireButton(pad2Buttons[0], PadKeyPainter.PadKeyKind.UpperLeft, 1);
+                PadKeyPainter.WireButton(pad2Buttons[1], PadKeyPainter.PadKeyKind.UpperRight, 1);
+                PadKeyPainter.WireButton(pad2Buttons[2], PadKeyPainter.PadKeyKind.Center, 1);
+                PadKeyPainter.WireButton(pad2Buttons[3], PadKeyPainter.PadKeyKind.DownLeft, 1);
             }
-            PadKeyPainter.WireButton(Btn_K5, PadKeyPainter.PadKeyKind.DownRight);
+            PadKeyPainter.WireButton(Btn_K5, PadKeyPainter.PadKeyKind.DownRight, 0);
+            PadKeyPainter.WireButton(pad2Buttons[4], PadKeyPainter.PadKeyKind.DownRight, 1);
             padKeyVectorWired = true;
         }
 
-        internal PadKeyPainter.PadKeyPaintArgs GetPadKeyPaintArgs(PadKeyPainter.PadKeyKind kind)
+        internal PadKeyPainter.PadKeyPaintArgs GetPadKeyPaintArgs(PadKeyPainter.PadKeyKind kind, int player)
         {
             int key = KeyIndexOfKind(kind);
             int selected = SensorIndex / SENSORS_PER_KEY;
             Color cellBg = pal.CardBg;
             Color outline = pal.PadOutline;
-            bool triggered = key >= 0 && key < padKeyActive.Length && padKeyActive[key];
+            bool[] active = player >= 0 && player < padKeyActive.Length ? padKeyActive[player] : null;
+            bool triggered = active != null && key >= 0 && key < active.Length && active[key];
             // Pressed = the pad's LED colour as currently shown on the Colour tab (same as the real
             // light bar). Falls back to the per-layout default highlight (5-key amber, 4-key red
             // ←/→ / green ↑/↓) while the colour is 0/unknown or not yet read from the board.
             // Idle colours: 5-key cyan set, 4-key white set — unchanged.
-            Color triggerFill = GetPadLedColor(key);
+            // Colour table belongs to the pad currently being edited. The other pad lights
+            // with the layout default so we never paint one board's colours on the other.
+            Color triggerFill = player == mDeviceIndex ? GetPadLedColor(key) : Color.Empty;
             if (triggerFill.IsEmpty)
                 triggerFill = FourKeyMode ? FourKeyPressColor(kind) : FiveKeyPressDefault;
             if (triggered)
@@ -1798,7 +1928,7 @@ namespace ConfigAppNS
                 ArrowBack = arrowBack,
                 ArrowGlow = arrowGlow,
                 BorderColor = pal.Border,
-                Selected = key == selected,
+                Selected = player == mDeviceIndex && key == selected,
                 Triggered = triggered,
                 TriggerFill = triggerFill
             };
@@ -1854,8 +1984,11 @@ namespace ConfigAppNS
             InvalidatePadKeyButtons();
         }
 
-        private void UpdatePadTriggerFromReport(byte[] buf, int reportIndex)
+        private void UpdatePadTriggerFromReport(int player, byte[] buf, int reportIndex)
         {
+            if (player < 0 || player >= padKeyActive.Length)
+                return;
+            bool[] lamps = padKeyActive[player];
             bool[] next = new bool[KEY_COUNT_5KEY];
 
             if (buf[reportIndex + 0] == (byte)UserCommand.SET_MRAW &&
@@ -1900,9 +2033,27 @@ namespace ConfigAppNS
             bool changed = false;
             for (int k = 0; k < KEY_COUNT_5KEY; k++)
             {
-                if (padKeyActive[k] != next[k])
+                if (lamps[k] != next[k])
                 {
-                    padKeyActive[k] = next[k];
+                    lamps[k] = next[k];
+                    changed = true;
+                }
+            }
+            if (changed)
+                InvalidatePadKeyButtons();
+        }
+
+        private void ClearPadKeys(int player)
+        {
+            if (player < 0 || player >= padKeyActive.Length)
+                return;
+            bool[] lamps = padKeyActive[player];
+            bool changed = false;
+            for (int k = 0; k < lamps.Length; k++)
+            {
+                if (lamps[k])
+                {
+                    lamps[k] = false;
                     changed = true;
                 }
             }
@@ -1916,10 +2067,20 @@ namespace ConfigAppNS
                 return;
             byte reportSize = 64;
             byte reportId = 0;
-            byte reportIndex = 0;
-            byte[] inputReportBuf = new byte[64];
-            USBCtrl.USBLib_DeviceCtrlInput(mDeviceIndex, DefaultOffset, reportId, reportSize, inputReportBuf);
-            UpdatePadTriggerFromReport(inputReportBuf, reportIndex);
+            for (int slot = 0; slot < 2; slot++)
+            {
+                if (!slotOnline[slot])
+                {
+                    ClearPadKeys(slot);
+                    continue;
+                }
+                // Debug mode already consumed this slot's report and painted its lamps.
+                if (bDebugModesFG && slot == mDeviceIndex)
+                    continue;
+                byte[] inputReportBuf = new byte[64];
+                USBCtrl.USBLib_DeviceCtrlInput((byte)slot, DefaultOffset, reportId, reportSize, inputReportBuf);
+                UpdatePadTriggerFromReport(slot, inputReportBuf, 0);
+            }
         }
 
         private void InvalidatePadKeyButtons()
@@ -1929,6 +2090,11 @@ namespace ConfigAppNS
             Btn_K3.Invalidate();
             Btn_K4.Invalidate();
             Btn_K5.Invalidate();
+            if (pad2Buttons == null)
+                return;
+            for (int i = 0; i < pad2Buttons.Length; i++)
+                if (pad2Buttons[i] != null)
+                    pad2Buttons[i].Invalidate();
         }
 
         private void Btn_LangToggle_Click(object sender, EventArgs e)
@@ -1955,7 +2121,7 @@ namespace ConfigAppNS
             button1.Text = L.Get("Btn.RawRead");
             button2.Text = L.Get("Btn.RawClear");
             if (btnFirmwareUpgrade != null) btnFirmwareUpgrade.Text = L.Get("Btn.FwUpgrade");
-            groupBox_Button.Text = L.Get("Group.Edit");
+            groupBox_Button.Text = L.F("Edit.Target", PlayerName(mDeviceIndex));
             groupBox_Mode.Text = L.Get("Group.Mode");
             groupBox_Sensi.Text = L.Get("Group.Sensitivity");
             groupBox_Color.Text = L.Get("Group.Color");
@@ -1986,7 +2152,102 @@ namespace ConfigAppNS
             UpdateThemeToggleText();
             UpdateWindowTitle();
             UpdateVersionLabel();
+            UpdatePadCaptions();
             RefreshLanguageMenu();
+        }
+
+        private static string PlayerName(int player)
+        {
+            return L.Get(player == 0 ? "Radio.1P" : "Radio.2P");
+        }
+
+        private static string UsbModeName(byte mode)
+        {
+            byte usb = (byte)(mode & (byte)UserMode.MODE_MAK);
+            if (usb == (byte)UserMode.DDR_HID) return L.Get("Radio.Gamepad");
+            if (usb == (byte)UserMode.DDR_IO4) return L.Get("Radio.IO");
+            return L.Get("Radio.Keyboard");
+        }
+
+        /// <summary>Caption above each pad, plus the edit-group title for the pad Read/Save will use.</summary>
+        private void UpdatePadCaptions()
+        {
+            if (padCaptions != null)
+            {
+                for (int p = 0; p < padCaptions.Length; p++)
+                {
+                    Label lb = padCaptions[p];
+                    if (lb == null) continue;
+                    string name = PlayerName(p);
+                    if (!slotOnline[p])
+                        lb.Text = L.F("Pad.Offline", name);
+                    else if (slotCache[p] != null && slotVersion[p] != null)
+                        lb.Text = L.F("Pad.Online", name, UsbModeName(slotCache[p].Mode), slotVersion[p]);
+                    else
+                        lb.Text = L.F("Pad.OnlineNoVer", name);
+                }
+            }
+            if (groupBox_Button != null)
+            {
+                groupBox_Button.Text = L.F("Edit.Target", PlayerName(mDeviceIndex));
+                groupBox_Button.Invalidate();
+            }
+        }
+
+        /// <summary>Clicking a key selects that pad for Read/Save and that key for the editor.</summary>
+        private void SelectPadKey(int player, int key)
+        {
+            if (player < 0 || player > 1) return;
+            if (key < 0 || key >= KeyCount) return;
+            // An unplugged pad has nothing to edit. Leave Read/Save on the pad that is actually open.
+            if (bDeviceStatusFG && !slotOnline[player])
+                return;
+            if (player != mDeviceIndex && bDebugModesFG)
+                SetDeviceRawDebugMode(false);
+            bool switched = player != mDeviceIndex;
+            mDeviceIndex = (byte)player;
+            if (switched)
+            {
+                // Drop the other pad's colours so the highlight does not lie.
+                MarkAllPadLedKnown(false);
+                if (slotCache[player] != null)
+                    ApplyCachedMode(player);
+                else
+                {
+                    ResetDeviceVersion();
+                    UpdateVersionLabel();
+                }
+            }
+            SensorIndex = key * SENSORS_PER_KEY;
+            if (switched)
+                PlaceEditGroup();
+            UpdatePadCaptions();
+            Sensor_Panel_Display_ReFlash();
+        }
+
+        private static string FormatFwVersion(int major, int minor)
+        {
+            return FirmwareImageInfo.VersionText(major, minor);
+        }
+
+        /// <summary>Push a previously read GET_MODE reply onto the editor (radios + version line).</summary>
+        private void ApplyCachedMode(int player)
+        {
+            ModeReply reply = player >= 0 && player < slotCache.Length ? slotCache[player] : null;
+            if (reply == null)
+                return;
+            mDevicePlayerBits = (byte)(reply.Mode & (byte)UserMode.MSEL_MAK);
+            byte usbMode = (byte)(reply.Mode & (byte)UserMode.MODE_MAK);
+            radioButton_KBS.Checked = usbMode == (byte)UserMode.DDR_KBS;
+            radioButton_HID.Checked = usbMode == (byte)UserMode.DDR_HID;
+            radioButton_IO4.Checked = usbMode == (byte)UserMode.DDR_IO4;
+            mDevUid = reply.Uid;
+            mDevHVer = reply.HVer;
+            mFwMajor = reply.FwMajor;
+            mFwMinor = reply.FwMinor;
+            mFwValid = true;
+            mFwFailReasonKey = "";
+            UpdateVersionLabel();
         }
 
         private void UpdateDebugButtonText()
@@ -2103,8 +2364,7 @@ namespace ConfigAppNS
             {
                 if (bDebugModesFG)
                     Seneor_Raw_Data_Read_and_Display();
-                else
-                    PollPadInputState();
+                PollPadInputState();
             }
             ///------------------------------------------------------------------------------------------
         }
@@ -2119,7 +2379,7 @@ namespace ConfigAppNS
             // LANGUAGE is applied in Program.Main (before any form exists); THEME is read here.
             string theme = AppConfig.Read("THEME");
             bDarkMode = theme != null && theme.Trim().Equals("DARK", StringComparison.OrdinalIgnoreCase);
-            // KEYCOUNT=4 → 4-key cross layout (PADUEX4); anything else → 5-key (PADUEX5)
+            // KEYCOUNT=4 → 4-key cross layout; anything else → 5-key
             string keys = AppConfig.Read("KEYCOUNT");
             KeyCount = keys != null && keys.Trim() == "4" ? 4 : KEY_COUNT_5KEY;
             DebugLog.Log("KEYCOUNT={0} -> {1}-key layout ({2})", keys ?? "(unset)", KeyCount, AppName);
@@ -2189,13 +2449,19 @@ namespace ConfigAppNS
             //-------------------------------------------------------------------------------------------
             //USBCtrl.HIDLibraryLibChanged += HID_Event_Changed_Delegate;
             //-------------------------------------------------------------------------------------------
-            // Forget the previous board completely: version, connection state, label.
+            // Forget the previous boards completely: version, connection state, label.
             bDeviceStatusFG = false;
             mConnState = ConnState.None;
+            slotOnline[0] = slotOnline[1] = false;
+            slotCache[0] = slotCache[1] = null;
+            slotVersion[0] = slotVersion[1] = null;
+            ClearPadKeys(0);
+            ClearPadKeys(1);
             ResetDeviceVersion();
             MarkAllPadLedKnown(false);   // after a (re)connect the board's own colours win once read back
             UpdateWindowTitle();
             UpdateVersionLabel();
+            UpdatePadCaptions();
             SetModeGroupEnabled(false);
             bool slot0 = false, slot1 = false;
             int pid0 = 0, pid1 = 0;
@@ -2204,6 +2470,7 @@ namespace ConfigAppNS
             {
                 mConnState = ConnState.Ota;
                 UpdateWindowTitle();
+                UpdatePadCaptions();
                 DebugLog.Log("USB: OTA bootloader 0E8F:8901 connected");
                 return;
             }
@@ -2229,12 +2496,17 @@ namespace ConfigAppNS
                 UpdateWindowTitle();
                 SetModeGroupEnabled(true);
                 //---------------------------------------------------------------------------------------
-                // HIDLibrary opens PID1 devices in slot 0 and PID2/PID3 devices in slot 1.
-                mDeviceIndex = (byte)(slot0 ? 0 : (slot1 ? 1 : 0));
-                DebugLog.Log("USB: connected VID 4D47, slot0 PID {0:X4}, slot1 PID {1:X4} -> using slot{2}",
-                    pid0, pid1, mDeviceIndex);
+                // HIDLibrary opens PID1 (1P) in slot 0 and PID2/PID3 (2P) in slot 1. Both stay open.
+                // The editor follows slot 0 when it is present, otherwise slot 1. Lamps follow both.
+                slotOnline[0] = slot0;
+                slotOnline[1] = slot1;
+                mDeviceIndex = (byte)(slot0 ? 0 : 1);
+                DebugLog.Log("USB: connected VID 4D47, slot0 PID {0:X4} ({1}), slot1 PID {2:X4} ({3}); editor slot{4}",
+                    pid0, slot0 ? "1P" : "absent", pid1, slot1 ? "2P" : "absent", mDeviceIndex);
                 //---------------------------------------------------------------------------------------
-                Btn_ReadMode_Click(null, null);
+                if (slot0) ReadDeviceMode(0, mDeviceIndex == 0);
+                if (slot1) ReadDeviceMode(1, mDeviceIndex == 1);
+                UpdatePadCaptions();
                 //---------------------------------------------------------------------------------------
             }
             //-------------------------------------------------------------------------------------------
@@ -2242,6 +2514,7 @@ namespace ConfigAppNS
             {
                 DebugLog.Log("USB: no device");
                 USBCtrl.USBLib_Disconnect();
+                UpdatePadCaptions();
             }
             //-------------------------------------------------------------------------------------------
         }
@@ -2664,7 +2937,7 @@ namespace ConfigAppNS
                 // Version re-read after the restart: a known pre-V3.2 image explains a lost
                 // sensitivity table by itself; anything else needs the log.
                 string hint = (ConfigType & 0x0F) == 0x00 && mFwValid && !FwPersistsSensitivity()
-                    ? L.F("Cfg.RebootHintOldFw", FwVersionText())
+                    ? L.F(mFwMajor >= 4 ? "Cfg.RebootHintV4" : "Cfg.RebootHintOldFw", FwVersionText())
                     : L.Get("Cfg.RebootHintLog");
                 MessageBox.Show(L.F("Cfg.WriteLostAfterReboot", rebootResult, hint), L.Get("Msg.SystemTitle"),
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -2805,7 +3078,7 @@ namespace ConfigAppNS
                 progressBar3.Value = RawBuffer[SenIndex + 2];
                 progressBar4.Value = RawBuffer[SenIndex + 3];
                 //---------------------------------------------------------------------------------------
-                UpdatePadTriggerFromReport(InputReportBuf, ReportIndex);
+                UpdatePadTriggerFromReport(mDeviceIndex, InputReportBuf, ReportIndex);
             }
         }
 
@@ -2893,40 +3166,11 @@ namespace ConfigAppNS
         /// =============================================================================================
         /// ==== Sens Value changed  ====
         /// =============================================================================================
-        private void Btn_K1_Click(object sender, EventArgs e)
-        {
-            SensorIndex = (1 - 1) * 4;
-            //tabControl1.SelectedIndex = 0;
-            Sensor_Panel_Display_ReFlash();
-        }
-
-        private void Btn_K2_Click(object sender, EventArgs e)
-        {
-            SensorIndex = (2 - 1) * 4;
-            //tabControl1.SelectedIndex = 0;
-            Sensor_Panel_Display_ReFlash();
-        }
-
-        private void Btn_K3_Click(object sender, EventArgs e)
-        {
-            SensorIndex = (3 - 1) * 4;
-            //tabControl1.SelectedIndex = 0;
-            Sensor_Panel_Display_ReFlash();
-        }
-
-        private void Btn_K4_Click(object sender, EventArgs e)
-        {
-            SensorIndex = (4 - 1) * 4;
-            //tabControl1.SelectedIndex = 0;
-            Sensor_Panel_Display_ReFlash();
-        }
-
-        private void Btn_K5_Click(object sender, EventArgs e)
-        {
-            SensorIndex = (5 - 1) * 4;
-            //tabControl1.SelectedIndex = 0;
-            Sensor_Panel_Display_ReFlash();
-        }
+        private void Btn_K1_Click(object sender, EventArgs e) { SelectPadKey(0, 0); }
+        private void Btn_K2_Click(object sender, EventArgs e) { SelectPadKey(0, 1); }
+        private void Btn_K3_Click(object sender, EventArgs e) { SelectPadKey(0, 2); }
+        private void Btn_K4_Click(object sender, EventArgs e) { SelectPadKey(0, 3); }
+        private void Btn_K5_Click(object sender, EventArgs e) { SelectPadKey(0, 4); }
 
         private void Btn_K6_Click(object sender, EventArgs e)
         {
@@ -3221,7 +3465,9 @@ namespace ConfigAppNS
                 if (mFwValid && !FwPersistsSensitivity())
                 {
                     DebugLog.Log("SET_SENS type 00: firmware {0} does not keep the sensitivity across power-up, asking before writing", FwVersionText());
-                    DialogResult r = MessageBox.Show(L.F("Cfg.SensiOldFwConfirm", FwVersionText()), L.Get("App.Name"),
+                    DialogResult r = MessageBox.Show(
+                        L.F(mFwMajor >= 4 ? "Cfg.SensiV4Confirm" : "Cfg.SensiOldFwConfirm", FwVersionText()),
+                        L.Get("App.Name"),
                         MessageBoxButtons.OKCancel, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
                     DebugLog.Log("SET_SENS type 00: user chose {0}", r);
                     if (r != DialogResult.OK) return;
@@ -3349,31 +3595,60 @@ namespace ConfigAppNS
         private void Btn_ReadMode_Click(object sender, EventArgs e)
         {
             ReadDeviceMode();
+            UpdatePadCaptions();
+        }
+
+        /// <summary>GET_MODE on the pad the editor is using, then refresh both captions.</summary>
+        private bool ReadDeviceMode()
+        {
+            bool ok = ReadDeviceMode(mDeviceIndex, true);
+            UpdatePadCaptions();
+            return ok;
         }
 
         /// <summary>
-        /// GET_MODE (0x47). Reply (64-byte input report, Report-ID byte already stripped):
+        /// GET_MODE (0x47) on one USB slot. Reply (64-byte input report, Report-ID byte already stripped):
         ///   [0]=0x47  [1]=mode  [2]=UID 0xA2  [3]=HVer (0x13 5-key / 0x14 4-key)  [4]=FW major  [5]=FW minor
         /// The firmware writes this reply into its shared reply buffer (AppUser+0x11E). While the
         /// board is in RAW debug mode that buffer is overwritten with "AMRAW" frames on every scan,
         /// and the board stays in RAW mode until NOLMD or re-plug. On a RAW frame NOLMD is sent and
         /// GET_MODE is re-sent; the failure reason is kept for the label and every byte is logged.
+        /// applyUi is set only for the pad the editor is following, so reading the other pad
+        /// does not overwrite the version line or the Keyboard/Gamepad radios.
         /// </summary>
-        private bool ReadDeviceMode()
+        private bool ReadDeviceMode(byte slot, bool applyUi)
+        {
+            byte saved = mDeviceIndex;
+            mDeviceIndex = slot;
+            try
+            {
+                return ReadDeviceModeOnCurrentSlot(slot, applyUi);
+            }
+            finally
+            {
+                mDeviceIndex = saved;
+            }
+        }
+
+        private bool ReadDeviceModeOnCurrentSlot(byte slot, bool applyUi)
         {
             //-------------------------------------------------------------------------------------------
             byte[] SendByteBuf = new byte[64];
             byte[] InputReportBuf = new byte[64];
             //-------------------------------------------------------------------------------------------
-            ResetDeviceVersion();
-            UpdateVersionLabel();
-            if (!bDeviceStatusFG)
+            if (applyUi)
             {
-                DebugLog.Log("GET_MODE: skipped, no device");
+                ResetDeviceVersion();
+                UpdateVersionLabel();
+            }
+            if (!bDeviceStatusFG || slot > 1 || !slotOnline[slot])
+            {
+                DebugLog.Log("GET_MODE slot{0}: skipped, no device", slot);
                 return false;
             }
             //-------------------------------------------------------------------------------------------
-            bool wasDebug = bDebugModesFG;
+            // Only the edited pad's debug session is paused. The other pad is left alone.
+            bool wasDebug = applyUi && bDebugModesFG;
             if (wasDebug)
             {
                 SetDeviceRawDebugMode(false);
@@ -3416,21 +3691,36 @@ namespace ConfigAppNS
                 }
             }
             //-------------------------------------------------------------------------------------------
+            slotCache[slot] = reply;
+            slotVersion[slot] = reply == null ? null : FormatFwVersion(reply.FwMajor, reply.FwMinor);
             if (reply == null)
             {
-                switch (last)
+                if (applyUi)
                 {
-                    case ReplyKind.NoData: mFwFailReasonKey = "Ver.Fail.HidRead"; break;
-                    case ReplyKind.Empty: mFwFailReasonKey = "Ver.Fail.NoReply"; break;
-                    case ReplyKind.RawStream: mFwFailReasonKey = "Ver.Fail.RawMode"; break;
-                    default: mFwFailReasonKey = "Ver.Fail.BadFrame"; break;
+                    switch (last)
+                    {
+                        case ReplyKind.NoData: mFwFailReasonKey = "Ver.Fail.HidRead"; break;
+                        case ReplyKind.Empty: mFwFailReasonKey = "Ver.Fail.NoReply"; break;
+                        case ReplyKind.RawStream: mFwFailReasonKey = "Ver.Fail.RawMode"; break;
+                        default: mFwFailReasonKey = "Ver.Fail.BadFrame"; break;
+                    }
+                    DebugLog.Log("GET_MODE slot{0}: FAILED after {1} attempts, last={2}, reason={3}", slot, GET_MODE_RETRIES, last, mFwFailReasonKey);
+                    UpdateVersionLabel();   // shows the reason instead of a stale value
                 }
-                DebugLog.Log("GET_MODE: FAILED after {0} attempts, last={1}, reason={2}", GET_MODE_RETRIES, last, mFwFailReasonKey);
-                UpdateVersionLabel();   // shows the reason instead of a stale value
+                else
+                {
+                    DebugLog.Log("GET_MODE slot{0}: FAILED after {1} attempts, last={2}", slot, GET_MODE_RETRIES, last);
+                }
                 return false;
             }
             //-------------------------------------------------------------------------------------------
             byte mode = reply.Mode;
+            string ver = slotVersion[slot];
+            DebugLog.Log("GET_MODE slot{0}: OK mode=0x{1:X2} UID={2:X2}{3} HVer={4:X2}{5} FVer={6}{7}",
+                slot, mode, reply.Uid, reply.UidMismatch ? "(!)" : "", reply.HVer, reply.HVerUnknown ? "(!)" : "",
+                ver, sawRaw ? " (recovered from RAW mode)" : "");
+            if (!applyUi)
+                return true;
             mDevicePlayerBits = (byte)(mode & (byte)UserMode.MSEL_MAK);
             byte usbMode = (byte)(mode & (byte)UserMode.MODE_MAK);
             radioButton_KBS.Checked = usbMode == (byte)UserMode.DDR_KBS;
@@ -3442,9 +3732,6 @@ namespace ConfigAppNS
             mFwMajor = reply.FwMajor;
             mFwMinor = reply.FwMinor;
             mFwValid = true;
-            DebugLog.Log("GET_MODE: OK mode=0x{0:X2} UID={1:X2}{2} HVer={3:X2}{4} FVer={5}{6}",
-                mode, mDevUid, reply.UidMismatch ? "(!)" : "", mDevHVer, reply.HVerUnknown ? "(!)" : "",
-                FwVersionText(), sawRaw ? " (recovered from RAW mode)" : "");
             UpdateVersionLabel();
             return true;
         }
