@@ -79,9 +79,10 @@ namespace ConfigAppNS
             return info;
         }
 
-        /// <summary>Same formatting as the main window: "V3.2" for major >= 3, "2.17" for the old images.</summary>
+        /// <summary>Same formatting as the main window: "V4" for 4.0, "V3.2" for major >= 3, "1.21" for the old images.</summary>
         public static string VersionText(int major, int minor)
         {
+            if (major >= 4 && minor == 0) return "V" + major;
             if (major >= 3) return "V" + major + "." + minor;
             return major.ToString() + "." + minor.ToString("D02");
         }

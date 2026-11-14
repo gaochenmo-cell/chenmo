@@ -70,8 +70,7 @@ namespace ConfigAppNS
         /// </summary>
         private string FwVersionText()
         {
-            if (mFwMajor >= 3) return "V" + mFwMajor + "." + mFwMinor;
-            return mFwMajor.ToString() + "." + mFwMinor.ToString("D02");
+            return FirmwareImageInfo.VersionText(mFwMajor, mFwMinor);
         }
 
         // Known firmware versions:
@@ -85,7 +84,9 @@ namespace ConfigAppNS
         {
             if (!mFwValid) return "";
             string tag = "";
-            if (mFwMajor >= 3)
+            if (mFwMajor >= 4)
+                tag = L.Get("Ver.Tag.Yuancon");
+            else if (mFwMajor >= 3)
             {
                 if (mDevHVer == DeviceProtocol.HVER_4KEY) tag = L.Get("Ver.Tag.Board4");
                 else if (mDevHVer == DeviceProtocol.HVER_5KEY) tag = L.Get("Ver.Tag.Board5");
@@ -100,16 +101,19 @@ namespace ConfigAppNS
         }
         private bool FwHasKeyMap()
         {
-            return mFwValid && (mFwMajor >= 3 || (mFwMajor == 2 && mFwMinor >= 17));
+            // Key remap lives in the V3 images and in 2.17+. YuanconDancepad V4 is the
+            // renamed 1P/2P image and does not gain that feature from the version number.
+            return mFwValid && (mFwMajor == 3 || (mFwMajor == 2 && mFwMinor >= 17));
         }
         /// <summary>
         /// Stock V2.13 and every image up to V3.0 never write the sensitivity page; V3.1 writes
         /// it but its boot code still overwrites the loaded table with 200. On all of them the
         /// sensitivity reads back as 200 after a power cycle. V3.2 keeps the saved values.
+        /// YuanconDancepad V4 reports major 4 and is not that image.
         /// </summary>
         private bool FwPersistsSensitivity()
         {
-            return mFwValid && (mFwMajor > 3 || (mFwMajor == 3 && mFwMinor >= 2));
+            return mFwValid && mFwMajor == 3 && mFwMinor >= 2;
         }
 
         private void ResetDeviceVersion()
@@ -2223,8 +2227,7 @@ namespace ConfigAppNS
 
         private static string FormatFwVersion(int major, int minor)
         {
-            if (major >= 3) return "V" + major + "." + minor;
-            return major.ToString() + "." + minor.ToString("D02");
+            return FirmwareImageInfo.VersionText(major, minor);
         }
 
         /// <summary>Push a previously read GET_MODE reply onto the editor (radios + version line).</summary>
@@ -2934,7 +2937,7 @@ namespace ConfigAppNS
                 // Version re-read after the restart: a known pre-V3.2 image explains a lost
                 // sensitivity table by itself; anything else needs the log.
                 string hint = (ConfigType & 0x0F) == 0x00 && mFwValid && !FwPersistsSensitivity()
-                    ? L.F("Cfg.RebootHintOldFw", FwVersionText())
+                    ? L.F(mFwMajor >= 4 ? "Cfg.RebootHintV4" : "Cfg.RebootHintOldFw", FwVersionText())
                     : L.Get("Cfg.RebootHintLog");
                 MessageBox.Show(L.F("Cfg.WriteLostAfterReboot", rebootResult, hint), L.Get("Msg.SystemTitle"),
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -3462,7 +3465,9 @@ namespace ConfigAppNS
                 if (mFwValid && !FwPersistsSensitivity())
                 {
                     DebugLog.Log("SET_SENS type 00: firmware {0} does not keep the sensitivity across power-up, asking before writing", FwVersionText());
-                    DialogResult r = MessageBox.Show(L.F("Cfg.SensiOldFwConfirm", FwVersionText()), L.Get("App.Name"),
+                    DialogResult r = MessageBox.Show(
+                        L.F(mFwMajor >= 4 ? "Cfg.SensiV4Confirm" : "Cfg.SensiOldFwConfirm", FwVersionText()),
+                        L.Get("App.Name"),
                         MessageBoxButtons.OKCancel, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
                     DebugLog.Log("SET_SENS type 00: user chose {0}", r);
                     if (r != DialogResult.OK) return;

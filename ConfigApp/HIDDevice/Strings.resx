@@ -310,6 +310,17 @@ Save anyway? It will take effect after upgrading the firmware.</value>
   <data name="Ver.Tag.Board4" xml:space="preserve">
     <value> (4-key)</value>
   </data>
+  <data name="Ver.Tag.Yuancon" xml:space="preserve">
+    <value> (YuanconDancepad)</value>
+  </data>
+  <data name="Cfg.RebootHintV4" xml:space="preserve">
+    <value>Firmware {0} does not keep the sensitivity across power-up.</value>
+  </data>
+  <data name="Cfg.SensiV4Confirm" xml:space="preserve">
+    <value>Firmware {0} does not keep the sensitivity: it resets to 200 at every power-up.
+
+Write the values anyway? They stay active until the board is unplugged.</value>
+  </data>
   <data name="Ver.Tag.UpgradeSensi" xml:space="preserve">
     <value>, upgrade to V3.2 (sensitivity not kept across power cycles)</value>
   </data>

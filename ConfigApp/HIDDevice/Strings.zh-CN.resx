@@ -310,6 +310,17 @@
   <data name="Ver.Tag.Board4" xml:space="preserve">
     <value> (四键)</value>
   </data>
+  <data name="Ver.Tag.Yuancon" xml:space="preserve">
+    <value> (YuanconDancepad)</value>
+  </data>
+  <data name="Cfg.RebootHintV4" xml:space="preserve">
+    <value>固件 {0} 掉电后不会保留灵敏度。</value>
+  </data>
+  <data name="Cfg.SensiV4Confirm" xml:space="preserve">
+    <value>固件 {0} 不会保存灵敏度，每次上电都恢复 200。
+
+仍要写入吗？写入的值在拔掉 USB 前有效。</value>
+  </data>
   <data name="Ver.Tag.UpgradeSensi" xml:space="preserve">
     <value>，建议升级 V3.2（灵敏度不掉电保存）</value>
   </data>

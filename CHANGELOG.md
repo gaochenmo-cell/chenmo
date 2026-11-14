@@ -3,7 +3,7 @@
 ## V4 (2026-11-14)
 
 - 产品名改为 YuanconDancepad，版本从 V4 起算。窗口标题、关于/升级确认文案、程序集信息（`AssemblyTitle` / `AssemblyProduct` / `4.0.0.0`）、可执行文件名和日志文件不再使用 PADUEX5、ConfigApp 或 V3.2.2。
-- 1P 与 2P 踏板仍同时显示。交付的 1P / 2P 固件仍是未改的 `DDR_WMCU_COM_V1.21` 参考镜像（镜像内没有可安全改写的产品名字符串）。
+- 1P 与 2P 踏板仍同时显示。交付固件文件名为 `YuanconDancepad-V4-1P.bin` / `YuanconDancepad-V4-2P.bin`。镜像里原有的版本立即数（GET_MODE 的 major/minor，以及启动打印 `AppUser Start`）从 1.21 改为 V4；1P/2P 默认模式那一个字节没有动。没有另造 USB 命令。
 
 ## V3.2.1 (2026-11-06)
 
