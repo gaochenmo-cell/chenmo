@@ -26,7 +26,7 @@ namespace ConfigAppNS
 			// Language: Config.ini LANGUAGE=AUTO|CN|EN (missing/AUTO = follow the Windows UI language)
 			L.Apply(AppConfig.Read("LANGUAGE"));
 
-			string AppName = "PADUEX5";
+			string AppName = "YuanconDancepad";
 			bool gotOwnership = false;
 			Mutex mutex = null;
 			try

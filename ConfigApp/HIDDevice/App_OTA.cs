@@ -280,7 +280,7 @@ namespace ConfigAppNS
             return null;
         }
 
-        /// <summary>"V3.2 (PADUEX4)" from the version bytes inside the image, or an "unknown" text.</summary>
+        /// <summary>"V3.2 (4-key)" from the version bytes inside the image, or an "unknown" text.</summary>
         private static string FileVersionText(FirmwareImageInfo info)
         {
             if (info == null || !info.HasVersion) return L.Get("Ota.FileVerUnknown");
@@ -447,7 +447,7 @@ namespace ConfigAppNS
             }
         }
 
-        /// <summary>Progress line for the dialog log plus the same text in PADUEX5.log.</summary>
+        /// <summary>Progress line for the dialog log plus the same text in YuanconDancepad.log.</summary>
         private static void Step(BackgroundWorker bw, int pct, string text)
         {
             DebugLog.Log("OTA: {0}", text);

@@ -75,7 +75,7 @@ namespace ConfigAppNS
         }
 
         // Known firmware versions:
-        //   3.2  current release (HVer 0x13 = 5-key PADUEX5, 0x14 = 4-key PADUEX4)
+        //   3.2  sensitivity kept across power cycles (HVer 0x13 = 5-key, 0x14 = 4-key)
         //   3.1  SET_SENS(sensitivity) wrote the flash page, but boot still reset the table to 200
         //   3.0  first V3 release; SET_SENS(sensitivity) only reached RAM
         //   2.17 previous 5-key image, 2.18 previous 4-key image
@@ -144,12 +144,20 @@ namespace ConfigAppNS
 
         private byte DefaultOffset = 0x01;			//V1.0.0.18:20241012(1)Change ADX Save Issue
         ///-------------------------------------------------------------------------------------------
-        // Config.ini KEYCOUNT=4|5 (default 5). Same code, same protocol; only the pad grid,
-        // the key-map rows and the window title change. Read once at start-up (ReadAppConfig).
+        // Config.ini KEYCOUNT=4|5 (default 5). Same code, same protocol; only the pad grid
+        // and the key-map rows change. Read once at start-up (ReadAppConfig).
         private static int KeyCount = KEY_COUNT_5KEY;
         private static bool FourKeyMode { get { return KeyCount == 4; } }
-        private static string AppName { get { return FourKeyMode ? "PADUEX4" : "PADUEX5"; } }
-        private static readonly string HostVer = "V" + System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString(3);
+        private static string AppName { get { return "YuanconDancepad"; } }
+        // 4.0.0.0 is shown as V4. A later 4.1.0 still uses the three-part form.
+        private static readonly string HostVer = FormatHostVer();
+        private static string FormatHostVer()
+        {
+            System.Version v = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            if (v != null && v.Minor == 0 && v.Build == 0)
+                return "V" + v.Major.ToString();
+            return "V" + (v == null ? "4" : v.ToString(3));
+        }
         private enum ConnState { None, Device, Ota }
         private ConnState mConnState = ConnState.None;
 
@@ -497,8 +505,8 @@ namespace ConfigAppNS
             ///------------------------------------------------------------------------------------------
             ReadAppConfig();
             L.LanguageChanged += (s, e) => { if (!IsDisposed) OnLanguageChanged(); };
-            DebugLog.Log("==== PADUEX5 {0} start, config={1}, lang={2}, log={3} ====",
-                HostVer, AppConfig.Path, L.Setting, DebugLog.Enabled ? "on" : "off");
+            DebugLog.Log("==== {0} {1} start, config={2}, lang={3}, log={4} ====",
+                AppName, HostVer, AppConfig.Path, L.Setting, DebugLog.Enabled ? "on" : "off");
             ///------------------------------------------------------------------------------------------
             USBCtrl.HIDLibraryLibChanged += HID_Event_Changed_Delegate;
             Find_USB_Deivce();
@@ -2368,7 +2376,7 @@ namespace ConfigAppNS
             // LANGUAGE is applied in Program.Main (before any form exists); THEME is read here.
             string theme = AppConfig.Read("THEME");
             bDarkMode = theme != null && theme.Trim().Equals("DARK", StringComparison.OrdinalIgnoreCase);
-            // KEYCOUNT=4 → 4-key cross layout (PADUEX4); anything else → 5-key (PADUEX5)
+            // KEYCOUNT=4 → 4-key cross layout; anything else → 5-key
             string keys = AppConfig.Read("KEYCOUNT");
             KeyCount = keys != null && keys.Trim() == "4" ? 4 : KEY_COUNT_5KEY;
             DebugLog.Log("KEYCOUNT={0} -> {1}-key layout ({2})", keys ?? "(unset)", KeyCount, AppName);

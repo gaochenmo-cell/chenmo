@@ -22,7 +22,7 @@
 			this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Dpi;
 			this.ClientSize = new System.Drawing.Size(320, 120);
 			this.Name = "App_Main";
-			this.Text = "PADUEX5";
+			this.Text = "YuanconDancepad";
 			this.ResumeLayout(false);
 		}
 

@@ -907,7 +907,7 @@
             this.Controls.Add(this.Btn_K6);
             this.Controls.Add(this.Btn_K5);
             this.Name = "App_DDR";
-            this.Text = "PADUEX5";
+            this.Text = "YuanconDancepad";
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.DDR_Form_FormClosing);
             this.Load += new System.EventHandler(this.DDR_Form_Load);
             this.groupBox_Button.ResumeLayout(false);

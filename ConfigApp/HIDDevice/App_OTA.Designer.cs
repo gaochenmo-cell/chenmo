@@ -223,7 +223,7 @@ namespace ConfigAppNS
             this.Name = "App_OTA";
             this.ShowInTaskbar = false;
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
-            this.Text = "PADUEX5";
+            this.Text = "YuanconDancepad";
             this.panelBanner.ResumeLayout(false);
             this.ResumeLayout(false);
             this.PerformLayout();
