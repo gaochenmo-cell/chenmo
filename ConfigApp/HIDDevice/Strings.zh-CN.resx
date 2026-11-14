@@ -138,6 +138,18 @@
   <data name="Group.Edit" xml:space="preserve">
     <value>编辑</value>
   </data>
+  <data name="Edit.Target" xml:space="preserve">
+    <value>编辑 · {0}</value>
+  </data>
+  <data name="Pad.Online" xml:space="preserve">
+    <value>{0}  ·  {1}  ·  {2}</value>
+  </data>
+  <data name="Pad.OnlineNoVer" xml:space="preserve">
+    <value>{0}  ·  已连接</value>
+  </data>
+  <data name="Pad.Offline" xml:space="preserve">
+    <value>{0}  ·  未连接</value>
+  </data>
   <data name="Group.Mode" xml:space="preserve">
     <value>模式</value>
   </data>
@@ -190,7 +202,7 @@
     <value>键盘按键映射</value>
   </data>
   <data name="Map.Hint" xml:space="preserve">
-    <value>仅键盘模式，需固件 V3.0 及以上。映射随灯色一起保存在板子里。1P/2P 由游戏按插入顺序自动分配，无需设置。</value>
+    <value>仅键盘模式，需固件 V3.0 及以上。映射随灯色一起保存在板子里。1P 和 2P 是两块踏板，界面同时显示；点哪一块，读取和保存就针对哪一块。</value>
   </data>
   <data name="Map.KeyLabel" xml:space="preserve">
     <value>五个踏板对应 HID 键值（选好后点保存映射）：</value>

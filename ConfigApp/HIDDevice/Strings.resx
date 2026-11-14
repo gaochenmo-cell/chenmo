@@ -138,6 +138,18 @@
   <data name="Group.Edit" xml:space="preserve">
     <value>Edit</value>
   </data>
+  <data name="Edit.Target" xml:space="preserve">
+    <value>Edit · {0}</value>
+  </data>
+  <data name="Pad.Online" xml:space="preserve">
+    <value>{0}  ·  {1}  ·  {2}</value>
+  </data>
+  <data name="Pad.OnlineNoVer" xml:space="preserve">
+    <value>{0}  ·  connected</value>
+  </data>
+  <data name="Pad.Offline" xml:space="preserve">
+    <value>{0}  ·  not connected</value>
+  </data>
   <data name="Group.Mode" xml:space="preserve">
     <value>Mode</value>
   </data>
@@ -190,7 +202,7 @@
     <value>Keyboard mapping</value>
   </data>
   <data name="Map.Hint" xml:space="preserve">
-    <value>Keyboard mode only. Requires firmware V3.0 or later. Stored in the colour table, so Save Colour keeps it. Player (1P/2P) is assigned by the game by plug-in order.</value>
+    <value>Keyboard mode only. Requires firmware V3.0 or later. Stored in the colour table, so Save Colour keeps it. 1P and 2P are separate pads and are both shown; Read and Save follow the pad you click.</value>
   </data>
   <data name="Map.KeyLabel" xml:space="preserve">
     <value>Per-pad HID usage (select then Save Map):</value>
