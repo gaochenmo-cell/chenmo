@@ -17,7 +17,7 @@ using HIDLibraryNS;
 
 namespace ConfigAppNS
 {
-    public partial class App_DDR : Form
+    public partial class App_DDR : UserControl
     {
 
         //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
@@ -25,9 +25,29 @@ namespace ConfigAppNS
         //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 
         ///-------------------------------------------------------------------------------------------
-        HidLibrary USBCtrl = new HidLibrary();
+        // One open HID interface per panel, so two boards are driven independently (see PadHid.cs).
+        private HidPort mPort = null;
+        private HidDeviceInfo mDevice = null;
+        /// <summary>Slot caption used in log lines and the host header card ("1P" / "2P").</summary>
+        public string SlotTag = "1P";
+        /// <summary>Raised when connection state / version changed; the host refreshes its header cards and title.</summary>
+        public event EventHandler StateChanged;
+        /// <summary>Raised when this panel needs the host to re-enumerate USB (after a reboot or a broken handle).</summary>
+        public event EventHandler RescanRequested;
+        /// <summary>Raised by the panel's own "Firmware upgrade" button; the host runs the upgrade dialog.</summary>
+        public event EventHandler OtaRequested;
+        /// <summary>True while this panel waits for its board to come back (save / upgrade); the host locks the other column meanwhile.</summary>
+        public event EventHandler BusyChanged;
+        public bool IsBusy { get { return mBusy; } }
+        private bool mBusy = false;
 
-        private delegate void UpdateUSBHIDStateDelegate(HIDLibraryLibChangedEventArgs args);
+        private void SetBusy(bool busy)
+        {
+            if (mBusy == busy) return;
+            mBusy = busy;
+            EventHandler h = BusyChanged;
+            if (h != null) h(this, EventArgs.Empty);
+        }
 
         ///-------------------------------------------------------------------------------------------
         private bool bDeviceStatusFG = false;
@@ -35,7 +55,6 @@ namespace ConfigAppNS
         private bool bDarkMode = false;
         private bool bDebugModesFG = false;
         private readonly bool[] padKeyActive = new bool[5];
-        private byte mDeviceIndex = 0;
         // 1P/2P is fixed by firmware since V2.12 (DEFAULT_1P2P); games assign players by
         // plug-in order, so the host no longer exposes it. Echo back whatever the device reports.
         private byte mDevicePlayerBits = (byte)UserMode.DDR_2PS;
@@ -142,12 +161,38 @@ namespace ConfigAppNS
         private enum ConnState { None, Device, Ota }
         private ConnState mConnState = ConnState.None;
 
+        public bool IsConnected { get { return bDeviceStatusFG; } }
+        public bool FirmwareVersionValid { get { return mFwValid; } }
+        public int DeviceHVer { get { return mDevHVer; } }
+        public int FirmwareMajor { get { return mFwMajor; } }
+        public int FirmwareMinor { get { return mFwMinor; } }
+        internal HidDeviceInfo Device { get { return mDevice; } }
+        public static string ApplicationName { get { return AppName; } }
+        public static string HostVersion { get { return HostVer; } }
+        public static bool IsFourKey { get { return FourKeyMode; } }
+
+        /// <summary>Short version text for the header card: "V3.2 (PADUEX4 four-key)" or the failure reason.</summary>
+        public string VersionSummary()
+        {
+            if (!bDeviceStatusFG) return "";
+            if (!mFwValid)
+                return mFwFailReasonKey.Length > 0 ? L.Get(mFwFailReasonKey) : L.Get("Ver.NotRead");
+            return L.F("Ver.Label", mDevUid.ToString("X02"), mDevHVer.ToString("X02"), FwVersionText(), FwTag());
+        }
+
+        /// <summary>Mode text for the header card: "Keyboard" / "Gamepad" as the board reported it.</summary>
+        public string ModeSummary()
+        {
+            if (!bDeviceStatusFG || !mFwValid) return "";
+            if (radioButton_HID.Checked) return L.Get("Radio.Gamepad");
+            if (radioButton_IO4.Checked) return L.Get("Radio.IO");
+            return L.Get("Radio.Keyboard");
+        }
+
         private void UpdateWindowTitle()
         {
-            string suffix = "";
-            if (mConnState == ConnState.Device) suffix = " " + L.Get("Title.Connected");
-            else if (mConnState == ConnState.Ota) suffix = " " + L.Get("Title.OtaConnected");
-            this.Text = AppName + " " + HostVer + suffix;
+            EventHandler h = StateChanged;
+            if (h != null) h(this, EventArgs.Empty);
         }
 
         ///-------------------------------------------------------------------------------------------
@@ -292,41 +337,6 @@ namespace ConfigAppNS
         }
         //#endregion
 
-
-        /// =============================================================================================
-        /// ==== Window Proc ====
-        /// =============================================================================================
-        ///
-        //[System.Security.Permissions.PermissionSet(System.Security.Permissions.SecurityAction.Demand, Name = "FullTrust")]
-        protected override void WndProc(ref Message m)
-        {
-            //int bStatus = (int)DeviceType.None;
-            //bDeviceStatusFG = false;
-            if (m.Msg == WM_DEVICECHANGE)//WM_DEVICECHANGE   DBT_DEVICEARRIVAL
-            {
-                if (((int)m.WParam == DBT_DEVICEARRIVAL))
-                {
-                    //Logtxtbx.Text += "device has been added to the system \r\n";
-                    //Logtxtbx.SelectionStart = Logtxtbx.Text.Length;
-                    //Logtxtbx.ScrollToCaret();
-                }
-                else if (((int)m.WParam == DBT_DEVICEREMOVECOMPLETE))
-                {
-                    //Logtxtbx.Text += "device has been removed from the system \r\n";
-                    //Logtxtbx.SelectionStart = Logtxtbx.Text.Length;
-                    //Logtxtbx.ScrollToCaret();
-                }
-                else if (//((int)m.WParam == DBT_DEVICEARRIVAL) ||
-                    //((int)m.WParam == DBT_DEVICEREMOVEPENDING) ||
-                    //((int)m.WParam == DBT_DEVICEREMOVECOMPLETE) ||
-                    //((int)m.WParam == DBT_CONFIGCHANGED) ||
-                    ((int)m.WParam == DBT_DEVNODES_CHANGED))
-                {
-                    Find_USB_Deivce();
-                }
-            }
-            base.WndProc(ref m);
-        }
 
         //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
         //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
@@ -482,15 +492,12 @@ namespace ConfigAppNS
         {
             ///------------------------------------------------------------------------------------------
             InitializeComponent();
-            ApplyAppIcon();
             ///------------------------------------------------------------------------------------------
             ReadAppConfig();
             L.LanguageChanged += (s, e) => { if (!IsDisposed) OnLanguageChanged(); };
-            DebugLog.Log("==== PADUEX5 {0} start, config={1}, lang={2}, log={3} ====",
-                HostVer, AppConfig.Path, L.Setting, DebugLog.Enabled ? "on" : "off");
             ///------------------------------------------------------------------------------------------
-            USBCtrl.HIDLibraryLibChanged += HID_Event_Changed_Delegate;
-            Find_USB_Deivce();
+            // No device yet: the host window enumerates USB and calls Attach / Detach per slot.
+            Detach();
             ///------------------------------------------------------------------------------------------
             timer1.Enabled = true;
             timer1.Interval = 10; // ~100 Hz sensor poll in debug / live pad highlight
@@ -510,27 +517,6 @@ namespace ConfigAppNS
             progressBar3.Direction = ProgressBarDirection.Vertical;
             progressBar4.Direction = ProgressBarDirection.Vertical;
             ///------------------------------------------------------------------------------------------
-        }
-
-        private void ApplyAppIcon()
-        {
-            try
-            {
-                string icoPath = Path.Combine(Application.StartupPath, "AppLogo.ico");
-                if (File.Exists(icoPath))
-                {
-                    this.Icon = new Icon(icoPath);
-                    return;
-                }
-            }
-            catch { }
-            try
-            {
-                Icon ico = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
-                if (ico != null)
-                    this.Icon = ico;
-            }
-            catch { }
         }
 
         /// =============================================================================================
@@ -635,8 +621,6 @@ namespace ConfigAppNS
         private bool layoutReady = false;
         private bool padKeyVectorWired = false;
         private Button btnFirmwareUpgrade;
-        private Button btnLangToggle;
-        private Button btnThemeToggle;
         private TabPage tabPage_Map;
         private GroupBox groupBox_Map;
         private Label label_MapHint;
@@ -701,10 +685,6 @@ namespace ConfigAppNS
         {
             UpdateWindowTitle();
             this.AutoScaleMode = AutoScaleMode.None;
-            this.FormBorderStyle = FormBorderStyle.Sizable;
-            this.MaximizeBox = true;
-            this.MinimizeBox = true;
-            this.StartPosition = FormStartPosition.CenterScreen;
 
             // One-time chrome / hide unused controls
             pictureBox1.Visible = false; pictureBox1.Enabled = false;
@@ -721,8 +701,6 @@ namespace ConfigAppNS
             radioButton_IO4.Visible = false;
 
             EnsureFirmwareUpgradeButton();
-            EnsureLanguageToggleButton();
-            EnsureThemeToggleButton();
             for (int i = 0; i < KEY_COUNT_5KEY; i++)
                 KeyMappingBuffer[i] = DefaultKeyMapping[i];
             EnsureKeyMappingUi();
@@ -733,12 +711,11 @@ namespace ConfigAppNS
                 groupBox_Mode.Controls.Add(btnFirmwareUpgrade);
             }
 
-            // Initial window = design × system DPI; later Resize keeps aspect scale
+            // Initial size = design × system DPI; the host sizes the panel afterwards and
+            // Resize keeps the aspect scale (see App_DDR_Resize).
             float dpiScale = ReadSystemDpiScale();
             layoutBusy = true;
-            this.ClientSize = new Size((int)(DesignW * dpiScale), (int)(DesignH * dpiScale));
-            this.MinimumSize = new Size((int)(DesignW * dpiScale * 0.85f) + 16,
-                                        (int)(DesignH * dpiScale * 0.85f) + 40);
+            this.Size = new Size((int)(DesignW * dpiScale), (int)(DesignH * dpiScale));
             layoutScale = dpiScale;
             RebuildScaledLayout();
             layoutBusy = false;
@@ -916,18 +893,6 @@ namespace ConfigAppNS
             Btn_ReadMode.Location = new Point(right - 3 * btnW - 2 * gapBtn, btnY);
             btnFirmwareUpgrade.BringToFront();
 
-            if (btnLangToggle != null)
-            {
-                btnLangToggle.Size = new Size(S(96), S(28));
-                btnLangToggle.Location = new Point(this.ClientSize.Width - S(110), S(8));
-                btnLangToggle.BringToFront();
-            }
-            if (btnThemeToggle != null)
-            {
-                btnThemeToggle.Size = new Size(S(96), S(28));
-                btnThemeToggle.Location = new Point(this.ClientSize.Width - S(220), S(8));
-                btnThemeToggle.BringToFront();
-            }
             label_Ver.AutoSize = true;
             label_Ver.Location = new Point(ox + S(2), S(12));
             label_Ver.BringToFront();
@@ -979,61 +944,6 @@ namespace ConfigAppNS
             this.Controls.Add(btnFirmwareUpgrade);
         }
 
-        private ContextMenuStrip menuLanguage;
-        private ToolStripMenuItem menuLangAuto, menuLangZh, menuLangEn;
-
-        private void EnsureLanguageToggleButton()
-        {
-            if (btnLangToggle != null)
-                return;
-            btnLangToggle = new Button();
-            btnLangToggle.Name = "btnLangToggle";
-            btnLangToggle.BackColor = SystemColors.Control;
-            btnLangToggle.UseVisualStyleBackColor = false;
-            btnLangToggle.Click += new EventHandler(this.Btn_LangToggle_Click);
-            this.Controls.Add(btnLangToggle);
-
-            menuLanguage = new ContextMenuStrip();
-            menuLanguage.ShowImageMargin = false;
-            menuLangAuto = new ToolStripMenuItem();
-            menuLangZh = new ToolStripMenuItem();
-            menuLangEn = new ToolStripMenuItem();
-            menuLangAuto.Click += (s, e) => SetLanguage(L.SettingAuto);
-            menuLangZh.Click += (s, e) => SetLanguage(L.SettingChinese);
-            menuLangEn.Click += (s, e) => SetLanguage(L.SettingEnglish);
-            menuLanguage.Items.Add(menuLangAuto);
-            menuLanguage.Items.Add(new ToolStripSeparator());
-            menuLanguage.Items.Add(menuLangZh);
-            menuLanguage.Items.Add(menuLangEn);
-            menuLanguage.Opening += (s, e) => RefreshLanguageMenu();
-        }
-
-        private void RefreshLanguageMenu()
-        {
-            if (menuLanguage == null) return;
-            menuLangAuto.Text = L.Get("Lang.Auto");
-            menuLangZh.Text = L.Get("Lang.zhCN");
-            menuLangEn.Text = L.Get("Lang.en");
-            menuLangAuto.Checked = L.Setting == L.SettingAuto;
-            menuLangZh.Checked = L.Setting == L.SettingChinese;
-            menuLangEn.Checked = L.Setting == L.SettingEnglish;
-            // Match the active theme so the menu is readable in dark mode too
-            menuLanguage.Renderer = new ToolStripProfessionalRenderer(new MenuColors(pal));
-            menuLanguage.BackColor = pal.PanelBg;
-            menuLanguage.ForeColor = pal.Text;
-            foreach (ToolStripItem it in menuLanguage.Items)
-            {
-                it.BackColor = pal.PanelBg;
-                it.ForeColor = pal.Text;
-            }
-        }
-
-        private void SetLanguage(string setting)
-        {
-            L.Apply(setting);                 // raises LanguageChanged → OnLanguageChanged()
-            AppConfig.Write("LANGUAGE", L.Setting);
-        }
-
         /// <summary>Re-apply every localized caption and repaint owner-drawn chrome (tabs, group titles).</summary>
         private void OnLanguageChanged()
         {
@@ -1041,40 +951,6 @@ namespace ConfigAppNS
             if (layoutReady && !layoutBusy)
                 RebuildScaledLayout();
             this.Invalidate(true);
-        }
-
-        private sealed class MenuColors : ProfessionalColorTable
-        {
-            private readonly Palette p;
-            public MenuColors(Palette pal) { p = pal; }
-            public override Color MenuBorder { get { return p.Border; } }
-            public override Color MenuItemBorder { get { return p.Accent; } }
-            public override Color MenuItemSelected { get { return p.CardBg; } }
-            public override Color MenuItemSelectedGradientBegin { get { return p.CardBg; } }
-            public override Color MenuItemSelectedGradientEnd { get { return p.CardBg; } }
-            public override Color MenuItemPressedGradientBegin { get { return p.CardBg; } }
-            public override Color MenuItemPressedGradientEnd { get { return p.CardBg; } }
-            public override Color ToolStripDropDownBackground { get { return p.PanelBg; } }
-            public override Color ImageMarginGradientBegin { get { return p.PanelBg; } }
-            public override Color ImageMarginGradientMiddle { get { return p.PanelBg; } }
-            public override Color ImageMarginGradientEnd { get { return p.PanelBg; } }
-            public override Color SeparatorDark { get { return p.Border; } }
-            public override Color SeparatorLight { get { return p.PanelBg; } }
-            public override Color CheckBackground { get { return p.Accent; } }
-            public override Color CheckSelectedBackground { get { return p.Accent; } }
-            public override Color CheckPressedBackground { get { return p.Accent; } }
-        }
-
-        private void EnsureThemeToggleButton()
-        {
-            if (btnThemeToggle != null)
-                return;
-            btnThemeToggle = new Button();
-            btnThemeToggle.Name = "btnThemeToggle";
-            btnThemeToggle.BackColor = SystemColors.Control;
-            btnThemeToggle.UseVisualStyleBackColor = false;
-            btnThemeToggle.Click += new EventHandler(this.Btn_ThemeToggle_Click);
-            this.Controls.Add(btnThemeToggle);
         }
 
         private void EnsureKeyMappingUi()
@@ -1322,102 +1198,18 @@ namespace ConfigAppNS
                 AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
-        private void Btn_ThemeToggle_Click(object sender, EventArgs e)
+        /// <summary>Theme is owned by the host window (title-bar toggle, Config.ini THEME); both panels follow it.</summary>
+        public void SetDarkMode(bool dark)
         {
-            bDarkMode = !bDarkMode;
+            if (bDarkMode == dark && themeHooksWired) return;
+            bDarkMode = dark;
             ApplyTheme();
-            UpdateThemeToggleText();
-            WriteThemeToConfig();
         }
 
-        private void UpdateThemeToggleText()
+        /// <summary>Fonts follow the column width (see UiFont.Scale); the host calls this when the scale step changes.</summary>
+        public void RefreshFonts()
         {
-            if (btnThemeToggle == null)
-                return;
-            // Caption names the theme you will switch TO
-            btnThemeToggle.Text = L.Get(bDarkMode ? "Btn.ThemeLight" : "Btn.ThemeDark");
-        }
-
-        private void WriteThemeToConfig()
-        {
-            AppConfig.Write("THEME", bDarkMode ? "DARK" : "LIGHT");
-        }
-
-        /// <summary>
-        /// Light: Laverita palette (Tailwind gray scale + blue / amber / red accents).
-        /// Dark: neon purple (deep violet-black background, violet→pink gradient highlights with glow).
-        /// Gradient / glow fields are Color.Empty on the light palette, which disables those effects.
-        /// </summary>
-        private sealed class Palette
-        {
-            public Color FormBg, PanelBg, CardBg, Border, BorderStrong, Text, MutedText, Title;
-            public Color Accent, AccentText, Danger, Neutral, NeutralText, Selected, BarTrack, BarFill;
-            public Color PadOutline;          // arrow / ring stroke on an unselected pad key
-            public Color SelectedGradientEnd; // second stop of the selected pad key fill (Empty = solid)
-            public Color AccentGradientEnd;   // second stop of the tab underline (Empty = solid)
-            public Color Glow;                // outer glow around selected / pressed pad keys (Empty = none)
-            public Color ArrowTip, ArrowMid, ArrowBack, ArrowGlow; // chevron / ring cyan gradient + halo
-
-            public static Palette Light()
-            {
-                Palette p = new Palette();
-                p.FormBg = Color.FromArgb(243, 244, 246);
-                p.PanelBg = Color.White;
-                p.CardBg = Color.FromArgb(249, 250, 251);
-                p.Border = Color.FromArgb(229, 231, 235);
-                p.BorderStrong = Color.FromArgb(209, 213, 219);
-                p.Text = Color.FromArgb(31, 41, 55);
-                p.MutedText = Color.FromArgb(107, 114, 128);
-                p.Title = Color.FromArgb(47, 111, 237);
-                p.Accent = Color.FromArgb(47, 111, 237);
-                p.AccentText = Color.White;
-                p.Danger = Color.FromArgb(220, 38, 38);
-                p.Neutral = Color.FromArgb(229, 231, 235);
-                p.NeutralText = Color.FromArgb(31, 41, 55);
-                p.Selected = Color.FromArgb(245, 158, 11);
-                p.BarTrack = Color.FromArgb(229, 231, 235);
-                p.BarFill = Color.FromArgb(200, 220, 245);
-                p.PadOutline = Color.FromArgb(31, 41, 55);
-                p.SelectedGradientEnd = Color.Empty;
-                p.AccentGradientEnd = Color.Empty;
-                p.Glow = Color.Empty;
-                // Same chevron shape as dark mode, one step deeper so it reads on the light card
-                p.ArrowTip = Color.FromArgb(0x06, 0xB6, 0xD4);   // #06B6D4
-                p.ArrowMid = Color.FromArgb(0x08, 0x91, 0xB2);   // #0891B2
-                p.ArrowBack = Color.FromArgb(0x15, 0x5E, 0x75);  // #155E75
-                p.ArrowGlow = Color.FromArgb(0x0E, 0x74, 0x90);  // #0E7490
-                return p;
-            }
-
-            public static Palette Dark()
-            {
-                Palette p = new Palette();
-                p.FormBg = Color.FromArgb(13, 10, 31);          // #0D0A1F deep violet-black
-                p.PanelBg = Color.FromArgb(23, 18, 51);         // #171233 card
-                p.CardBg = Color.FromArgb(36, 29, 74);          // #241D4A inner cell / input
-                p.Border = Color.FromArgb(52, 42, 102);         // #342A66
-                p.BorderStrong = Color.FromArgb(91, 74, 160);   // #5B4AA0
-                p.Text = Color.FromArgb(237, 233, 254);         // #EDE9FE
-                p.MutedText = Color.FromArgb(157, 146, 201);    // #9D92C9 violet-grey
-                p.Title = Color.FromArgb(192, 132, 252);        // #C084FC
-                p.Accent = Color.FromArgb(124, 58, 237);        // #7C3AED
-                p.AccentText = Color.White;
-                p.Danger = Color.FromArgb(236, 72, 153);        // #EC4899 neon pink
-                p.Neutral = Color.FromArgb(42, 34, 80);         // #2A2250
-                p.NeutralText = Color.FromArgb(237, 233, 254);
-                p.Selected = Color.FromArgb(124, 58, 237);      // #7C3AED → gradient end below
-                p.BarTrack = Color.FromArgb(36, 29, 74);
-                p.BarFill = Color.FromArgb(91, 74, 160);
-                p.PadOutline = Color.FromArgb(196, 181, 253);   // #C4B5FD lavender
-                p.SelectedGradientEnd = Color.FromArgb(236, 72, 153); // #EC4899
-                p.AccentGradientEnd = Color.FromArgb(96, 165, 250);   // #60A5FA
-                p.Glow = Color.FromArgb(168, 85, 247);          // #A855F7
-                p.ArrowTip = Color.FromArgb(0x22, 0xD3, 0xEE);   // #22D3EE
-                p.ArrowMid = Color.FromArgb(0x06, 0xB6, 0xD4);   // #06B6D4
-                p.ArrowBack = Color.FromArgb(0x0E, 0x74, 0x90);  // #0E7490
-                p.ArrowGlow = Color.FromArgb(0x22, 0xD3, 0xEE);  // #22D3EE
-                return p;
-            }
+            if (layoutReady) ApplyTheme();
         }
 
         private Palette pal = Palette.Light();
@@ -1444,19 +1236,13 @@ namespace ConfigAppNS
                     p.BorderStyle = BorderStyle.None;
                 }
             }
-            StyleButton(btnLangToggle, pal.Neutral, pal.NeutralText);
-            StyleButton(btnThemeToggle, pal.Accent, pal.AccentText);
             if (label_Ver != null)
             {
                 label_Ver.BackColor = pal.FormBg;
                 label_Ver.ForeColor = pal.MutedText;
                 UiFont.Set(label_Ver, UiFont.Status);
             }
-            if (menuLanguage != null)
-                UiFont.Set(menuLanguage, UiFont.Body);
-
             ApplyModeGroupColors();
-            UpdateThemeToggleText();
             InvalidatePadKeyButtons();
             this.Invalidate(true);
         }
@@ -1625,47 +1411,13 @@ namespace ConfigAppNS
                 b.FlatAppearance.BorderColor = pal.BorderStrong;
                 return;
             }
-            if (b == btnLangToggle)
-            {
-                StyleButton(b, pal.Neutral, pal.NeutralText);
-                return;
-            }
             // "Default / reset" actions are red like Laverita; everything else is the blue accent
             if (b == btn_default || b == button2 || (b.Name != null && b.Name.IndexOf("Default", StringComparison.OrdinalIgnoreCase) >= 0))
             {
-                StyleButton(b, pal.Danger, Color.White);
+                pal.StyleButton(b, pal.Danger, Color.White, bDarkMode);
                 return;
             }
-            StyleButton(b, pal.Accent, pal.AccentText);
-        }
-
-        private void StyleButton(Button b, Color back, Color fore)
-        {
-            if (b == null)
-                return;
-            b.FlatStyle = FlatStyle.Flat;
-            b.FlatAppearance.BorderSize = 0;
-            b.FlatAppearance.MouseOverBackColor = Lighten(back, bDarkMode ? 0.12f : -0.08f);
-            b.FlatAppearance.MouseDownBackColor = Lighten(back, bDarkMode ? 0.2f : -0.16f);
-            b.UseVisualStyleBackColor = false;
-            b.BackColor = back;
-            b.ForeColor = fore;
-            UiFont.Set(b, UiFont.Body, FontStyle.Bold);
-        }
-
-        private static Color Lighten(Color c, float amount)
-        {
-            // amount > 0 lightens, < 0 darkens
-            float r = c.R, g = c.G, b = c.B;
-            if (amount >= 0)
-            {
-                r += (255 - r) * amount; g += (255 - g) * amount; b += (255 - b) * amount;
-            }
-            else
-            {
-                r *= 1 + amount; g *= 1 + amount; b *= 1 + amount;
-            }
-            return Color.FromArgb(c.A, (int)r, (int)g, (int)b);
+            pal.StyleButton(b, pal.Accent, pal.AccentText, bDarkMode);
         }
 
         /// <summary>Card look: rounded panel, 1px border, blue bold title (no system GroupBox frame).</summary>
@@ -1918,7 +1670,8 @@ namespace ConfigAppNS
             byte reportId = 0;
             byte reportIndex = 0;
             byte[] inputReportBuf = new byte[64];
-            USBCtrl.USBLib_DeviceCtrlInput(mDeviceIndex, DefaultOffset, reportId, reportSize, inputReportBuf);
+            if (!PortRead(reportId, reportSize, inputReportBuf))
+                return;
             UpdatePadTriggerFromReport(inputReportBuf, reportIndex);
         }
 
@@ -1931,14 +1684,6 @@ namespace ConfigAppNS
             Btn_K5.Invalidate();
         }
 
-        private void Btn_LangToggle_Click(object sender, EventArgs e)
-        {
-            if (menuLanguage == null || btnLangToggle == null)
-                return;
-            RefreshLanguageMenu();
-            menuLanguage.Show(btnLangToggle, new Point(0, btnLangToggle.Height));
-        }
-
         /// <summary>
         /// Every user-visible caption of the main window. All text comes from Strings*.resx via L;
         /// called at start-up and again whenever the language changes (theme-independent, so the
@@ -1946,7 +1691,6 @@ namespace ConfigAppNS
         /// </summary>
         private void ApplyUiLanguage()
         {
-            if (btnLangToggle != null) btnLangToggle.Text = L.Get("Btn.Language");
             btn_default.Text = L.Get("Btn.Default");
             btn_Read.Text = L.Get("Btn.Read");
             btn_Save.Text = L.Get("Btn.Save");
@@ -1983,10 +1727,8 @@ namespace ConfigAppNS
                     mapKeyLabels[i].Text = L.Get(PadKeyCaptionKey(i));
             RelocalizeHidUsageCombos();
             UpdateDebugButtonText();
-            UpdateThemeToggleText();
             UpdateWindowTitle();
             UpdateVersionLabel();
-            RefreshLanguageMenu();
         }
 
         private void UpdateDebugButtonText()
@@ -2006,8 +1748,8 @@ namespace ConfigAppNS
             SendByteBuf[index++] = b2;
             SendByteBuf[index++] = b3;
             SendByteBuf[index++] = b4;
-            DebugLog.Log("TX slot{0} SET_MRAW: {1}", mDeviceIndex, DebugLog.Hex(SendByteBuf, 0, index));
-            USBCtrl.USBLib_DeviceCtrlOutput(mDeviceIndex, ReportID, ReportSize, SendByteBuf);
+            DebugLog.Log("TX {0} SET_MRAW: {1}", SlotTag, DebugLog.Hex(SendByteBuf, 0, index));
+            PortWrite(ReportID, SendByteBuf, ReportSize);
         }
 
         /// <summary>NOLMD — stop the RAW stream on the board without touching the host-side flag/button.</summary>
@@ -2035,8 +1777,8 @@ namespace ConfigAppNS
         {
             byte ReportSize = 64;
             byte ReportID = 0;
-            DebugLog.Log("TX slot{0} {1}: {2}", mDeviceIndex, what, DebugLog.Hex(txBuf, 0, txLen));
-            USBCtrl.USBLib_DeviceCtrlOutput(mDeviceIndex, ReportID, ReportSize, txBuf);
+            DebugLog.Log("TX {0} {1}: {2}", SlotTag, what, DebugLog.Hex(txBuf, 0, txLen));
+            PortWrite(ReportID, txBuf, ReportSize);
             Thread.Sleep(waitMs);
             return ReadReply(what, expectedCmd, rxBuf);
         }
@@ -2046,9 +1788,9 @@ namespace ConfigAppNS
             byte ReportSize = 64;
             byte ReportID = 0;
             DeviceProtocol.FillSentinel(rxBuf);
-            USBCtrl.USBLib_DeviceCtrlInput(mDeviceIndex, DefaultOffset, ReportID, ReportSize, rxBuf);
+            PortRead(ReportID, ReportSize, rxBuf);
             ReplyKind kind = DeviceProtocol.Classify(rxBuf, 0, expectedCmd);
-            DebugLog.Log("RX slot{0} {1} -> {2}: {3}", mDeviceIndex, what, kind, DebugLog.Hex(rxBuf, 0, ReportSize));
+            DebugLog.Log("RX {0} {1} -> {2}: {3}", SlotTag, what, kind, DebugLog.Hex(rxBuf, 0, ReportSize));
             return kind;
         }
 
@@ -2099,8 +1841,16 @@ namespace ConfigAppNS
         private void timer1_Tick(object sender, EventArgs e)
         {
             ///------------------------------------------------------------------------------------------
-            if (bDeviceStatusFG)
+            if (bDeviceStatusFG && !ioSuspended)
             {
+                if (mPort != null && mPort.Broken)
+                {
+                    // The board went away under us (reboot / unplug): stop polling and let the host re-enumerate.
+                    DebugLog.Log("USB {0}: handle broken (win32 error {1}), asking for a rescan", SlotTag, mPort.LastError);
+                    bDeviceStatusFG = false;
+                    RequestRescan();
+                    return;
+                }
                 if (bDebugModesFG)
                     Seneor_Raw_Data_Read_and_Display();
                 else
@@ -2129,19 +1879,10 @@ namespace ConfigAppNS
         }
 
         /// =============================================================================================
-        /// ====  Form Load ====
+        /// ==== Shutdown (host window closing) ====
         /// =============================================================================================
         ///
-        private void DDR_Form_Load(object sender, EventArgs e)
-        {
-            //Find_USB_Deivce();
-        }
-
-        /// =============================================================================================
-        /// ==== Form Closing  ====
-        /// =============================================================================================
-        ///
-        private void DDR_Form_FormClosing(object sender, FormClosingEventArgs e)
+        public void Shutdown()
         {
             // Leave RAW mode, otherwise the next session cannot read anything until re-plug.
             if (bDeviceStatusFG && bDebugModesFG)
@@ -2149,171 +1890,140 @@ namespace ConfigAppNS
                 try { SendRawStreamOff(); } catch { }
                 bDebugModesFG = false;
             }
-            DebugLog.Log("==== exit ====");
-            USBCtrl.USBLib_Disconnect();
-            //this.Close();
-            //App_Main main = new App_Main();
-            //main.Show();
-        }
-        /// =============================================================================================
-        /// ==== HID Event Changed  ====
-        /// =============================================================================================
-        ///
-        private void HID_Event_Changed_Delegate(object sender, HIDLibraryLibChangedEventArgs args)
-        {
-            BeginInvoke(new UpdateUSBHIDStateDelegate(UpdateHidLibraryState), args);
-        }
-        /// =============================================================================================
-        /// ==== Display All ====
-        /// =============================================================================================
-        ///
-        private void UpdateHidLibraryState(HIDLibraryLibChangedEventArgs args)
-        {
-            HIDLibraryState mHIDLibraryState = args.HIDLibraryState;
-            switch (mHIDLibraryState.DeviceType)    //V1.0.0.16:20240921(1)Change DDR 1P and 2P Mode
-            {
-                case DeviceType.DDR_KBS_PID1: break;
-                case DeviceType.DDR_KBS_PID2: break;
-                case DeviceType.DDR_HID_PID1: break;
-                case DeviceType.DDR_HID_PID2: break;
-                default:break;
-            }
+            ClosePort();
         }
 
         /// =============================================================================================
-        /// ==== Find USB Connected ====
+        /// ==== HID port helpers ====
         /// =============================================================================================
         ///
-        private void Find_USB_Deivce()
+        private bool ioSuspended = false;
+
+        private void ClosePort()
         {
+            if (mPort != null)
+            {
+                try { mPort.Dispose(); } catch { }
+                mPort = null;
+            }
+        }
+
+        private bool PortWrite(byte reportId, byte[] buf, int len)
+        {
+            if (mPort == null || !mPort.IsOpen) return false;
+            return mPort.SetOutputReport(reportId, buf, len);
+        }
+
+        private bool PortRead(byte reportId, int len, byte[] dst)
+        {
+            if (mPort == null || !mPort.IsOpen) return false;
+            return mPort.GetInputReport(reportId, DefaultOffset, len, dst);
+        }
+
+        private void RequestRescan()
+        {
+            EventHandler h = RescanRequested;
+            if (h != null) h(this, EventArgs.Empty);
+        }
+
+        /// <summary>
+        /// While the other board is being upgraded this panel keeps its handle but stops polling,
+        /// so nothing but the upgrade talks to USB. The host also disables the panel visually.
+        /// </summary>
+        public void SuspendIo(bool suspend)
+        {
+            ioSuspended = suspend;
+        }
+
+        /// =============================================================================================
+        /// ==== Attach / Detach (called by the host after every USB enumeration) ====
+        /// =============================================================================================
+        ///
+        /// <summary>
+        /// Bind this panel to a board. A board that is already attached through a healthy handle
+        /// is left alone (the other slot plugging / unplugging must not disturb this one); a new
+        /// board, a re-plugged one or a broken handle gets a fresh handle and a GET_MODE.
+        /// </summary>
+        internal void Attach(HidDeviceInfo dev)
+        {
+            if (dev == null)
+            {
+                Detach();
+                return;
+            }
+            bool sameBoard = mDevice != null && mDevice.BoardKey == dev.BoardKey;
+            bool healthy = mPort != null && mPort.IsOpen && !mPort.Broken && bDeviceStatusFG;
+            if (sameBoard && healthy && mFwValid && mDevice.Path == dev.Path)
+            {
+                mDevice = dev;
+                return;
+            }
             //-------------------------------------------------------------------------------------------
-            //USBCtrl.HIDLibraryLibChanged += HID_Event_Changed_Delegate;
-            //-------------------------------------------------------------------------------------------
-            // Forget the previous board completely: version, connection state, label.
+            // Forget the previous handle completely: version, connection state, label.
+            ClosePort();
             bDeviceStatusFG = false;
             mConnState = ConnState.None;
             ResetDeviceVersion();
             MarkAllPadLedKnown(false);   // after a (re)connect the board's own colours win once read back
-            UpdateWindowTitle();
-            UpdateVersionLabel();
-            SetModeGroupEnabled(false);
-            bool slot0 = false, slot1 = false;
-            int pid0 = 0, pid1 = 0;
-            //-------------------------------------------------------------------------------------------//V1.0.0.20:20241231(1)Display OTA Device infor on App Title
-            if (USBCtrl.USBLib_Connect((int)DeviceType.HID_OTA_VID, (int)DeviceType.HID_OTA_PID, (int)DeviceType.None) != (int)DeviceType.None)
+            bDebugModesFG = false;       // a re-enumerated board is never in RAW mode
+            UpdateDebugButtonText();
+            mDevice = dev;
+            //-------------------------------------------------------------------------------------------
+            HidPort port = HidPort.Open(dev);
+            if (port == null)
             {
-                mConnState = ConnState.Ota;
+                DebugLog.Log("USB {0}: open failed for {1} (win32 error {2})", SlotTag, dev, Marshal.GetLastWin32Error());
                 UpdateWindowTitle();
-                DebugLog.Log("USB: OTA bootloader 0E8F:8901 connected");
+                UpdateVersionLabel();
+                SetModeGroupEnabled(false);
                 return;
             }
+            mPort = port;
+            bDeviceStatusFG = true;
+            mConnState = ConnState.Device;
+            DebugLog.Log("USB {0}: attached {1}", SlotTag, dev);
+            UpdateWindowTitle();
+            SetModeGroupEnabled(true);
             //-------------------------------------------------------------------------------------------
-            if (((pid0 = USBCtrl.USBLib_Connect((int)DeviceType.DDR_KBS_VID, (int)DeviceType.DDR_KBS_PID1, (int)DeviceType.None)) != (int)DeviceType.None) ||
-                ((pid0 = USBCtrl.USBLib_Connect((int)DeviceType.DDR_HID_VID, (int)DeviceType.DDR_HID_PID1, (int)DeviceType.None)) != (int)DeviceType.None))      //V1.0.0.32:20250529(1)DDR HID Mode PID compatibility Issue
-            {
-                bDeviceStatusFG = true;
-                slot0 = true;
-            }
-            //-------------------------------------------------------------------------------------------
-            if (((pid1 = USBCtrl.USBLib_Connect((int)DeviceType.DDR_KBS_VID, (int)DeviceType.None, (int)DeviceType.DDR_KBS_PID2)) != (int)DeviceType.None) ||
-                ((pid1 = USBCtrl.USBLib_Connect((int)DeviceType.DDR_HID_VID, (int)DeviceType.None, (int)DeviceType.DDR_HID_PID2)) != (int)DeviceType.None) ||    //V1.0.0.32:20250529(1)DDR HID Mode PID compatibility Issue
-                ((pid1 = USBCtrl.USBLib_Connect((int)DeviceType.DDR_HID_VID, (int)DeviceType.None, (int)DeviceType.DDR_HID_PID3)) != (int)DeviceType.None))      //V1.0.0.32:20250529(1)DDR HID Mode PID compatibility Issue
-            {
-                bDeviceStatusFG = true;
-                slot1 = true;
-            }
-            //-------------------------------------------------------------------------------------------
-            if (bDeviceStatusFG == true)
-            {
-                mConnState = ConnState.Device;
-                UpdateWindowTitle();
-                SetModeGroupEnabled(true);
-                //---------------------------------------------------------------------------------------
-                // HIDLibrary opens PID1 devices in slot 0 and PID2/PID3 devices in slot 1.
-                mDeviceIndex = (byte)(slot0 ? 0 : (slot1 ? 1 : 0));
-                DebugLog.Log("USB: connected VID 4D47, slot0 PID {0:X4}, slot1 PID {1:X4} -> using slot{2}",
-                    pid0, pid1, mDeviceIndex);
-                //---------------------------------------------------------------------------------------
-                Btn_ReadMode_Click(null, null);
-                //---------------------------------------------------------------------------------------
-            }
-            //-------------------------------------------------------------------------------------------
-            else
-            {
-                DebugLog.Log("USB: no device");
-                USBCtrl.USBLib_Disconnect();
-            }
+            Btn_ReadMode_Click(null, null);
+            UpdateWindowTitle();
             //-------------------------------------------------------------------------------------------
         }
 
-        /// =============================================================================================
-        /// ==== USB First Connected ====
-        /// =============================================================================================
-        ///
-        /*
-        private void DeivceFirstConnected()
+        /// <summary>Board gone (unplugged, rebooting, or moved to the other slot): drop the handle and clear the column.</summary>
+        public void Detach()
         {
-            if (bDeviceStatusFG == true)
-            {
-                this.Text = AppName + " (Device Connected)";
-                //this.groupBox_Mode.Enabled = true;
-                groupBox_Mode.Enabled = true;
-                //-------------------------------------------------------------------------------------------
-                if (USBCtrl.DDR_GetDeviceType(0) == (int)DeviceType.DDR_KBS_PID1 ||
-                    USBCtrl.DDR_GetDeviceType(0) == (int)DeviceType.DDR_HID_PID1)
-                {
-                    //this.Text = AppName + " (Device Connected KBS 1P)";
-                    radioButton_1P.Enabled = true;
-                }
-                else
-                {
-                    radioButton_1P.Enabled = false;
-                }
-                //-------------------------------------------------------------------------------------------
-                if (USBCtrl.DDR_GetDeviceType(1) == (int)DeviceType.DDR_KBS_PID2 ||
-                    USBCtrl.DDR_GetDeviceType(1) == (int)DeviceType.DDR_HID_PID2)
-                {
-                    //this.Text = AppName + " (Device Connected KBS 2P)";
-                    radioButton_2P.Enabled = true;
-                }
-                else
-                {
-                    //this.Text = AppName + " (Device Connected HID 2P)";
-                    radioButton_2P.Enabled = false;
-                }
-                //-------------------------------------------------------------------------------------------
-                if (radioButton_1P.Enabled == true)
-                {
-                    mDeviceIndex = 0;
-                    radioButton_1P.Checked = true;
-                    radioButton_2P.Checked = false;
-                }
-                else if (radioButton_2P.Enabled == true)
-                {
-                    mDeviceIndex = 1;
-                    radioButton_1P.Checked = false;
-                    radioButton_2P.Checked = true;
-                }
-                else
-                {
-                    mDeviceIndex = 0;
-                    radioButton_1P.Checked = false;
-                    radioButton_2P.Checked = false;
-                }
-                //-------------------------------------------------------------------------------------------
-                Btn_ReadMode_Click(null, null);
-            }
-            else
-            {
-                this.Text = AppName;
-                //this.groupBox_Mode.Enabled = false;
-                groupBox_Mode.Enabled = false;
-                radioButton_1P.Checked = false;
-                radioButton_2P.Checked = false;
-            }
-        }*/
+            bool had = bDeviceStatusFG || mDevice != null;
+            ClosePort();
+            bDeviceStatusFG = false;
+            mConnState = ConnState.None;
+            mDevice = null;
+            bDebugModesFG = false;
+            ResetDeviceVersion();
+            MarkAllPadLedKnown(false);
+            if (had) DebugLog.Log("USB {0}: detached", SlotTag);
+            UpdateDebugButtonText();
+            UpdateWindowTitle();
+            UpdateVersionLabel();
+            SetModeGroupEnabled(false);
+        }
 
-
+        /// <summary>
+        /// Before the firmware upgrade of this board: leave RAW mode and release the handle so the
+        /// upgrade dialog owns the device. The version read last is kept for the post-upgrade compare.
+        /// </summary>
+        public void PrepareForOta()
+        {
+            if (bDeviceStatusFG && bDebugModesFG)
+            {
+                try { SendRawStreamOff(); } catch { }
+                bDebugModesFG = false;
+                UpdateDebugButtonText();
+            }
+            ClosePort();
+            bDeviceStatusFG = false;
+            UpdateWindowTitle();
+        }
 
         //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
         //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
@@ -2494,7 +2204,7 @@ namespace ConfigAppNS
                 byte DataLen = (byte)(CONFIG_VALUE_COUNT * 2); // 5Key: 20*2 — FW DATA_LEN
                 byte CSlen = 1;
                 byte PktLen = (byte)(SyncLen + DataLen + CSlen);
-                byte CS = USBCtrl.UPDATE_CRC(ReportIndex,InputReportBuf, (byte)(SyncLen + DataLen));
+                byte CS = DeviceProtocol.Crc8(InputReportBuf, ReportIndex, SyncLen + DataLen);
                 //---------------------------------------------------------------------------------------
                 if (CS == InputReportBuf[ReportIndex + PktLen - 1])
                 {
@@ -2619,7 +2329,7 @@ namespace ConfigAppNS
                 SendByteBuf[index++] = (byte)((ConfigOut[ConfigOutIndex + i] >> 0) & 0xff);
             }
             //-------------------------------------------------------------------------------------------
-            Txd_CS = USBCtrl.UPDATE_CRC(0,SendByteBuf, index);
+            Txd_CS = DeviceProtocol.Crc8(SendByteBuf, 0, index);
             SendByteBuf[index++] = Txd_CS;
             //-------------------------------------------------------------------------------------------
             DebugLog.Log("SET_SENS type {0:X2}: values={1} fw={2}", ConfigType, ValuesText(ConfigOut, Len),
@@ -2698,8 +2408,8 @@ namespace ConfigAppNS
             byte[] cmd = new byte[64];
             cmd[0] = (byte)UserCommand.SET_MODE;
             cmd[1] = CurrentWorkMode();
-            DebugLog.Log("REBOOT-VERIFY type {0:X2}: TX slot{1} SET_MODE {2} to restart the board", ConfigType, mDeviceIndex, DebugLog.Hex(cmd, 0, 2));
-            USBCtrl.USBLib_DeviceCtrlOutput(mDeviceIndex, 0, 64, cmd);
+            DebugLog.Log("REBOOT-VERIFY type {0:X2}: TX {1} SET_MODE {2} to restart the board", ConfigType, SlotTag, DebugLog.Hex(cmd, 0, 2));
+            PortWrite(0, cmd, 64);
             //-------------------------------------------------------------------------------------------
             Thread.Sleep(400);                 // let the old handle go away before probing
             int waited = WaitForDeviceBack(REBOOT_WAIT_MS);
@@ -2740,15 +2450,18 @@ namespace ConfigAppNS
         {
             Cursor = Cursors.WaitCursor;
             DateTime t0 = DateTime.Now;
+            SetBusy(true);
             try
             {
                 bDeviceStatusFG = false;
-                USBCtrl.USBLib_Disconnect();
+                ClosePort();
+                UpdateWindowTitle();
                 while (true)
                 {
                     Application.DoEvents();
                     Thread.Sleep(REBOOT_POLL_MS);
-                    if (!bDeviceStatusFG) Find_USB_Deivce();
+                    // The host re-enumerates and calls Attach on this panel once the board is back
+                    if (!bDeviceStatusFG) RequestRescan();
                     if (bDeviceStatusFG && mFwValid) return (int)(DateTime.Now - t0).TotalMilliseconds;
                     if ((DateTime.Now - t0).TotalMilliseconds >= timeoutMs) return -1;
                 }
@@ -2756,6 +2469,7 @@ namespace ConfigAppNS
             finally
             {
                 Cursor = Cursors.Default;
+                SetBusy(false);
             }
         }
 
@@ -2773,8 +2487,8 @@ namespace ConfigAppNS
             byte[] InputReportBuf = new byte[64];
             UInt16[] RawBuffer = new UInt16[64];
             //-------------------------------------------------------------------------------------------
-            //USBCtrl.DDR_USBDeviceCtrlInput(mDeviceIndex, InputReportBuf, ReportSize);
-            USBCtrl.USBLib_DeviceCtrlInput(mDeviceIndex, DefaultOffset, ReportID, ReportSize, InputReportBuf);//V1.0.0.18:20241012(1)Change ADX Save Issue
+            if (!PortRead(ReportID, ReportSize, InputReportBuf))
+                return;
             //-------------------------------------------------------------------------------------------
             if (InputReportBuf[ReportIndex + 0] == (byte)UserCommand.SET_MRAW &&
                 InputReportBuf[ReportIndex + 1] == 0x4D &&  //M
@@ -3255,19 +2969,10 @@ namespace ConfigAppNS
         ///
         private void Btn_OTA_Click(object sender, EventArgs e)
         {
-            // Firmware upgrade dialog; it switches the board into OTA mode itself.
-            bool hadVersion = mFwValid;
-            int hverBefore = mDevHVer, majorBefore = mFwMajor, minorBefore = mFwMinor;
-            App_OTA ota = new App_OTA(mFwValid, mDevHVer, mFwMajor, mFwMinor);
-            ota.ShowDialog(this);
-            FirmwareImageInfo flashed = ota.FlashedImage;
-            if (flashed == null)
-            {
-                // Nothing was written (cancelled / failed); just refresh the device state.
-                Find_USB_Deivce();
-                return;
-            }
-            Verify_Firmware_AfterOta(flashed, hadVersion, hverBefore, majorBefore, minorBefore);
+            // The host runs the upgrade dialog (target 1P / 2P, lock of the other column) and
+            // calls Verify_Firmware_AfterOta on the panel whose board was flashed.
+            EventHandler h = OtaRequested;
+            if (h != null) h(this, EventArgs.Empty);
         }
 
         private const int OTA_RETURN_WAIT_MS = 15000;
@@ -3277,7 +2982,7 @@ namespace ConfigAppNS
         /// is the version the new APP reports. Wait for the board to enumerate as the APP again,
         /// read GET_MODE and compare HVer / FVer with the constants in the file that was flashed.
         /// </summary>
-        private void Verify_Firmware_AfterOta(FirmwareImageInfo flashed, bool hadVersion, int hverBefore, int majorBefore, int minorBefore)
+        internal void Verify_Firmware_AfterOta(FirmwareImageInfo flashed, bool hadVersion, int hverBefore, int majorBefore, int minorBefore)
         {
             string before = hadVersion ? string.Format("HVer={0:X2} FVer={1}", hverBefore, FirmwareImageInfo.VersionText(majorBefore, minorBefore)) : "unknown";
             DebugLog.Log("OTA-VERIFY: waiting for the APP to enumerate; file {0}; board before OTA {1}", flashed.VersionLogText(), before);
@@ -3336,8 +3041,7 @@ namespace ConfigAppNS
             SendByteBuf[index++] = (byte)(0x45);    //E
             SendByteBuf[index++] = (byte)(0x41);    //A
             SendByteBuf[index++] = (byte)(0x52);    //R
-            //USBCtrl.DDR_USBDeviceCtrlOutput(mDeviceIndex, SendByteBuf, ReportSize);
-            USBCtrl.USBLib_DeviceCtrlOutput(mDeviceIndex, ReportID, ReportSize, SendByteBuf);
+            PortWrite(ReportID, SendByteBuf, ReportSize);
             //-------------------------------------------------------------------------------------------
         }
 
@@ -3478,8 +3182,8 @@ namespace ConfigAppNS
             SendByteBuf[index++] = (byte)(UserCommand.SET_MODE);
             SendByteBuf[index++] = (byte)(WorkMode);
             //-------------------------------------------------------------------------------------------
-            DebugLog.Log("TX slot{0} SET_MODE: {1} (MCU reboots)", mDeviceIndex, DebugLog.Hex(SendByteBuf, 0, index));
-            USBCtrl.USBLib_DeviceCtrlOutput(mDeviceIndex, ReportID, ReportSize, SendByteBuf);
+            DebugLog.Log("TX {0} SET_MODE: {1} (MCU reboots)", SlotTag, DebugLog.Hex(SendByteBuf, 0, index));
+            PortWrite(ReportID, SendByteBuf, ReportSize);
             //-------------------------------------------------------------------------------------------
             Thread.Sleep(100);
             //-------------------------------------------------------------------------------------------
@@ -3499,12 +3203,11 @@ namespace ConfigAppNS
 
         private void radioButton_1P_CheckedChanged(object sender, EventArgs e)
         {
-            mDeviceIndex = 0;
+            // Player bits are fixed by firmware since V2.12; the slot (1P / 2P) is chosen by the host.
         }
 
         private void radioButton_2P_CheckedChanged(object sender, EventArgs e)
         {
-            mDeviceIndex = 1;
         }
 
 

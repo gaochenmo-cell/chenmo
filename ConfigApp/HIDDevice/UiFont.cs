@@ -19,6 +19,13 @@ namespace ConfigAppNS
         public const float Value = 12f;       // important numeric values (sensitivity, debounce)
         public const float BarValue = 9.5f;   // live RAW value drawn inside the narrow bars
 
+        /// <summary>
+        /// Global multiplier applied to every size above. With two board columns side by side each
+        /// column gets roughly half the width it had as a single window, so the host lowers this
+        /// in steps as the columns shrink (and raises it again when they grow). 1 = design size.
+        /// </summary>
+        public static float Scale = 1f;
+
         private static readonly string[] Preferred = new string[] { "Microsoft YaHei UI", "Microsoft YaHei" };
         private static string family;
 
@@ -67,8 +74,15 @@ namespace ConfigAppNS
 
         public static Font Get(float size, FontStyle style)
         {
-            try { return new Font(Family, size, style, GraphicsUnit.Point); }
-            catch { return new Font(FontFamily.GenericSansSerif, size, style, GraphicsUnit.Point); }
+            float pt = Scaled(size);
+            try { return new Font(Family, pt, style, GraphicsUnit.Point); }
+            catch { return new Font(FontFamily.GenericSansSerif, pt, style, GraphicsUnit.Point); }
+        }
+
+        private static float Scaled(float size)
+        {
+            float pt = size * Scale;
+            return pt < 6f ? 6f : pt;
         }
 
         /// <summary>Assign a font only when it differs, so repeated theme passes do not churn handles.</summary>
@@ -77,7 +91,7 @@ namespace ConfigAppNS
             if (c == null)
                 return;
             Font cur = c.Font;
-            if (cur != null && cur.Name == Family && Math.Abs(cur.SizeInPoints - size) < 0.01f && cur.Style == style)
+            if (cur != null && cur.Name == Family && Math.Abs(cur.SizeInPoints - Scaled(size)) < 0.01f && cur.Style == style)
                 return;
             c.Font = Get(size, style);
         }
@@ -96,7 +110,8 @@ namespace ConfigAppNS
             Font cur = root.Font;
             float size = cur != null ? Math.Max(minSize, cur.SizeInPoints) : minSize;
             FontStyle style = cur != null ? cur.Style : FontStyle.Regular;
-            Set(root, size, style);
+            // Fixed-layout dialogs keep their designer sizes regardless of the column scale
+            Set(root, size / (Scale > 0 ? Scale : 1f), style);
             foreach (Control c in root.Controls)
                 Refamily(c, minSize);
         }

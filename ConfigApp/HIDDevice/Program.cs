@@ -37,7 +37,7 @@ namespace ConfigAppNS
 					MessageBox.Show(L.F("App.AlreadyRunning", AppName), L.Get("Msg.SystemTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
 					return;
 				}
-				Application.Run(new App_DDR());
+				Application.Run(new App_Host());
 			}
 			finally
 			{

@@ -124,7 +124,29 @@ namespace ConfigAppNS
         public const byte CMD_GET_SENS = 0x52;
         public const byte CMD_SET_SENS = 0x57;
         public const byte CMD_SET_MRAW = 0x41;
+        public const byte CMD_SET_OTA = 0x42;
+        public const byte CMD_SET_MODE = 0x4D;
         public const byte ID_DDR = 0xA2;
+
+        /// <summary>
+        /// USB identity of the pad in APP mode. Keyboard mode enumerates as 4D47:5761, gamepad
+        /// (HID) mode as 4D47:5771; 5762 / 5772 / 5763 are the second-player PIDs of older stock
+        /// images. Every board running the same firmware reports the same VID / PID, so two boards
+        /// are told apart by their USB serial number (MCU unique ID), see PadHid.cs / PadManager.
+        /// </summary>
+        public const int PAD_VID = 0x4D47;
+        public static readonly int[] PAD_PIDS = new int[] { 0x5761, 0x5762, 0x5771, 0x5772, 0x5763 };
+        /// <summary>PIDs the stock firmware used for the second player; an unbound board with one of these prefers slot 2P.</summary>
+        public static readonly int[] PAD_PIDS_PLAYER2 = new int[] { 0x5762, 0x5772, 0x5763 };
+        /// <summary>Artery USB HID bootloader (IAP) identity after SET_OTA.</summary>
+        public const int OTA_VID = 0x0E8F;
+        public const int OTA_PID = 0x8901;
+
+        public static bool IsPlayer2Pid(int pid)
+        {
+            foreach (int p in PAD_PIDS_PLAYER2) if (p == pid) return true;
+            return false;
+        }
         /// <summary>HVer byte of the GET_MODE reply: 0x13 = 5-key board, 0x14 = 4-key board (firmware V3.0+).</summary>
         public const byte HVER_5KEY = 0x13;
         public const byte HVER_4KEY = 0x14;

@@ -6,7 +6,6 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
-using HIDLibraryNS;
 using Microsoft.Win32.SafeHandles;
 
 namespace ConfigAppNS
@@ -14,7 +13,10 @@ namespace ConfigAppNS
     /// <summary>
     /// Firmware upgrade dialog - AT32 USB HID IAP (AN0007).
     /// The Artery bootloader only accepts interrupt IN/OUT (WriteFile/ReadFile);
-    /// HidD_SetOutputReport / GetInputReport (USBLib_DeviceCtrl*) time out.
+    /// HidD_SetOutputReport / GetInputReport time out.
+    /// With two boards connected the user picks 1P or 2P; SET_OTA is sent through that board's
+    /// own device path, never by VID / PID (both boards share them), so the other board stays
+    /// in APP mode and keeps its column.
     /// </summary>
     public partial class App_OTA : Form
     {
@@ -27,9 +29,7 @@ namespace ConfigAppNS
         private const int CHUNK_1K = 1024;
         private const int HID_PAYLOAD = 60; // 64 - cmd(2) - len(2)
 
-        private readonly HidLibrary usb = new HidLibrary();
         private readonly byte reportId = 0;
-        private readonly byte reportSize = 64;
 
         private string binPath = "";
         private byte[] binData = null;
@@ -40,10 +40,26 @@ namespace ConfigAppNS
         private string lastIapError = "";
         private int bytesWritten = 0;
 
-        // Version of the board as the main window last read it (GET_MODE), used to warn about
+        // Boards the main window offers for upgrading (1P / 2P) and the one the user picked.
+        // Version data is what the main window last read with GET_MODE; it is used to warn about
         // a file that does not match the board or does not move its version forward.
-        private readonly bool devValid;
-        private readonly int devHVer, devFwMajor, devFwMinor;
+        private readonly OtaTarget[] targets;
+        private int targetIndex;
+        private Label labelTarget;
+        private ComboBox comboTarget;
+        /// <summary>Slot (0 = 1P, 1 = 2P) whose board the upgrade was started for.</summary>
+        internal int TargetIndex { get { return targetIndex; } }
+        /// <summary>Called on the UI thread right before the upgrade starts, with the chosen slot index.</summary>
+        internal Action<int> TargetChosen;
+
+        private OtaTarget Current
+        {
+            get { return targets.Length > 0 ? targets[Math.Max(0, Math.Min(targetIndex, targets.Length - 1))] : OtaTarget.Empty; }
+        }
+        private bool devValid { get { return Current.FwValid; } }
+        private int devHVer { get { return Current.HVer; } }
+        private int devFwMajor { get { return Current.FwMajor; } }
+        private int devFwMinor { get { return Current.FwMinor; } }
 
         /// <summary>
         /// Set when the worker reported success: the image whose version the main window should
@@ -51,15 +67,14 @@ namespace ConfigAppNS
         /// </summary>
         internal FirmwareImageInfo FlashedImage { get; private set; }
 
-        public App_OTA() : this(false, 0, 0, 0) { }
+        public App_OTA() : this(new OtaTarget[0], 0) { }
 
-        public App_OTA(bool deviceVersionValid, int deviceHVer, int deviceFwMajor, int deviceFwMinor)
+        internal App_OTA(OtaTarget[] otaTargets, int preselect)
         {
-            devValid = deviceVersionValid;
-            devHVer = deviceHVer;
-            devFwMajor = deviceFwMajor;
-            devFwMinor = deviceFwMinor;
+            targets = otaTargets ?? new OtaTarget[0];
+            targetIndex = Math.Max(0, Math.Min(preselect, Math.Max(0, targets.Length - 1)));
             InitializeComponent();
+            CreateTargetSelector();
             try
             {
                 string icoPath = Path.Combine(Application.StartupPath, "AppLogo.ico");
@@ -90,10 +105,48 @@ namespace ConfigAppNS
         }
 
         /// <summary>All captions of this dialog come from Strings*.resx (see Localization.cs).</summary>
+        private void CreateTargetSelector()
+        {
+            labelTarget = new Label();
+            labelTarget.AutoSize = false;
+            labelTarget.Size = new Size(110, 28);
+            labelTarget.TextAlign = ContentAlignment.MiddleLeft;
+            labelTarget.Font = labelAddr.Font;
+            this.Controls.Add(labelTarget);
+
+            comboTarget = new ComboBox();
+            comboTarget.DropDownStyle = ComboBoxStyle.DropDownList;
+            comboTarget.Size = new Size(410, 28);
+            comboTarget.Font = labelAddr.Font;
+            comboTarget.SelectedIndexChanged += (s, e) =>
+            {
+                if (comboTarget.SelectedIndex >= 0 && comboTarget.SelectedIndex < targets.Length)
+                {
+                    targetIndex = comboTarget.SelectedIndex;
+                    DebugLog.Log("OTA: target {0} selected: {1}", Current.SlotName, Current.LogText());
+                }
+            };
+            this.Controls.Add(comboTarget);
+            FillTargetSelector();
+        }
+
+        private void FillTargetSelector()
+        {
+            if (comboTarget == null) return;
+            comboTarget.Items.Clear();
+            foreach (OtaTarget t in targets)
+                comboTarget.Items.Add(t.Caption());
+            if (targets.Length > 0)
+                comboTarget.SelectedIndex = Math.Min(targetIndex, targets.Length - 1);
+            comboTarget.Enabled = targets.Length > 1 && !upgrading;
+        }
+
         private void ApplyUiLanguage()
         {
             this.Text = L.Get("Ota.Title");
             labelTitle.Text = L.Get("Ota.Title");
+            if (labelTarget != null) labelTarget.Text = L.Get("Ota.Target");
+            FillTargetSelector();
             labelTips.Text = L.Get("Ota.Tips");
             labelAddr.Text = L.F("Ota.Addr", FLASH_APP_ADDR.ToString("X8"));
             labelLimit.Text = L.F("Ota.Limit", MAX_APP_SIZE);
@@ -105,6 +158,8 @@ namespace ConfigAppNS
                 labelFileInfo.Text = L.Get("Ota.NoFile");
         }
 
+        private const int TargetRowH = 36;
+
         /// <summary>Idle layout: title + tips visible; banner hidden.</summary>
         private void ApplyIdleLayout()
         {
@@ -115,9 +170,12 @@ namespace ConfigAppNS
             labelTips.Location = new Point(20, 56);
             // The three tips wrap to up to 7 lines at the larger body font: give the block
             // room for that and shift the rows below it by the same amount.
-            const int tipsExtra = 64;
-            labelTips.Size = new Size(520, 88 + tipsExtra);
-            int y = 156 + tipsExtra;
+            const int tipsExtra = 64 + TargetRowH;
+            labelTips.Size = new Size(520, 88 + tipsExtra - TargetRowH);
+            int y = 156 + tipsExtra - TargetRowH;
+            labelTarget.Location = new Point(20, y);
+            comboTarget.Location = new Point(130, y);
+            y += TargetRowH;
             labelAddr.Location = new Point(20, y);
             labelLimit.Location = new Point(270, y);
             labelLimit.Size = new Size(270, labelLimit.Height);
@@ -145,21 +203,24 @@ namespace ConfigAppNS
             labelTitle.Visible = false;
             labelTips.Visible = false;
             int y = 68;
+            labelTarget.Location = new Point(20, y);
+            comboTarget.Location = new Point(130, y);
+            y += TargetRowH;
             labelAddr.Location = new Point(20, y);
             labelLimit.Location = new Point(270, y);
             labelLimit.Size = new Size(270, labelLimit.Height);
-            y = 100;
+            y = 100 + TargetRowH;
             textFile.Location = new Point(20, y);
             btnBrowse.Location = new Point(430, y - 2);
-            labelFileInfo.Location = new Point(20, 136);
-            progressBar.Location = new Point(20, 170);
-            labelPercent.Location = new Point(480, 170);
-            labelStatus.Location = new Point(20, 208);
-            textLog.Location = new Point(20, 240);
+            labelFileInfo.Location = new Point(20, 136 + TargetRowH);
+            progressBar.Location = new Point(20, 170 + TargetRowH);
+            labelPercent.Location = new Point(480, 170 + TargetRowH);
+            labelStatus.Location = new Point(20, 208 + TargetRowH);
+            textLog.Location = new Point(20, 240 + TargetRowH);
             textLog.Size = new Size(520, 180);
-            btnStart.Location = new Point(20, 440);
-            btnClose.Location = new Point(430, 440);
-            this.ClientSize = new Size(560, 496);
+            btnStart.Location = new Point(20, 440 + TargetRowH);
+            btnClose.Location = new Point(430, 440 + TargetRowH);
+            this.ClientSize = new Size(560, 496 + TargetRowH);
             this.BackColor = Color.FromArgb(255, 248, 240);
         }
 
@@ -198,6 +259,7 @@ namespace ConfigAppNS
             }
             upgrading = busy;
             btnBrowse.Enabled = !busy;
+            if (comboTarget != null) comboTarget.Enabled = !busy && targets.Length > 1;
             btnStart.Enabled = !busy && binData != null && binData.Length > 0;
             btnClose.Enabled = !busy;
             this.ControlBox = !busy;
@@ -381,12 +443,23 @@ namespace ConfigAppNS
                 MessageBox.Show(err, L.Get("Ota.CheckTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
+            int bootloaders = PadManager.CountBootloaders();
+            if (bootloaders > 1)
+            {
+                MessageBox.Show(L.Get("Ota.E.MultiBootloader"), L.Get("Ota.CheckTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            if (Current.Device == null && bootloaders == 0)
+            {
+                MessageBox.Show(L.F("Ota.E.NoTarget", Current.SlotName), L.Get("Ota.CheckTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
             if (!PreflightVersionCheck())
                 return;
 
             DialogResult r = MessageBox.Show(
                 L.F("Ota.Confirm", Path.GetFileName(binPath), binData.Length, FLASH_APP_ADDR.ToString("X8"),
-                    FileVersionText(binInfo), BoardVersionText()),
+                    FileVersionText(binInfo), Current.SlotName + ": " + BoardVersionText()),
                 L.Get("Ota.ConfirmTitle"),
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Warning);
@@ -396,8 +469,11 @@ namespace ConfigAppNS
                 return;
             }
 
-            DebugLog.Log("OTA: START file=\"{0}\" size={1} padded={2} sha256={3} {4}; board={5}",
-                binPath, binData.Length, Align1K(binData.Length), binInfo.Sha256, binInfo.VersionLogText(), BoardVersionText());
+            DebugLog.Log("OTA: START file=\"{0}\" size={1} padded={2} sha256={3} {4}; target {5} {6}",
+                binPath, binData.Length, Align1K(binData.Length), binInfo.Sha256, binInfo.VersionLogText(), Current.SlotName, Current.LogText());
+            // The main window releases the target board and locks the other column
+            if (TargetChosen != null)
+                TargetChosen(targetIndex);
             FlashedImage = null;
             bytesWritten = 0;
             SetUiBusy(true);
@@ -421,8 +497,6 @@ namespace ConfigAppNS
         private void Worker_Completed(object sender, RunWorkerCompletedEventArgs e)
         {
             SetUiBusy(false);
-            try { usb.USBLib_Disconnect(); }
-            catch { }
             if (e.Error != null)
             {
                 DebugLog.Log("OTA: FAILED after {0} bytes: {1}", bytesWritten, e.Error.Message);
@@ -465,13 +539,10 @@ namespace ConfigAppNS
             {
                 Step(bw, 2, L.Get("Ota.P.Detect"));
                 EnsureBootloaderReady(bw);
-
-                // Release HIDLibrary so interrupt port can open exclusively
-                try { usb.USBLib_Disconnect(); } catch { }
                 Thread.Sleep(200);
 
                 Step(bw, 8, L.Get("Ota.P.OpenPort"));
-                port = OtaHidPort.Open((ushort)DeviceType.HID_OTA_VID, (ushort)DeviceType.HID_OTA_PID);
+                port = OtaHidPort.Open((ushort)DeviceProtocol.OTA_VID, (ushort)DeviceProtocol.OTA_PID);
                 Step(bw, 10, L.F("Ota.P.PortReady", port.InputReportLen, port.OutputReportLen));
                 Thread.Sleep(150);
 
@@ -486,7 +557,7 @@ namespace ConfigAppNS
                     bool currentPrefix = port.ForceReportIdPrefix ?? (port.OutputReportLen >= 65);
                     Step(bw, 12, L.Get("Ota.P.NoAckRetry") + " " + FailDetail());
                     try { port.Dispose(); } catch { }
-                    port = OtaHidPort.Open((ushort)DeviceType.HID_OTA_VID, (ushort)DeviceType.HID_OTA_PID);
+                    port = OtaHidPort.Open((ushort)DeviceProtocol.OTA_VID, (ushort)DeviceProtocol.OTA_PID);
                     port.ForceReportIdPrefix = !currentPrefix;
                     Thread.Sleep(100);
                     Array.Clear(pkt, 0, pkt.Length);
@@ -574,7 +645,10 @@ namespace ConfigAppNS
 
         private void EnsureBootloaderReady(BackgroundWorker bw)
         {
-            if (ProbeOtaEnumerated())
+            int present = PadManager.CountBootloaders();
+            if (present > 1)
+                throw new Exception(L.Get("Ota.E.MultiBootloader"));
+            if (present == 1)
             {
                 Step(bw, 5, L.Get("Ota.P.OtaFound"));
                 return;
@@ -582,41 +656,37 @@ namespace ConfigAppNS
 
             Step(bw, 3, L.Get("Ota.P.TryEnterOta"));
             bool sent = false;
-            int[] vids = new int[] {
-                (int)DeviceType.DDR_KBS_VID,
-                (int)DeviceType.DDR_HID_VID
-            };
-            int[] pids = new int[] {
-                (int)DeviceType.DDR_KBS_PID1, (int)DeviceType.DDR_KBS_PID2,
-                (int)DeviceType.DDR_HID_PID1, (int)DeviceType.DDR_HID_PID2, (int)DeviceType.DDR_HID_PID3
-            };
-
-            foreach (int vid in vids)
+            OtaTarget target = Current;
+            if (target.Device != null)
             {
-                foreach (int pid in pids)
+                // Open the chosen board by its own device path. Both boards share VID / PID, so a
+                // VID / PID lookup could switch the wrong one into the bootloader.
+                HidPort port = null;
+                try
                 {
-                    try
-                    {
-                        if (usb.USBLib_Connect(vid, pid, (int)DeviceType.None) == (int)DeviceType.None)
-                            continue;
-                        byte[] pkt = new byte[64];
-                        pkt[0] = (byte)UserCommand.SET_OTA;
-                        pkt[1] = (byte)'O';
-                        pkt[2] = (byte)'T';
-                        pkt[3] = (byte)'A';
-                        // APP config channel still uses control transfer — OK here
-                        usb.USBLib_DeviceCtrlOutput(0, reportId, reportSize, pkt);
-                        sent = true;
-                        DebugLog.Log("OTA: SET_OTA sent to VID {0:X4} PID {1:X4}: {2}", vid, pid, DebugLog.Hex(pkt, 0, 4));
-                        usb.USBLib_Disconnect();
-                        break;
-                    }
-                    catch (Exception ex)
-                    {
-                        DebugLog.Log("OTA: SET_OTA to VID {0:X4} PID {1:X4} failed: {2}", vid, pid, ex.Message);
-                    }
+                    port = HidPort.Open(target.Device);
+                    if (port == null)
+                        throw new IOException("CreateFile failed, win32 error " + Marshal.GetLastWin32Error());
+                    byte[] pkt = new byte[64];
+                    pkt[0] = DeviceProtocol.CMD_SET_OTA;
+                    pkt[1] = (byte)'O';
+                    pkt[2] = (byte)'T';
+                    pkt[3] = (byte)'A';
+                    // APP config channel still uses control transfer — OK here
+                    sent = port.SetOutputReport(reportId, pkt, 64);
+                    DebugLog.Log("OTA: SET_OTA {0} to {1} {2}: {3}", sent ? "sent" : "write FAILED (error " + port.LastError + ")",
+                        target.SlotName, target.Device, DebugLog.Hex(pkt, 0, 4));
+                    if (sent)
+                        Step(bw, 4, L.F("Ota.P.SentTo", target.SlotName, target.Device.Serial.Length > 0 ? target.Device.Serial : target.Device.PortKey));
                 }
-                if (sent) break;
+                catch (Exception ex)
+                {
+                    DebugLog.Log("OTA: SET_OTA to {0} {1} failed: {2}", target.SlotName, target.Device, ex.Message);
+                }
+                finally
+                {
+                    if (port != null) port.Dispose();
+                }
             }
 
             if (!sent)
@@ -625,7 +695,10 @@ namespace ConfigAppNS
             for (int i = 0; i < 40; i++)
             {
                 Thread.Sleep(250);
-                if (ProbeOtaEnumerated())
+                present = PadManager.CountBootloaders();
+                if (present > 1)
+                    throw new Exception(L.Get("Ota.E.MultiBootloader"));
+                if (present == 1)
                 {
                     Step(bw, 6, L.Get("Ota.P.OtaConnected") + " (" + ((i + 1) * 250) + " ms)");
                     return;
@@ -633,25 +706,8 @@ namespace ConfigAppNS
                 bw.ReportProgress(4 + (i % 3), L.F("Ota.P.Waiting", i + 1, 40));
             }
             DebugLog.Log("OTA: bootloader {0:X4}:{1:X4} did not enumerate within 10 s (SET_OTA sent={2})",
-                (int)DeviceType.HID_OTA_VID, (int)DeviceType.HID_OTA_PID, sent);
+                DeviceProtocol.OTA_VID, DeviceProtocol.OTA_PID, sent);
             throw new Exception(L.Get("Ota.E.Timeout"));
-        }
-
-        private bool ProbeOtaEnumerated()
-        {
-            try { usb.USBLib_Disconnect(); } catch { }
-            try
-            {
-                int t = usb.USBLib_Connect((int)DeviceType.HID_OTA_VID, (int)DeviceType.HID_OTA_PID, (int)DeviceType.None);
-                if (t == (int)DeviceType.None) return false;
-                // Disconnect immediately — exclusive interrupt port needs the handle free
-                try { usb.USBLib_Disconnect(); } catch { }
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
         }
 
         private static void PutBe16(byte[] buf, int index, int value)
@@ -720,7 +776,7 @@ namespace ConfigAppNS
                 try
                 {
                     port.Dispose();
-                    port = OtaHidPort.Open((ushort)DeviceType.HID_OTA_VID, (ushort)DeviceType.HID_OTA_PID);
+                    port = OtaHidPort.Open((ushort)DeviceProtocol.OTA_VID, (ushort)DeviceProtocol.OTA_PID);
                     port.WritePacket(packet);
                 }
                 catch (Exception ex2)
@@ -769,7 +825,7 @@ namespace ConfigAppNS
                 try
                 {
                     port.Dispose();
-                    port = OtaHidPort.Open((ushort)DeviceType.HID_OTA_VID, (ushort)DeviceType.HID_OTA_PID);
+                    port = OtaHidPort.Open((ushort)DeviceProtocol.OTA_VID, (ushort)DeviceProtocol.OTA_PID);
                 }
                 catch (Exception ex)
                 {
@@ -1047,9 +1103,32 @@ namespace ConfigAppNS
                     L.Get("App.Name"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
-            try { usb.USBLib_Disconnect(); }
-            catch { }
             base.OnFormClosing(e);
+        }
+    }
+
+    /// <summary>A board offered in the upgrade dialog: which slot, its device path and the version the main window read.</summary>
+    internal sealed class OtaTarget
+    {
+        public string SlotName = "1P";
+        public HidDeviceInfo Device;
+        public bool FwValid;
+        public int HVer, FwMajor, FwMinor;
+
+        public static readonly OtaTarget Empty = new OtaTarget();
+
+        public string Caption()
+        {
+            if (Device == null) return L.F("Ota.TargetNone", SlotName);
+            string ver = FwValid ? FirmwareImageInfo.VersionText(FwMajor, FwMinor) : L.Get("Ota.BoardVerUnknown");
+            string kind = HVer == DeviceProtocol.HVER_5KEY ? L.Get("Ota.Kind5") : HVer == DeviceProtocol.HVER_4KEY ? L.Get("Ota.Kind4") : "";
+            string sn = Device.Serial.Length > 0 ? Device.Serial : Device.PortKey;
+            return L.F("Ota.TargetItem", SlotName, ver + (kind.Length > 0 ? " " + kind : ""), sn);
+        }
+
+        public string LogText()
+        {
+            return Device == null ? "(no device)" : string.Format("{0} fw={1}", Device, FwValid ? FirmwareImageInfo.VersionText(FwMajor, FwMinor) + " HVer=" + HVer.ToString("X2") : "?");
         }
     }
 }

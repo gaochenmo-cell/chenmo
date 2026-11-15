@@ -85,7 +85,7 @@
       <DependentUpon>App_Main.cs</DependentUpon>
     </Compile>
     <Compile Include="App_DDR.cs">
-      <SubType>Form</SubType>
+      <SubType>UserControl</SubType>
     </Compile>
     <Compile Include="App_DDR.Designer.cs">
       <DependentUpon>App_DDR.cs</DependentUpon>
@@ -97,6 +97,12 @@
       <DependentUpon>App_OTA.cs</DependentUpon>
     </Compile>
     <Compile Include="AppConfig.cs" />
+    <Compile Include="App_Host.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="PadHid.cs" />
+    <Compile Include="PadManager.cs" />
+    <Compile Include="Palette.cs" />
     <Compile Include="DebugLog.cs" />
     <Compile Include="DeviceProtocol.cs" />
     <Compile Include="Localization.cs" />
