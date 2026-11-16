@@ -10,6 +10,7 @@ Expected per image (given on the command line, defaults below):
 
     PADUEX5_V3.2.bin   -> HVer 0x13, FW 3.2
     PADUEX4_V3.2.bin   -> HVer 0x14, FW 3.2
+    PADUEX4_V3.3.bin   -> HVer 0x14, FW 3.3
     legacy/PADUEX5_V3.1 -> HVer 0x13, FW 3.1
     legacy/PADUEX4_V3.1 -> HVer 0x14, FW 3.1
     legacy/PADUEX5_V3.0 -> HVer 0x13, FW 3.0
@@ -47,6 +48,7 @@ SCRATCH = 0x20004000
 EXPECT = {
     "PADUEX5_V3.2.bin": (0x13, 3, 2),
     "PADUEX4_V3.2.bin": (0x14, 3, 2),
+    "PADUEX4_V3.3.bin": (0x14, 3, 3),
     "PADUEX5_V3.1.bin": (0x13, 3, 1),
     "PADUEX4_V3.1.bin": (0x14, 3, 1),
     "PADUEX5_V3.0.bin": (0x13, 3, 0),

@@ -354,9 +354,10 @@ Save anyway? It will take effect after upgrading the firmware.</value>
   </data>
   <data name="Ota.Tips" xml:space="preserve">
     <value>How to:
-1. Pick PADUEX5_V3.2.bin for the 5-key pad or PADUEX4_V3.2.bin for the 4-key pad
+1. Pick PADUEX5_V3.2.bin for the 5-key pad, or PADUEX4_V3.2.bin / the newer PADUEX4_V3.3.bin for the 4-key pad
 2. Keep USB connected; do not unplug, power off or close this window while upgrading
-3. On failure the board stays in Bootloader - just retry. ISP: PADUEX5_V3.2.bin / PADUEX4_V3.2.bin or stock V2.13 only</value>
+3. On failure the board stays in Bootloader - just retry. ISP: PADUEX5_V3.2.bin / PADUEX4_V3.2.bin or stock V2.13 only
+4. Plug into a rear motherboard USB port. Do not use a case front-panel USB port (often under-powered, and the cable extension makes the device misbehave) or a bus-powered hub. When both pads need an extra port, use a self-powered hub.</value>
   </data>
   <data name="Ota.Addr" xml:space="preserve">
     <value>APP address: 0x{0}</value>
