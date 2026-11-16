@@ -113,9 +113,9 @@ namespace ConfigAppNS
             labelTips.Visible = true;
             labelTitle.Location = new Point(20, 16);
             labelTips.Location = new Point(20, 56);
-            // The three tips wrap to up to 7 lines at the larger body font: give the block
-            // room for that and shift the rows below it by the same amount.
-            const int tipsExtra = 64;
+            // The tips wrap to about 9 lines at the larger body font (the fourth line is
+            // the rear-port wiring note). Shift every row below by the same amount.
+            const int tipsExtra = 112;
             labelTips.Size = new Size(520, 88 + tipsExtra);
             int y = 156 + tipsExtra;
             labelAddr.Location = new Point(20, y);
