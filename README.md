@@ -4,18 +4,19 @@ Yuanpad 五键（PADUEX5）与四键（PADUEX4）跳舞毯控制板的 Windows �
 
 ## 下载
 
-- [`dist/PADUEX5/`](./dist/PADUEX5/) → `PADUEX5.exe`（V3.2.1）
+- [`dist/PADUEX5/`](./dist/PADUEX5/) → `PADUEX5.exe`（V3.3.0）
 - [`dist/PADUEX5-win-release.zip`](./dist/PADUEX5-win-release.zip)
 
-同一个程序通过 `Config.ini` 的 `KEYCOUNT=5|4` 切换五键 / 四键界面，窗口标题分别为 `PADUEX5 V3.2.1` / `PADUEX4 V3.2.1`。
+同一个程序通过 `Config.ini` 的 `KEYCOUNT=5|4` 切换五键 / 四键界面，窗口标题分别为 `PADUEX5 V3.3.0` / `PADUEX4 V3.3.0`。
 
 ## 功能
 
+- 两块手台同时插入，按 1P / 2P 两栏（或两个标签页）分别配置；按 USB 序列号识别板子，`Config.ini` 记住归属，「交换 1P/2P」可调换
 - 每个踏板 4 路传感器的灵敏度、灯色（红 / 白 / 蓝）、延迟释放（消抖）
 - USB 工作模式：键盘 / 手柄
 - 键盘模式改键（需固件 V3.0 及以上）
 - 调试模式：实时显示传感器 RAW 值与踩踏
-- 固件升级（OTA，升级前校验镜像）
+- 固件升级（OTA，升级前校验镜像；双板时选择升级 1P 或 2P，另一栏锁定）
 - 中文 / English，白天 / 黑夜主题
 
 ## 固件

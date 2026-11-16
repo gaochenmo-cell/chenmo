@@ -356,7 +356,8 @@
     <value>操作提示：
 1. 五键机选择 PADUEX5_V3.2.bin，四键机选择 PADUEX4_V3.2.bin
 2. 保持 USB 连接，升级中勿拔线、勿关机、勿关闭本窗口
-3. 失败留在 Bootloader 可重试；ISP 请用 PADUEX5_V3.2.bin / PADUEX4_V3.2.bin 或官方 V2.13</value>
+3. 失败留在 Bootloader 可重试；ISP 请用 PADUEX5_V3.2.bin / PADUEX4_V3.2.bin 或官方 V2.13
+4. 插主板后置 USB 口；不要用机箱前面板 USB 口（供电常不足、走延长线，会导致设备异常）和无源 HUB；两块板同时使用时如需扩展口，用带独立供电的 HUB</value>
   </data>
   <data name="Ota.Addr" xml:space="preserve">
     <value>APP 地址: 0x{0}</value>
@@ -618,5 +619,62 @@
     <value>当前固件 {0} 不会保存灵敏度，每次上电都恢复 200。请先点「固件升级」升级到 V3.2。
 
 仍要写入吗？写入的值在拔掉 USB 前有效。</value>
+  </data>
+  <data name="Btn.Swap" xml:space="preserve">
+    <value>交换 1P/2P</value>
+  </data>
+  <data name="Btn.ViewTab" xml:space="preserve">
+    <value>切换为标签页</value>
+  </data>
+  <data name="Btn.ViewSide" xml:space="preserve">
+    <value>切换为并排</value>
+  </data>
+  <data name="Title.Slots" xml:space="preserve">
+    <value>（1P：{0}，2P：{1}）</value>
+  </data>
+  <data name="Slot.Connected" xml:space="preserve">
+    <value>已连接</value>
+  </data>
+  <data name="Slot.NoDevice" xml:space="preserve">
+    <value>未连接</value>
+  </data>
+  <data name="Slot.PlugHint" xml:space="preserve">
+    <value>插入手台后会自动出现在本栏。</value>
+  </data>
+  <data name="Slot.OpenFailed" xml:space="preserve">
+    <value>找到手台但无法打开</value>
+  </data>
+  <data name="Slot.Locked" xml:space="preserve">
+    <value>已锁定：另一块板正在升级</value>
+  </data>
+  <data name="Slot.Upgrading" xml:space="preserve">
+    <value>固件升级中…</value>
+  </data>
+  <data name="Slot.Serial" xml:space="preserve">
+    <value>序列号 {0}</value>
+  </data>
+  <data name="Host.Bootloader" xml:space="preserve">
+    <value>检测到 {0} 个处于 OTA 模式的设备（0E8F:8901），可在「固件升级」中直接写入。</value>
+  </data>
+  <data name="Host.Unplaced" xml:space="preserve">
+    <value>另有 {0} 块手台已插入但未分配（最多支持两块）。</value>
+  </data>
+  <data name="Ota.Target" xml:space="preserve">
+    <value>升级目标</value>
+  </data>
+  <data name="Ota.TargetItem" xml:space="preserve">
+    <value>{0}：{1}（序列号 {2}）</value>
+  </data>
+  <data name="Ota.TargetNone" xml:space="preserve">
+    <value>{0}：未连接</value>
+  </data>
+  <data name="Ota.E.MultiBootloader" xml:space="preserve">
+    <value>检测到多个处于 OTA 模式的设备，请只保留一块板后重试。</value>
+  </data>
+  <data name="Ota.E.NoTarget" xml:space="preserve">
+    <value>{0} 未连接，且没有处于 OTA 模式的设备。</value>
+  </data>
+  <data name="Ota.P.SentTo" xml:space="preserve">
+    <value>已向 {0}（序列号 {1}）发送进入 OTA 命令</value>
   </data>
 </root>

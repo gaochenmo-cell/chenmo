@@ -356,7 +356,8 @@ Save anyway? It will take effect after upgrading the firmware.</value>
     <value>How to:
 1. Pick PADUEX5_V3.2.bin for the 5-key pad or PADUEX4_V3.2.bin for the 4-key pad
 2. Keep USB connected; do not unplug, power off or close this window while upgrading
-3. On failure the board stays in Bootloader - just retry. ISP: PADUEX5_V3.2.bin / PADUEX4_V3.2.bin or stock V2.13 only</value>
+3. On failure the board stays in Bootloader - just retry. ISP: PADUEX5_V3.2.bin / PADUEX4_V3.2.bin or stock V2.13 only
+4. Plug into a rear motherboard USB port. Do not use a case front-panel USB port (often under-powered, and the cable extension makes the device misbehave) or a bus-powered hub. When both pads need an extra port, use a self-powered hub.</value>
   </data>
   <data name="Ota.Addr" xml:space="preserve">
     <value>APP address: 0x{0}</value>
@@ -618,5 +619,62 @@ Check that you selected the .bin from the new release folder and run the upgrade
     <value>Firmware {0} does not keep the sensitivity: it resets to 200 at every power-up. Upgrade to V3.2 first (Firmware Upgrade button).
 
 Write the values anyway? They stay active until the board is unplugged.</value>
+  </data>
+  <data name="Btn.Swap" xml:space="preserve">
+    <value>Swap 1P / 2P</value>
+  </data>
+  <data name="Btn.ViewTab" xml:space="preserve">
+    <value>Show as tabs</value>
+  </data>
+  <data name="Btn.ViewSide" xml:space="preserve">
+    <value>Show side by side</value>
+  </data>
+  <data name="Title.Slots" xml:space="preserve">
+    <value>(1P: {0}, 2P: {1})</value>
+  </data>
+  <data name="Slot.Connected" xml:space="preserve">
+    <value>Connected</value>
+  </data>
+  <data name="Slot.NoDevice" xml:space="preserve">
+    <value>Not connected</value>
+  </data>
+  <data name="Slot.PlugHint" xml:space="preserve">
+    <value>Plug in a pad; it appears in this column automatically.</value>
+  </data>
+  <data name="Slot.OpenFailed" xml:space="preserve">
+    <value>Pad found but it could not be opened</value>
+  </data>
+  <data name="Slot.Locked" xml:space="preserve">
+    <value>Locked: the other board is being upgraded</value>
+  </data>
+  <data name="Slot.Upgrading" xml:space="preserve">
+    <value>Upgrading firmware…</value>
+  </data>
+  <data name="Slot.Serial" xml:space="preserve">
+    <value>SN {0}</value>
+  </data>
+  <data name="Host.Bootloader" xml:space="preserve">
+    <value>{0} device(s) in OTA mode (0E8F:8901) — use Firmware upgrade to flash it.</value>
+  </data>
+  <data name="Host.Unplaced" xml:space="preserve">
+    <value>{0} more pad(s) connected but not assigned (two are supported).</value>
+  </data>
+  <data name="Ota.Target" xml:space="preserve">
+    <value>Target board</value>
+  </data>
+  <data name="Ota.TargetItem" xml:space="preserve">
+    <value>{0}: {1}  (SN {2})</value>
+  </data>
+  <data name="Ota.TargetNone" xml:space="preserve">
+    <value>{0}: not connected</value>
+  </data>
+  <data name="Ota.E.MultiBootloader" xml:space="preserve">
+    <value>More than one device is in OTA mode. Leave only one board connected and retry.</value>
+  </data>
+  <data name="Ota.E.NoTarget" xml:space="preserve">
+    <value>{0} is not connected and no device is in OTA mode.</value>
+  </data>
+  <data name="Ota.P.SentTo" xml:space="preserve">
+    <value>SET_OTA sent to {0} (SN {1})</value>
   </data>
 </root>

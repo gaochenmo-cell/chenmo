@@ -310,7 +310,10 @@ namespace ConfigAppNS
             if (btn == null || !(btn.Tag is PadKeyKind))
                 return;
 
-            App_DDR form = btn.FindForm() as App_DDR;
+            // The pad buttons sit directly on the board panel (one App_DDR per 1P / 2P column)
+            App_DDR form = null;
+            for (Control c = btn.Parent; c != null && form == null; c = c.Parent)
+                form = c as App_DDR;
             PadKeyPaintArgs args = form != null
                 ? form.GetPadKeyPaintArgs((PadKeyKind)btn.Tag)
                 : default(PadKeyPaintArgs);

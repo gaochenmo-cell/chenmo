@@ -886,11 +886,7 @@
             // Layout is rebuilt at runtime for current DPI (see ApplyFiveKeyLayoutOnly).
             this.AutoScaleDimensions = new System.Drawing.SizeF(96F, 96F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.None;
-            this.ClientSize = new System.Drawing.Size(1120, 780);
-            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.Sizable;
-            this.MaximizeBox = true;
-            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
-            this.MinimumSize = new System.Drawing.Size(900, 640);
+            this.Size = new System.Drawing.Size(1040, 780);
             this.Controls.Add(this.label_Ver);
             this.Controls.Add(this.groupBox_Mode);
             this.Controls.Add(this.button1);
@@ -907,9 +903,6 @@
             this.Controls.Add(this.Btn_K6);
             this.Controls.Add(this.Btn_K5);
             this.Name = "App_DDR";
-            this.Text = "PADUEX5";
-            this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.DDR_Form_FormClosing);
-            this.Load += new System.EventHandler(this.DDR_Form_Load);
             this.groupBox_Button.ResumeLayout(false);
             this.groupBox_Color.ResumeLayout(false);
             this.groupBox_DTick.ResumeLayout(false);
