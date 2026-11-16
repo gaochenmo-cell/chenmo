@@ -356,7 +356,8 @@
     <value>操作提示：
 1. 五键机选择 PADUEX5_V3.2.bin，四键机选择 PADUEX4_V3.2.bin
 2. 保持 USB 连接，升级中勿拔线、勿关机、勿关闭本窗口
-3. 失败留在 Bootloader 可重试；ISP 请用 PADUEX5_V3.2.bin / PADUEX4_V3.2.bin 或官方 V2.13</value>
+3. 失败留在 Bootloader 可重试；ISP 请用 PADUEX5_V3.2.bin / PADUEX4_V3.2.bin 或官方 V2.13
+4. 插主板后置 USB 口；不要用机箱前面板 USB 口（供电常不足、走延长线，会导致设备异常）和无源 HUB；两块板同时使用时如需扩展口，用带独立供电的 HUB</value>
   </data>
   <data name="Ota.Addr" xml:space="preserve">
     <value>APP 地址: 0x{0}</value>

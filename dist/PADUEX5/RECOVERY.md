@@ -12,6 +12,8 @@ USB 中断向量被覆盖（见 `legacy/patches/paduex5_1.0-Vector-Brick.md`）�
 
 ## 新板升级建议（两步）
 
+接线：插主板后置 USB 口；不要用机箱前面板 USB 口（供电常不足、走延长线，会导致设备异常）和无源 HUB；两块板同时使用时如需扩展口，用带独立供电的 HUB。
+
 1. 先用上位机 OTA 刷 **官方 V2.13**，确认升级工具与 Bootloader 路径本身无问题
 2. 再 OTA 刷 **`PADUEX5_V3.2.bin`**（四键机 `PADUEX4_V3.2.bin`）
 
