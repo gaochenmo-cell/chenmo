@@ -244,11 +244,14 @@ def main() -> int:
         print(f"[{'PASS' if ok else 'FAIL'}] {name}{('  ' + detail) if detail else ''}")
 
     board = Board(img)
+    # V3.4 keeps the sensitivity / colour pages and pins DTick at 0.
+    dtick_fixed = img[0x0800616A - BASE] == 4
+    boot_dtick = [0] * 20 if dtick_fixed else [3] * 20
 
     # 1) first power-up on a blank config area: the board's own defaults
     board.power_up()
     check("blank flash: boot Sensi == 200 (board default)", board.ram(0)[:20] == [200] * 20, str(board.ram(0)[:4]))
-    check("blank flash: boot DTick == 3", board.ram(2)[:20] == [3] * 20, str(board.ram(2)[:4]))
+    check(f"blank flash: boot DTick == {boot_dtick[0]}", board.ram(2)[:20] == boot_dtick, str(board.ram(2)[:4]))
     check("blank flash: boot Color == default colour table",
           board.ram(1)[:20] == [5] * 8 + [3] * 4 + [4] * 8, str(board.ram(1)[:20]))
     check("GET_SENS(Sensi) via dispatcher returns the boot values", host_get(board, 0x00) == [200] * 20)
@@ -262,8 +265,17 @@ def main() -> int:
     }
     for t in (0, 1, 2):
         board.flash_ops.clear(); board.set_flash_calls.clear(); board.errors.clear()
+        page_before = board.page(t)
         rsp = host_set(board, t, want[t])
         check(f"SET_SENS({NAMES[t]}) ACK 57 4F 4B", rsp[:3] == bytes([0x57, 0x4F, 0x4B]) and rsp[4] == t, rsp[:5].hex())
+        if dtick_fixed and t == 2:
+            check("SET_SENS(DTick) RAM stays 0", board.ram(2)[:20] == [0] * 20, str(board.ram(2)[:4]))
+            check("SET_SENS(DTick) does not call App_Set_Flash_Cofnig", not board.set_flash_calls,
+                  str([(hex(a), hex(s), n) for a, s, n in board.set_flash_calls]))
+            check("SET_SENS(DTick) flash page unchanged, GET returns 0",
+                  not board.flash_ops and board.page(2) == page_before and host_get(board, 2) == [0] * 20,
+                  board.page(2)[:4].hex())
+            continue
         check(f"SET_SENS({NAMES[t]}) RAM updated", board.ram(t)[:20] == want[t], str(board.ram(t)[:4]))
         check(f"SET_SENS({NAMES[t]}) calls App_Set_Flash_Cofnig({PAGES[t]:#x}, {NAMES[t]}, 36)",
               board.set_flash_calls == [(PAGES[t], RAM_TAB[t], MAX_VAL_CHAN)],
@@ -289,8 +301,10 @@ def main() -> int:
     # 4) power cycle: real boot routine on the flash we just wrote
     board.power_up()
     for t in (0, 1, 2):
-        check(f"after power cycle: {NAMES[t]} RAM == saved values", board.ram(t)[:20] == want[t], str(board.ram(t)[:4]))
-        check(f"after power cycle: GET_SENS({NAMES[t]}) == saved values", host_get(board, t) == want[t],
+        expect = [0] * 20 if (dtick_fixed and t == 2) else want[t]
+        label = "fixed 0" if (dtick_fixed and t == 2) else "saved values"
+        check(f"after power cycle: {NAMES[t]} RAM == {label}", board.ram(t)[:20] == expect, str(board.ram(t)[:4]))
+        check(f"after power cycle: GET_SENS({NAMES[t]}) == {label}", host_get(board, t) == expect,
               str((host_get(board, t) or [])[:4]))
 
     # 5) a second power cycle must not change anything either (page stays valid, nothing rewrites it)
