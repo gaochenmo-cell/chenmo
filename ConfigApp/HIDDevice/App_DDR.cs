@@ -506,7 +506,6 @@ namespace ConfigAppNS
             groupBox_Button.Visible = true;
             groupBox_Sensi.Enabled = false;
             groupBox_Color.Enabled = false;
-            groupBox_DTick.Enabled = false;
 
             ///------------------------------------------------------------------------------------------
             ApplyFiveKeyLayoutOnly();  // Yuanpad 5Key only — real PIU corner+center layout + DPI
@@ -770,15 +769,6 @@ namespace ConfigAppNS
 
             // Sensitivity A–D compact columns (must fit inside tab ~500 design px)
             LayoutSensitivityColumns();
-
-            groupBox_DTick.Location = new Point(S(24), S(36));
-            groupBox_DTick.Size = new Size(S(460), S(150));
-            trackBar_DTick.Location = new Point(S(16), S(28));
-            trackBar_DTick.Size = new Size(S(420), S(45));
-            label_DTick.Location = new Point(S(80), S(90));
-            label_DTick.Size = new Size(S(180), S(36));
-            textBox_DTick.Location = new Point(S(270), S(92));
-            textBox_DTick.Size = new Size(S(72), S(32));
 
             // Pad 3×3
             int cell = S(140);
@@ -1391,11 +1381,11 @@ namespace ConfigAppNS
             }
         }
 
-        /// <summary>Sensitivity / debounce numbers and their A–D column captions use the larger value font.</summary>
+        /// <summary>Sensitivity numbers and their A–D column captions use the larger value font.</summary>
         private bool IsValueControl(Control c)
         {
-            return c == textBox_V1 || c == textBox_V2 || c == textBox_V3 || c == textBox_V4 || c == textBox_DTick
-                || c == label1 || c == label2 || c == label3 || c == label4 || c == label_DTick;
+            return c == textBox_V1 || c == textBox_V2 || c == textBox_V3 || c == textBox_V4
+                || c == label1 || c == label2 || c == label3 || c == label4;
         }
 
         private void ThemeButton(Button b)
@@ -1703,12 +1693,9 @@ namespace ConfigAppNS
             groupBox_Mode.Text = L.Get("Group.Mode");
             groupBox_Sensi.Text = L.Get("Group.Sensitivity");
             groupBox_Color.Text = L.Get("Group.Color");
-            groupBox_DTick.Text = L.Get("Group.Debounce");
             groupBox2.Text = L.Get("Group.PlayerNum");
-            label_DTick.Text = L.Get("Label.Hold");
             tabPage_Sensi.Text = L.Get("Tab.Sensitivity");
             tabPage_Color.Text = L.Get("Tab.Color");
-            tabPage_DTick.Text = L.Get("Tab.Debounce");
             groupBox_USBMode.Text = L.Get("Group.USB");
             radioButton_KBS.Text = L.Get("Radio.Keyboard");
             radioButton_HID.Text = L.Get("Radio.Gamepad");
@@ -2049,41 +2036,9 @@ namespace ConfigAppNS
         private const int DEFAULT_COLOR4 = LED_COLOR_B; // Key4 ↙ blue
         private const int DEFAULT_COLOR5 = LED_COLOR_B; // Key5 ↘ blue
 
-        private const int DEFAULT_DTICK = 0x03;
-
         private int SensorIndex = 0;
         private int[] SensiBuffer = new int[CONFIG_VALUE_COUNT];
         private int[] ColorBuffer = new int[CONFIG_VALUE_COUNT];
-        private int[] DTickBuffer = new int[CONFIG_VALUE_COUNT];
-
-        /// <summary>
-        /// Firmware applies debounce as DTick[key] (Tck[i/4] = DTick[i/4]), not DTick[key*4].
-        /// The host mirrors that layout.
-        /// </summary>
-        private int GetDebounceKeyIndex()
-        {
-            int key = SensorIndex / 4;
-            if (key < 0) key = 0;
-            if (key >= KEY_COUNT_5KEY) key = KEY_COUNT_5KEY - 1;
-            return key; // FW quirk: one slot per key at index 0..4
-        }
-
-        private int GetDebounceValue()
-        {
-            return DTickBuffer[GetDebounceKeyIndex()];
-        }
-
-        private void SetDebounceValue(int ms)
-        {
-            if (ms < 0) ms = 0;
-            if (ms > 1000) ms = 1000;
-            int key = GetDebounceKeyIndex();
-            // Firmware reads DTick[key]; write DTick[key*4] as well so both layouts stay in sync.
-            DTickBuffer[key] = ms;
-            int packed = key * SENSORS_PER_KEY;
-            if (packed >= 0 && packed < CONFIG_VALUE_COUNT)
-                DTickBuffer[packed] = ms;
-        }
 
         readonly int[] DEFAULT_SENSI_TAB = new int[]//5*4
         {
@@ -2102,19 +2057,6 @@ namespace ConfigAppNS
           DEFAULT_COLOR4,DEFAULT_COLOR4,DEFAULT_COLOR4,DEFAULT_COLOR4, // Key4
           DEFAULT_COLOR5,DEFAULT_COLOR5,DEFAULT_COLOR5,DEFAULT_COLOR5, // Key5
         };
-        // Debounce defaults: indices 0..4 = Key1..Key5 (match FW DTick[i/4]); rest unused
-        readonly int[] DEFAULT_DTICK_TAB = new int[]//5*4 packet, FW uses [0..4]
-        {
-          DEFAULT_DTICK, // 0 Key1
-          DEFAULT_DTICK, // 1 Key2
-          DEFAULT_DTICK, // 2 Key3
-          DEFAULT_DTICK, // 3 Key4
-          DEFAULT_DTICK, // 4 Key5
-          DEFAULT_DTICK,DEFAULT_DTICK,DEFAULT_DTICK, // 5..7 unused by FW quirk
-          DEFAULT_DTICK,DEFAULT_DTICK,DEFAULT_DTICK,DEFAULT_DTICK, // 8..11
-          DEFAULT_DTICK,DEFAULT_DTICK,DEFAULT_DTICK,DEFAULT_DTICK, // 12..15
-          DEFAULT_DTICK,DEFAULT_DTICK,DEFAULT_DTICK,DEFAULT_DTICK, // 16..19
-        };
 
         /// =============================================================================================
         /// ==== Load  Default Value ====
@@ -2122,15 +2064,14 @@ namespace ConfigAppNS
         private void Load_Default_Sens()
         {
             // Start-up fills every slot. Afterwards only the keys this build shows are reset: in
-            // 4-key mode the K5 slots (16..19, plus DTick quirk slot 4) keep what was last read
-            // from the board so "Save" writes them back unchanged.
+            // 4-key mode the K5 slots (16..19) keep what was last read from the board so "Save"
+            // writes them back unchanged.
             bool startup = !layoutReady;
             for (int i = 0; i < CONFIG_VALUE_COUNT; i++)
             {
                 if (!startup && !IsVisibleKey(i / SENSORS_PER_KEY)) continue;
                 SensiBuffer[i] = DEFAULT_SENSI_TAB[i];
                 if (!IsMapSlot(i)) ColorBuffer[i] = DEFAULT_COLOR_TAB[i];   // slot +1 = key map
-                if (startup || IsVisibleKey(i)) DTickBuffer[i] = DEFAULT_DTICK_TAB[i];
             }
         }
         /// =============================================================================================
@@ -2541,7 +2482,6 @@ namespace ConfigAppNS
             groupBox_Button.Enabled = true;
             groupBox_Sensi.Enabled = true;
             groupBox_Color.Enabled = true;
-            groupBox_DTick.Enabled = true;
             //-------------------------------------------------------------------------------------------
             if (tabControl1.SelectedIndex == 0)
             {
@@ -2587,17 +2527,6 @@ namespace ConfigAppNS
                 else if (ColorBuffer[(SensorIndex / 4) * 4] == (byte)LED_COLOR_P) { Btn_LED.BackColor = System.Drawing.Color.Fuchsia; }
                 else if (ColorBuffer[(SensorIndex / 4) * 4] == (byte)LED_COLOR_C) { Btn_LED.BackColor = System.Drawing.Color.Cyan; }
                 else if (ColorBuffer[(SensorIndex / 4) * 4] == (byte)LED_COLOR_W) { Btn_LED.BackColor = System.Drawing.Color.White; }
-                //---------------------------------------------------------------------------------------
-            }
-            else if (tabControl1.SelectedIndex == 2)
-            {
-                //---------------------------------------------------------------------------------------
-                // FW V2.12: effective slot is DTick[key], not DTick[key*4]
-                int SensVal = GetDebounceValue();
-                if (SensVal < trackBar_DTick.Minimum) SensVal = trackBar_DTick.Minimum;
-                if (SensVal > trackBar_DTick.Maximum) SensVal = trackBar_DTick.Maximum;
-                textBox_DTick.Text = SensVal.ToString();
-                trackBar_DTick.Value = SensVal;
                 //---------------------------------------------------------------------------------------
             }
             //-------------------------------------------------------------------------------------------
@@ -2827,39 +2756,6 @@ namespace ConfigAppNS
         private void Btn_Col_W_Click(object sender, EventArgs e) { SetSelectedPadColor(LED_COLOR_W); }
 
 
-        /// =============================================================================================
-        /// ====  Btn Sensor Debounce  Click  ====
-        /// =============================================================================================
-        ///
-        private void trackBar_DTick_Scroll(object sender, EventArgs e)
-        {
-            int SensVal = trackBar_DTick.Value;
-            SetDebounceValue(SensVal); // FW V2.12: DTick[key]
-            textBox_DTick.Text = SensVal.ToString();
-        }
-
-        private void textBox_DTick_TextChanged(object sender, EventArgs e)
-        {
-            try
-            {
-                string InputStr = textBox_DTick.Text;
-                if (InputStr.Length > 0)
-                {
-                    int SensVal = Convert.ToInt32(InputStr);
-                    if (SensVal < trackBar_DTick.Minimum) SensVal = trackBar_DTick.Minimum;
-                    if (SensVal > trackBar_DTick.Maximum) SensVal = trackBar_DTick.Maximum;
-                    textBox_DTick.Text = SensVal.ToString();
-                    trackBar_DTick.Value = SensVal;
-                    SetDebounceValue(SensVal); // FW V2.12: DTick[key]
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(L.F("Msg.InputError", ex.Message), L.Get("Msg.ErrorTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
-
         //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
         //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
         //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
@@ -2885,7 +2781,7 @@ namespace ConfigAppNS
         {
             //-------------------------------------------------------------------------------------------
             // 5Key FW: all keys in one WMCU packet (high nibble 0x00)
-            // Bit[3:0] : 0x00=Sensi, 0x01=Color,  0x02=DTick 
+            // Bit[3:0] : 0x00=Sensi, 0x01=Color. DTick is fixed in the firmware and is not read.
             byte ConfigType = 0x00;
             //-------------------------------------------------------------------------------------------
             byte result = 0x00;
@@ -2899,12 +2795,6 @@ namespace ConfigAppNS
             {
                 ConfigType |= 0x01;
                 result = Read_Config_PausingDebug(ConfigType, ColorBuffer, CONFIG_VALUE_COUNT);
-            }
-            //-------------------------------------------------------------------------------------------
-            else if (tabControl1.SelectedIndex == 2)
-            {
-                ConfigType |= 0x02;
-                result = Read_Config_PausingDebug(ConfigType, DTickBuffer, CONFIG_VALUE_COUNT);
             }
             //-------------------------------------------------------------------------------------------
             if (result != 0)
@@ -2921,7 +2811,7 @@ namespace ConfigAppNS
         {
             //-------------------------------------------------------------------------------------------
             // 5Key FW: all keys in one WMCU packet (high nibble 0x00)
-            // Bit[3:0] : 0x00=Sensi, 0x01=Color,  0x02=DTick 
+            // Bit[3:0] : 0x00=Sensi, 0x01=Color. DTick is fixed in the firmware and is not written.
             byte ConfigType = 0x00;
             //-------------------------------------------------------------------------------------------
             byte result = 0x00;
@@ -2947,12 +2837,6 @@ namespace ConfigAppNS
             {
                 ConfigType |= 0x01;
                 result = Write_Config_PausingDebug(ConfigType, ColorBuffer, CONFIG_VALUE_COUNT, true);
-            }
-            //-------------------------------------------------------------------------------------------
-            else if (tabControl1.SelectedIndex == 2)
-            {
-                ConfigType |= 0x02;
-                result = Write_Config_PausingDebug(ConfigType, DTickBuffer, CONFIG_VALUE_COUNT, true);
             }
             //-------------------------------------------------------------------------------------------
             if (result != 0)

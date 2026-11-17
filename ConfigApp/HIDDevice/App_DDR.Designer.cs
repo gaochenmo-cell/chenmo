@@ -45,10 +45,6 @@
             this.Btn_Col_C = new System.Windows.Forms.Button();
             this.Btn_Col_Y = new System.Windows.Forms.Button();
             this.Btn_Col_P = new System.Windows.Forms.Button();
-            this.groupBox_DTick = new System.Windows.Forms.GroupBox();
-            this.textBox_DTick = new System.Windows.Forms.TextBox();
-            this.label_DTick = new System.Windows.Forms.Label();
-            this.trackBar_DTick = new System.Windows.Forms.TrackBar();
             this.groupBox_Sensi = new System.Windows.Forms.GroupBox();
             this.textBox_V4 = new System.Windows.Forms.TextBox();
             this.textBox_V3 = new System.Windows.Forms.TextBox();
@@ -77,7 +73,6 @@
             this.tabPage_Sensi = new System.Windows.Forms.TabPage();
             this.tabPage_Color = new System.Windows.Forms.TabPage();
             this.pictureBox_sens = new System.Windows.Forms.PictureBox();
-            this.tabPage_DTick = new System.Windows.Forms.TabPage();
             this.Btn_K1 = new System.Windows.Forms.Button();
             this.Btn_K2 = new System.Windows.Forms.Button();
             this.Btn_K3 = new System.Windows.Forms.Button();
@@ -95,8 +90,6 @@
             this.label_Ver = new System.Windows.Forms.Label();
             this.groupBox_Button.SuspendLayout();
             this.groupBox_Color.SuspendLayout();
-            this.groupBox_DTick.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)(this.trackBar_DTick)).BeginInit();
             this.groupBox_Sensi.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.trackBar2)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.trackBar3)).BeginInit();
@@ -107,7 +100,6 @@
             this.tabPage_Sensi.SuspendLayout();
             this.tabPage_Color.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox_sens)).BeginInit();
-            this.tabPage_DTick.SuspendLayout();
             this.groupBox_USBMode.SuspendLayout();
             this.groupBox_Mode.SuspendLayout();
             this.groupBox2.SuspendLayout();
@@ -308,52 +300,6 @@
             this.Btn_Col_P.TabIndex = 127;
             this.Btn_Col_P.UseVisualStyleBackColor = false;
             this.Btn_Col_P.Click += new System.EventHandler(this.Btn_Col_P_Click);
-            // 
-            // groupBox_DTick
-            // 
-            this.groupBox_DTick.Controls.Add(this.textBox_DTick);
-            this.groupBox_DTick.Controls.Add(this.label_DTick);
-            this.groupBox_DTick.Controls.Add(this.trackBar_DTick);
-            this.groupBox_DTick.Location = new System.Drawing.Point(104, 54);
-            this.groupBox_DTick.Name = "groupBox_DTick";
-            this.groupBox_DTick.Size = new System.Drawing.Size(720, 147);
-            this.groupBox_DTick.TabIndex = 132;
-            this.groupBox_DTick.TabStop = false;
-            this.groupBox_DTick.Text = "Debounce(0~1000mS)";
-            // 
-            // textBox_DTick
-            // 
-            this.textBox_DTick.Font = new System.Drawing.Font("SimSun", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.textBox_DTick.Location = new System.Drawing.Point(376, 86);
-            this.textBox_DTick.MaxLength = 4;
-            this.textBox_DTick.Name = "textBox_DTick";
-            this.textBox_DTick.Size = new System.Drawing.Size(68, 35);
-            this.textBox_DTick.TabIndex = 139;
-            this.textBox_DTick.TextAlign = System.Windows.Forms.HorizontalAlignment.Center;
-            this.textBox_DTick.TextChanged += new System.EventHandler(this.textBox_DTick_TextChanged);
-            // 
-            // label_DTick
-            // 
-            this.label_DTick.BackColor = System.Drawing.SystemColors.ButtonFace;
-            this.label_DTick.Font = new System.Drawing.Font("SimSun", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.label_DTick.Location = new System.Drawing.Point(159, 81);
-            this.label_DTick.Name = "label_DTick";
-            this.label_DTick.Size = new System.Drawing.Size(212, 50);
-            this.label_DTick.TabIndex = 115;
-            this.label_DTick.Text = "Debounce(mS) =";
-            this.label_DTick.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
-            // 
-            // trackBar_DTick
-            // 
-            this.trackBar_DTick.AccessibleRole = System.Windows.Forms.AccessibleRole.None;
-            this.trackBar_DTick.BackColor = System.Drawing.SystemColors.ButtonFace;
-            this.trackBar_DTick.LargeChange = 20;
-            this.trackBar_DTick.Location = new System.Drawing.Point(9, 24);
-            this.trackBar_DTick.Maximum = 1000;
-            this.trackBar_DTick.Name = "trackBar_DTick";
-            this.trackBar_DTick.Size = new System.Drawing.Size(704, 69);
-            this.trackBar_DTick.TabIndex = 114;
-            this.trackBar_DTick.Scroll += new System.EventHandler(this.trackBar_DTick_Scroll);
             // 
             // groupBox_Sensi
             // 
@@ -636,7 +582,6 @@
             // 
             this.tabControl1.Controls.Add(this.tabPage_Sensi);
             this.tabControl1.Controls.Add(this.tabPage_Color);
-            this.tabControl1.Controls.Add(this.tabPage_DTick);
             this.tabControl1.Location = new System.Drawing.Point(552, 39);
             this.tabControl1.Name = "tabControl1";
             this.tabControl1.SelectedIndex = 0;
@@ -676,17 +621,6 @@
             this.pictureBox_sens.SizeMode = System.Windows.Forms.PictureBoxSizeMode.StretchImage;
             this.pictureBox_sens.TabIndex = 118;
             this.pictureBox_sens.TabStop = false;
-            // 
-            // tabPage_DTick
-            // 
-            this.tabPage_DTick.BackColor = System.Drawing.SystemColors.Control;
-            this.tabPage_DTick.Controls.Add(this.groupBox_DTick);
-            this.tabPage_DTick.Location = new System.Drawing.Point(4, 28);
-            this.tabPage_DTick.Name = "tabPage_DTick";
-            this.tabPage_DTick.Padding = new System.Windows.Forms.Padding(3, 3, 3, 3);
-            this.tabPage_DTick.Size = new System.Drawing.Size(930, 660);
-            this.tabPage_DTick.TabIndex = 2;
-            this.tabPage_DTick.Text = "  Debounce  ";
             // 
             // Btn_K1
             // 
@@ -905,9 +839,6 @@
             this.Name = "App_DDR";
             this.groupBox_Button.ResumeLayout(false);
             this.groupBox_Color.ResumeLayout(false);
-            this.groupBox_DTick.ResumeLayout(false);
-            this.groupBox_DTick.PerformLayout();
-            ((System.ComponentModel.ISupportInitialize)(this.trackBar_DTick)).EndInit();
             this.groupBox_Sensi.ResumeLayout(false);
             this.groupBox_Sensi.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.trackBar2)).EndInit();
@@ -919,7 +850,6 @@
             this.tabPage_Sensi.ResumeLayout(false);
             this.tabPage_Color.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox_sens)).EndInit();
-            this.tabPage_DTick.ResumeLayout(false);
             this.groupBox_USBMode.ResumeLayout(false);
             this.groupBox_USBMode.PerformLayout();
             this.groupBox_Mode.ResumeLayout(false);
@@ -956,9 +886,6 @@
         private System.Windows.Forms.Button Btn_Col_R;
         private System.Windows.Forms.GroupBox groupBox_Color;
         private System.Windows.Forms.GroupBox groupBox_Sensi;
-        private System.Windows.Forms.GroupBox groupBox_DTick;
-        private System.Windows.Forms.Label label_DTick;
-        private System.Windows.Forms.TrackBar trackBar_DTick;
         public System.Windows.Forms.Timer timer1;
         private System.Windows.Forms.Button Btn_ADJ;
         private System.Windows.Forms.Button button1;
@@ -966,7 +893,6 @@
         private System.Windows.Forms.TabControl tabControl1;
         private System.Windows.Forms.TabPage tabPage_Sensi;
         private System.Windows.Forms.TabPage tabPage_Color;
-        private System.Windows.Forms.TabPage tabPage_DTick;
         private App_DDR.ProgressBarWithValue progressBar4;
         private App_DDR.ProgressBarWithValue progressBar3;
         private App_DDR.ProgressBarWithValue progressBar2;
@@ -984,7 +910,6 @@
         private System.Windows.Forms.TextBox textBox_V4;
         private System.Windows.Forms.TextBox textBox_V3;
         private System.Windows.Forms.TextBox textBox_V2;
-        private System.Windows.Forms.TextBox textBox_DTick;
         private System.Windows.Forms.GroupBox groupBox_USBMode;
         private System.Windows.Forms.RadioButton radioButton_KBS;
         private System.Windows.Forms.RadioButton radioButton_HID;
