@@ -47,6 +47,8 @@ SCRATCH = 0x20004000
 EXPECT = {
     "PADUEX5_V3.2.bin": (0x13, 3, 2),
     "PADUEX4_V3.2.bin": (0x14, 3, 2),
+    "PADUEX5_V3.4.bin": (0x13, 3, 4),
+    "PADUEX4_V3.4.bin": (0x14, 3, 4),
     "PADUEX5_V3.1.bin": (0x13, 3, 1),
     "PADUEX4_V3.1.bin": (0x14, 3, 1),
     "PADUEX5_V3.0.bin": (0x13, 3, 0),
