@@ -17,8 +17,8 @@
 |---|---|---|
 | 固件文件 | `PADUEX5_Vx.y.bin` / `PADUEX4_Vx.y.bin` | `PADUEX5_V3.2.bin` |
 | 固件上报 | GET_MODE 回包 FW major / minor 为整数 | `03 02` → 上位机显示 `V3.2` |
-| 上位机 | `AssemblyVersion` 三段式显示 | `PADUEX5 V3.3.0` |
-| 交付包 | `ConfigApp-PADUEX5-Vx.y.z-YYYYMMDD.zip` | `ConfigApp-PADUEX5-V3.3.0-20261115.zip` |
+| 上位机 | `AssemblyVersion` 三段式显示 | `PADUEX5 V3.3.1` |
+| 交付包 | `ConfigApp-PADUEX5-Vx.y.z-YYYYMMDD.zip` | `ConfigApp-PADUEX5-V3.3.1-20261117.zip` |
 
 五键 / 四键固件版本号相同，由 GET_MODE 回包的 HVer 字节区分：`0x13` 五键、`0x14` 四键。
 
