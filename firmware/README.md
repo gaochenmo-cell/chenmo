@@ -55,3 +55,7 @@ python3 firmware/tests/emu_get_mode.py       firmware/PADUEX4_V3.2.bin   # GET_M
 ## 救砖
 
 见 [`RECOVERY.md`](./RECOVERY.md)。
+
+## ADX-Magkey-V01 磁轴按键固件
+
+静音可调磁轴单键板（PY32F002B）的固件源码在 [`magkey-v01/`](./magkey-v01/)，与本目录的 PADUEX 跳舞毯固件无关。
