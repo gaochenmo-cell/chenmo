@@ -1,5 +1,8 @@
 /*
- * key_engine.h - 霍尔 ADC -> 行程深度 -> 四档触发判定 -> KEY_OUT
+ * key_engine.h - 霍尔 ADC 采样与当前档的绝对阈值比较，驱动 KEY_OUT
+ *
+ * 触发点是 GEAR_VOLTAGE_MV 换出的 ADC 计数。Flash 里的校准、行程换算、
+ * 快速触发都不参与这次比较。
  */
 #ifndef KEY_ENGINE_H
 #define KEY_ENGINE_H
@@ -8,34 +11,31 @@
 #include <stdbool.h>
 
 typedef struct {
-    uint16_t rest_adc;      /* 完全松开时的 ADC 值 */
-    uint16_t bottom_adc;    /* 按到底时的 ADC 值 */
+    uint16_t rest_adc;
+    uint16_t bottom_adc;
 } key_cal_t;
 
 void key_engine_init(void);
 
-/* 设置校准值（来自 Flash 或刚完成的校准），同时重算档位阈值 */
+/* 保留接口。校准值不改变触发阈值。 */
 void key_engine_set_cal(const key_cal_t *cal);
 const key_cal_t *key_engine_get_cal(void);
-/* 当前（含自动基线跟踪后）的 rest 值 */
 uint16_t key_engine_effective_rest(void);
 
-/* 设置当前档位 1..GEAR_COUNT */
 void    key_engine_set_gear(uint8_t gear);
 uint8_t key_engine_get_gear(void);
 
-/* 返回某档的触发电压（mV）、由电压换算的行程（0.01 mm）、以及 ADC 边界 */
+/* 档位的绝对触发电压（mV）和对应的 12 位 ADC 计数（3.3 V） */
 uint16_t key_engine_gear_voltage_mv(uint8_t gear);
 uint16_t key_engine_gear_travel(uint8_t gear);
 uint16_t key_engine_gear_threshold_adc(uint8_t gear);
 
-/* 主循环中每次 ADC 采样后调用；返回当前按下状态 */
+/* 用这一次的 ADC 采样和当前档阈值决定按下/松开 */
 bool key_engine_update(uint16_t adc, uint32_t now_ms);
 
-/* 把输出强制为松开（校准期间使用） */
 void key_engine_force_release(void);
 
-/* 最近一次计算出的行程深度（0.01 mm，0..SWITCH_TOTAL_TRAVEL） */
+/* 仅供串口显示，不参与判定 */
 uint16_t key_engine_depth(void);
 bool     key_engine_pressed(void);
 

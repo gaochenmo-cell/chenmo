@@ -2,7 +2,7 @@
  * main.c - ADX-Magkey-V01 静音可调磁轴按键固件
  *
  * 功能概要：
- *   - 霍尔 ADC 连续采样 -> 行程深度 -> 四档触发点 + 快速触发/迟滞 -> KEY_OUT (PB2 -> Q1 -> J3.KEY1)
+ *   - 霍尔 ADC 采样与当前档的绝对电压阈值比较 -> KEY_OUT (PB2 -> Q1 -> J3.KEY1 低 = 按下)
  *   - S1 短按：档位 1..4 循环，LED6 显示 红/绿/蓝/白，档位写入 Flash
  *   - S1 长按 3 s：校准（白灯快闪时松开键；青灯常亮时把键按到底）
  *   - 上电按住 S1 3 s：恢复出厂设置
@@ -48,8 +48,7 @@ static const rgb_t k_red   = { 255, 0, 0 };
 
 static void apply_settings(void)
 {
-    key_cal_t cal = { s_settings.rest_adc, s_settings.bottom_adc };
-    key_engine_set_cal(&cal);
+    /* Flash 里的 rest/bottom 不参与比较。只恢复档位。 */
     key_engine_set_gear(s_settings.gear);
     led_show_gear(s_settings.gear);
 }

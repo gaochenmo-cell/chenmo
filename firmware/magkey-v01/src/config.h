@@ -42,39 +42,26 @@
 /* ------------------------------------------------------------------ */
 /* 四档灵敏度。档位 1 最灵敏，档位 4 最迟钝。                              */
 /* 颜色：红 绿 蓝 白。短按 S1 按此顺序循环后回到红。出厂默认第 2 档（绿）。 */
-/* 四个电压边界把 0.15 V～2.80 V 四等分（含两端）：                         */
-/*   150 + round(i * 2650 / 3) mV，i = 0..3 → 150 / 1033 / 1917 / 2800。  */
-/* 行程由该电压线性换算：0.15 V = 0 mm，2.80 V = 3.40 mm。                 */
+/* 0.15 V 和 2.80 V 只是霍尔区间两端，不能当触发点（静止就落在低端上）。   */
+/* 两端各留 HALL_MARGIN_MV。12 位、3.3 V 时 1 LSB ≈ 0.806 mV；            */
+/* 200 mV = 200*4095/3300 = 248 个计数。前端是 R9 1K + C17/C18 1nF，      */
+/* 没有分压，霍尔电压直接进 PB1。四档在内缩区间上等分（含内缩后的两端）。   */
 /* ------------------------------------------------------------------ */
+#define HALL_MARGIN_MV          200U
+#define GEAR_V_LOW_MV           (HALL_V_LOW_MV + HALL_MARGIN_MV)   /* 350 mV */
+#define GEAR_V_HIGH_MV          (HALL_V_HIGH_MV - HALL_MARGIN_MV)  /* 2600 mV */
+#define GEAR_STEP_MV            ((GEAR_V_HIGH_MV - GEAR_V_LOW_MV) / 3U) /* 750 mV */
+
 #define GEAR_COUNT              4U
-#define GEAR_DEFAULT            2U      /* 出厂默认：第 2 档（绿，1.033 V） */
+#define GEAR_DEFAULT            2U      /* 出厂默认：第 2 档（绿，1.100 V） */
 
-/* 每档触发电压（mV），单调递增 */
-#define GEAR_VOLTAGE_MV         { 150U, 1033U, 1917U, 2800U }
-
-/* ------------------------------------------------------------------ */
-/* 触发 / 释放算法                                                      */
-/* ------------------------------------------------------------------ */
-/* 1 = 快速触发（Rapid Trigger）：按下后只要回弹 RT_RELEASE_TRAVEL 即释放，
- *     释放后在触发点以下再压入 RT_PRESS_TRAVEL 即再次触发；
- * 0 = 传统迟滞：越过触发点按下，回到触发点 - HYSTERESIS_TRAVEL 以上才释放。 */
-#define CFG_RAPID_TRIGGER       1
-#define RT_RELEASE_TRAVEL       20U     /* 0.20 mm */
-#define RT_PRESS_TRAVEL         20U     /* 0.20 mm */
-/* 传统模式的迟滞，也是快速触发模式下"回到静止区"的判定余量 */
-#define HYSTERESIS_TRAVEL       10U     /* 0.10 mm */
-/* 低于此深度认为完全松开（用于复位快速触发状态） */
-#define REST_ZONE_TRAVEL        15U     /* 0.15 mm */
-
-/* 静止基线自动跟踪：按键连续松开 AUTO_REST_IDLE_MS 后，把 RAM 中的 rest 值
- * 缓慢拉向当前 ADC 值，补偿温漂和老化（承认书：1 亿次后未按电压漂移可达 -20%）。
- * 只改 RAM，不写 Flash；校准值仍以 Flash 中保存的为准。 */
-#define CFG_AUTO_REST_TRACK     1
-#define AUTO_REST_IDLE_MS       2000U
-/* 每 AUTO_REST_STEP_MS 向当前值靠近 1 LSB */
-#define AUTO_REST_STEP_MS       20U
-/* 自动跟踪允许偏离 Flash 校准值的最大范围（ADC LSB，约 0.25 V） */
-#define AUTO_REST_MAX_DRIFT     310U
+/* 每档绝对触发电压（mV）：350 / 1100 / 1850 / 2600。比较器直接用这些值。 */
+#define GEAR_VOLTAGE_MV         { \
+    GEAR_V_LOW_MV, \
+    (GEAR_V_LOW_MV + GEAR_STEP_MV), \
+    (GEAR_V_LOW_MV + 2U * GEAR_STEP_MV), \
+    GEAR_V_HIGH_MV \
+}
 
 /* ADC 过采样次数（每次按键扫描对 ADC 连续采样 N 次取平均） */
 #define ADC_OVERSAMPLE          8U
@@ -84,11 +71,10 @@
 /* ------------------------------------------------------------------ */
 /* 按键输出（J3.KEY1）                                                  */
 /* ------------------------------------------------------------------ */
-/* 出厂默认是反相（0）。
- * 1：PB2 高 = 按下 → Q1 导通 → J3.KEY1 被拉低（按下 = 低）。
- * 0：PB2 低 = 按下 → Q1 关断 → J3.KEY1 被 R5 拉高（按下 = 高，松开 = 低）。
- * 当前烧录镜像使用 0：J3 开漏为低表示松开，为高表示按下。 */
-#define KEY_OUT_ACTIVE_HIGH     0
+/* PB2 → R7 510R → Q1 2N7002K 栅极（R6 100K 下拉），漏极 = J3.KEY1，R5 10K 上拉到 3.3 V。
+ * 1：按下时 PB2 高，Q1 导通，J3.KEY1 被拉低；松开时 PB2 低，Q1 关断，J3.KEY1 被 R5 拉高。
+ * 0：相反（按下 = J3 高）。出厂镜像使用 1：按下 = J3 低，松开 = J3 高。 */
+#define KEY_OUT_ACTIVE_HIGH     1
 
 /* ------------------------------------------------------------------ */
 /* S1 按钮交互                                                          */
