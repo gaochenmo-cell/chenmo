@@ -9,9 +9,20 @@
 
 static const uint16_t k_gear_mv[GEAR_COUNT] = GEAR_VOLTAGE_MV;
 
-static uint8_t  s_gear = GEAR_DEFAULT;
-static uint16_t s_depth;
-static bool     s_pressed;
+static uint8_t   s_gear = GEAR_DEFAULT;
+static uint16_t  s_depth;
+static bool      s_pressed;
+static bool      s_calibrated;
+static key_cal_t s_cal;
+static uint16_t  s_thr[GEAR_COUNT];
+
+static bool     s_capturing;
+static bool     s_stroke;
+static bool     s_seen;
+static uint8_t  s_strokes;
+static uint16_t s_cap_min;
+static uint16_t s_cap_max;
+static uint16_t s_baseline;
 
 static inline void key_out_write(bool pressed)
 {
@@ -29,6 +40,10 @@ void key_engine_init(void)
 {
     LL_IOP_GRP1_EnableClock(LL_IOP_GRP1_PERIPH_GPIOB);
     s_pressed = false;
+    s_calibrated = false;
+    s_capturing = false;
+    s_cal.rest_adc = MV_TO_ADC(HALL_V_LOW_MV);
+    s_cal.bottom_adc = MV_TO_ADC(HALL_V_HIGH_MV);
     key_out_write(false);
     LL_GPIO_SetPinMode(KEY_OUT_GPIO_PORT, KEY_OUT_GPIO_PIN, LL_GPIO_MODE_OUTPUT);
     LL_GPIO_SetPinOutputType(KEY_OUT_GPIO_PORT, KEY_OUT_GPIO_PIN, LL_GPIO_OUTPUT_PUSHPULL);
@@ -36,23 +51,132 @@ void key_engine_init(void)
     LL_GPIO_SetPinPull(KEY_OUT_GPIO_PORT, KEY_OUT_GPIO_PIN, LL_GPIO_PULL_NO);
 }
 
+/* 实测跨度短于 0.40 V 时，两端内缩改为跨度的 1/4，避免 0.20+0.20 把区间吃光。 */
+static uint16_t inset_counts(uint16_t span)
+{
+    uint32_t span_mv = ((uint32_t)span * ADC_VREF_MV) / ADC_FULL_SCALE;
+    uint32_t margin_mv = HALL_MARGIN_MV;
+    if (span_mv < (2U * HALL_MARGIN_MV)) {
+        margin_mv = span_mv / 4U;
+    }
+    uint32_t margin = (margin_mv * ADC_FULL_SCALE) / ADC_VREF_MV;
+    if (margin == 0U && span >= 2U) {
+        margin = 1U;
+    }
+    if ((margin * 2U) >= span) {
+        margin = span / 4U;
+        if (margin == 0U && span >= 2U) {
+            margin = 1U;
+        }
+    }
+    return (uint16_t)margin;
+}
+
+static void scale_thresholds(uint16_t vmin, uint16_t vmax)
+{
+    uint16_t span = (uint16_t)(vmax - vmin);
+    uint16_t margin = inset_counts(span);
+    uint16_t lo = (uint16_t)(vmin + margin);
+    uint16_t hi = (uint16_t)(vmax - margin);
+    if (hi < lo) {
+        hi = lo;
+    }
+    uint16_t inner = (uint16_t)(hi - lo);
+    for (uint8_t i = 0; i < GEAR_COUNT; i++) {
+        s_thr[i] = (uint16_t)(lo + ((uint32_t)inner * i) / (GEAR_COUNT - 1U));
+    }
+}
+
 void key_engine_set_cal(const key_cal_t *cal)
 {
-    (void)cal;
+    if (cal == 0 || cal->bottom_adc <= cal->rest_adc) {
+        s_calibrated = false;
+        s_cal.rest_adc = MV_TO_ADC(HALL_V_LOW_MV);
+        s_cal.bottom_adc = MV_TO_ADC(HALL_V_HIGH_MV);
+        return;
+    }
+    s_cal = *cal;
+    s_calibrated = true;
+    scale_thresholds(cal->rest_adc, cal->bottom_adc);
 }
 
 const key_cal_t *key_engine_get_cal(void)
 {
-    static const key_cal_t k_span = {
-        MV_TO_ADC(HALL_V_LOW_MV),
-        MV_TO_ADC(HALL_V_HIGH_MV)
-    };
-    return &k_span;
+    return &s_cal;
+}
+
+bool key_engine_is_calibrated(void)
+{
+    return s_calibrated;
 }
 
 uint16_t key_engine_effective_rest(void)
 {
-    return MV_TO_ADC(HALL_V_LOW_MV);
+    return s_calibrated ? s_cal.rest_adc : MV_TO_ADC(HALL_V_LOW_MV);
+}
+
+void key_engine_cal_begin(void)
+{
+    s_capturing = true;
+    s_stroke = false;
+    s_seen = false;
+    s_strokes = 0;
+    s_cap_min = 0;
+    s_cap_max = 0;
+    s_baseline = 0;
+}
+
+bool key_engine_cal_feed(uint16_t adc)
+{
+    if (!s_capturing) {
+        return false;
+    }
+    if (!s_seen) {
+        s_cap_min = adc;
+        s_cap_max = adc;
+        s_baseline = adc;
+        s_seen = true;
+        return false;
+    }
+    if (adc < s_cap_min) s_cap_min = adc;
+    if (adc > s_cap_max) s_cap_max = adc;
+
+    uint16_t delta = MV_TO_ADC(CAL_PRESS_DELTA_MV);
+    if (!s_stroke) {
+        if (adc < s_baseline) s_baseline = adc;
+        uint16_t trip = (s_baseline > (uint16_t)(4095U - delta))
+                            ? 4095U
+                            : (uint16_t)(s_baseline + delta);
+        if (trip > s_baseline && adc >= trip) {
+            s_stroke = true;
+            if (s_strokes < 255U) s_strokes++;
+        }
+    } else {
+        uint16_t back = (uint16_t)(s_baseline + (delta / 4U));
+        if (adc <= back) {
+            s_stroke = false;
+            if (s_strokes >= CAL_PRESS_COUNT) {
+                s_capturing = false;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+uint16_t key_engine_cal_min(void)
+{
+    return s_cap_min;
+}
+
+uint16_t key_engine_cal_max(void)
+{
+    return s_cap_max;
+}
+
+uint8_t key_engine_cal_presses(void)
+{
+    return s_strokes;
 }
 
 void key_engine_set_gear(uint8_t gear)
@@ -70,7 +194,8 @@ uint8_t key_engine_get_gear(void)
 uint16_t key_engine_gear_voltage_mv(uint8_t gear)
 {
     if (gear < 1U || gear > GEAR_COUNT) return 0;
-    return k_gear_mv[gear - 1U];
+    if (!s_calibrated) return k_gear_mv[gear - 1U];
+    return (uint16_t)(((uint32_t)s_thr[gear - 1U] * ADC_VREF_MV) / ADC_FULL_SCALE);
 }
 
 uint16_t key_engine_gear_travel(uint8_t gear)
@@ -83,7 +208,9 @@ uint16_t key_engine_gear_travel(uint8_t gear)
 
 uint16_t key_engine_gear_threshold_adc(uint8_t gear)
 {
-    return MV_TO_ADC(key_engine_gear_voltage_mv(gear));
+    if (gear < 1U || gear > GEAR_COUNT) return 0;
+    if (!s_calibrated) return MV_TO_ADC(k_gear_mv[gear - 1U]);
+    return s_thr[gear - 1U];
 }
 
 static uint16_t adc_to_depth(uint16_t adc)

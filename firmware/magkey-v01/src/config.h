@@ -80,15 +80,17 @@
 /* S1 按钮交互                                                          */
 /* ------------------------------------------------------------------ */
 #define BTN_DEBOUNCE_MS         20U
-#define BTN_LONG_PRESS_MS       3000U   /* 长按 3 s 进入校准 */
+#define BTN_LONG_PRESS_MS       5000U   /* 按住 S1 5 s 进入校准 */
 #define BTN_BOOT_RESET_MS       3000U   /* 上电时按住 3 s 恢复出厂设置 */
 /* 档位切换后延迟写入 Flash 的时间（合并连续多次短按，减少擦写） */
 #define GEAR_SAVE_DELAY_MS      1500U
 
-/* 校准流程时间 */
-#define CAL_REST_SAMPLE_MS      1500U   /* 阶段 1：采样静止值（白灯快闪，不要碰键） */
-#define CAL_BOTTOM_TIMEOUT_MS   8000U   /* 阶段 2：等待用户把键按到底的最长时间（青灯常亮） */
-#define CAL_BOTTOM_HOLD_MS      1500U   /* 阶段 2：检测到按下后继续取极值的时间 */
+/* 校准：磁轴按下 3 次。一笔按压 = 霍尔比当前低点升高 CAL_PRESS_DELTA_MV，
+ * 再落回低点附近算松开。第三次松开即确认。全程记录见到的最低/最高 ADC。 */
+#define CAL_PRESS_COUNT         3U
+#define CAL_PRESS_DELTA_MV      100U
+/* 完成后黄灯闪三下的整周期（亮一半、灭一半） */
+#define CAL_DONE_BLINK_MS       400U
 
 /* ------------------------------------------------------------------ */
 /* 档位指示灯 LED6                                                      */

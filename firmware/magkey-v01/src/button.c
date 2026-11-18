@@ -1,7 +1,11 @@
 #include "button.h"
-#include "board.h"
 #include "config.h"
+#ifdef HOST_TEST
+#include "host_stubs.h"
+#else
+#include "board.h"
 #include "py32f002b_ll_bus.h"
+#endif
 
 static bool     s_stable_down;
 static bool     s_last_raw;

@@ -5,9 +5,11 @@
 #include <assert.h>
 #include <stdio.h>
 #include "key_engine.h"
+#include "button.h"
 #include "config.h"
 
 int g_key_out;
+int g_sw1_down;
 
 int main(void)
 {
@@ -57,14 +59,74 @@ int main(void)
         assert(g_key_out == 0);
     }
 
-    /* 旧的校准重映射不得把阈值拉回静止点附近 */
-    key_cal_t bogus = { 400, 900 };
-    key_engine_set_cal(&bogus);
+    /* 未写入校准前，阈值保持出厂表 */
+    assert(!key_engine_is_calibrated());
+
+    /* 三击：最低 180，最高 3000。第三次松开才确认。 */
+    key_engine_cal_begin();
+    assert(!key_engine_cal_feed(200));
+    assert(!key_engine_cal_feed(2000));
+    assert(!key_engine_cal_feed(200));
+    assert(key_engine_cal_presses() == 1);
+    assert(!key_engine_cal_feed(180));
+    assert(!key_engine_cal_feed(3000));
+    assert(!key_engine_cal_feed(180));
+    assert(key_engine_cal_presses() == 2);
+    assert(!key_engine_cal_feed(2500));
+    assert(key_engine_cal_feed(190));
+    assert(key_engine_cal_presses() == 3);
+    assert(key_engine_cal_min() == 180);
+    assert(key_engine_cal_max() == 3000);
+
+    key_cal_t span = { key_engine_cal_min(), key_engine_cal_max() };
+    key_engine_set_cal(&span);
+    assert(key_engine_is_calibrated());
+    uint16_t margin = (uint16_t)((200U * 4095U) / 3300U);
+    assert(key_engine_gear_threshold_adc(1) == (uint16_t)(180U + margin));
+    assert(key_engine_gear_threshold_adc(4) == (uint16_t)(3000U - margin));
+    for (uint8_t g = 1; g <= GEAR_COUNT; g++) {
+        key_engine_set_gear(g);
+        assert(!key_engine_update(180, now++));
+        assert(g_key_out == 0);
+        assert(key_engine_update(key_engine_gear_threshold_adc(g), now++));
+        assert(g_key_out == 1);
+        key_engine_force_release();
+    }
+
+    /* 跨度短于 0.40 V：内缩改为跨度的 1/4，静止点仍松开 */
+    key_cal_t short_span = { 1000, 1200 };
+    key_engine_set_cal(&short_span);
+    assert(key_engine_gear_threshold_adc(1) > 1000);
+    assert(key_engine_gear_threshold_adc(4) < 1200);
     key_engine_set_gear(1);
-    assert(key_engine_gear_threshold_adc(1) == k_adc[0]);
-    assert(!key_engine_update(rest, now++));
-    assert(!key_engine_update(400, now++));
-    assert(key_engine_update(k_adc[0], now++));
+    assert(!key_engine_update(1000, now++));
+
+    /* 清除校准后回到出厂表 */
+    key_engine_set_cal(0);
+    assert(!key_engine_is_calibrated());
+    assert(key_engine_gear_threshold_adc(2) == k_adc[1]);
+
+    /* S1 按住 5 s 才是长按；4.999 s 不是，松开仍是短按 */
+    g_sw1_down = 0;
+    button_init();
+    button_poll(0);
+    g_sw1_down = 1;
+    button_poll(1000);
+    assert(button_poll(1000 + BTN_DEBOUNCE_MS) == BTN_EVT_NONE);
+    uint32_t held = 1000U + BTN_DEBOUNCE_MS;
+    assert(BTN_LONG_PRESS_MS == 5000U);
+    assert(button_poll(held + 4999U) == BTN_EVT_NONE);
+    assert(button_poll(held + 5000U) == BTN_EVT_LONG);
+    g_sw1_down = 0;
+    button_poll(held + 5000U);
+    assert(button_poll(held + 5000U + BTN_DEBOUNCE_MS) == BTN_EVT_NONE);
+
+    g_sw1_down = 1;
+    button_poll(20000);
+    button_poll(20000 + BTN_DEBOUNCE_MS);
+    g_sw1_down = 0;
+    button_poll(20100);
+    assert(button_poll(20100 + BTN_DEBOUNCE_MS) == BTN_EVT_SHORT);
 
     puts("key_engine host test OK");
     return 0;

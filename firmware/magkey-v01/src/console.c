@@ -126,7 +126,7 @@ static void cmd_status(void)
     console_put_uint(cal->rest_adc);
     console_puts("..");
     console_put_uint(cal->bottom_adc);
-    console_puts(" (cal ignored)\nlight_chain: ");
+    console_puts(key_engine_is_calibrated() ? " calibrated\nlight_chain: " : " factory\nlight_chain: ");
     console_put_uint(LIGHT_CHAIN_LED_COUNT);
     console_puts("x" LIGHT_CHAIN_LED_TYPE " J1.DIN->LED1..LED5->J2.DOUT, mcu_connected=");
     console_put_uint(LIGHT_CHAIN_MCU_CONNECTED);
@@ -182,7 +182,7 @@ static void handle_line(const char *line)
         }
     } else if (str_eq(line, "cal")) {
         app_request_calibration();
-        console_puts("cal: release key, wait...\n");
+        console_puts("cal: magenta, press magnetic key 3 times\n");
     } else if (starts_with(line, "raw")) {
         parse_uint(line + 3, &a, &ok);
         s_raw_stream = ok ? (a != 0U) : !s_raw_stream;

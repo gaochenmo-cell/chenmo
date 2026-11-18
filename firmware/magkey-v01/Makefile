@@ -63,7 +63,7 @@ all: $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET).hex $(BUILD_DIR)/$(TARGET
 test-host:
 	@mkdir -p $(BUILD_DIR)
 	$(HOST_CC) -std=gnu11 -Wall -Wextra -Werror -DHOST_TEST -Itests/host -Isrc \
-	  tests/host/test_key_engine.c src/key_engine.c -o $(BUILD_DIR)/test_key_engine
+	  tests/host/test_key_engine.c src/key_engine.c src/button.c -o $(BUILD_DIR)/test_key_engine
 	$(BUILD_DIR)/test_key_engine
 
 $(BUILD_DIR)/%.o: %.c

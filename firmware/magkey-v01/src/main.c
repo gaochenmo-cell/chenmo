@@ -4,7 +4,8 @@
  * 功能概要：
  *   - 霍尔 ADC 采样与当前档的绝对电压阈值比较 -> KEY_OUT (PB2 -> Q1 -> J3.KEY1 低 = 按下)
  *   - S1 短按：档位 1..4 循环，LED6 显示 红/绿/蓝/白，档位写入 Flash
- *   - S1 长按 3 s：校准（白灯快闪时松开键；青灯常亮时把键按到底）
+ *   - S1 按住 5 s：校准。LED6 品红常亮，磁轴按 3 次，第三次松开确认。
+ *     完成后黄灯闪三下，再回到当前档颜色。
  *   - 上电按住 S1 3 s：恢复出厂设置
  *   - DEBUG2 串口 115200：status / gears / gear n / cal / raw / led / reset / light(预留)
  *   - LED1~LED5 游戏灯链：不实现，仅保留 light_chain.h 接口
@@ -23,32 +24,28 @@
 
 typedef enum {
     APP_RUN = 0,
-    APP_CAL_REST,
-    APP_CAL_BOTTOM,
+    APP_CAL,
 } app_state_t;
 
 static settings_t  s_settings;
 static app_state_t s_state = APP_RUN;
-static uint32_t    s_state_t0;
 static bool        s_save_pending;
 static uint32_t    s_save_due_ms;
 
-/* 校准过程变量 */
-static uint32_t    s_cal_acc;
-static uint32_t    s_cal_n;
-static uint16_t    s_cal_rest;
-static uint16_t    s_cal_extreme;
-static bool        s_cal_bottom_seen;
-static uint32_t    s_cal_bottom_t0;
-
-static const rgb_t k_white = { 255, 255, 255 };
-static const rgb_t k_cyan  = { 0, 255, 255 };
-static const rgb_t k_green = { 0, 255, 0 };
-static const rgb_t k_red   = { 255, 0, 0 };
+static const rgb_t k_white   = { 255, 255, 255 };
+static const rgb_t k_green   = { 0, 255, 0 };
+static const rgb_t k_red     = { 255, 0, 0 };
+static const rgb_t k_magenta = { 255, 0, 255 }; /* 校准中，不是四档颜色 */
+static const rgb_t k_yellow  = { 255, 255, 0 }; /* 校准完成，闪三下 */
 
 static void apply_settings(void)
 {
-    /* Flash 里的 rest/bottom 不参与比较。只恢复档位。 */
+    if (s_settings.calibrated && s_settings.bottom_adc > s_settings.rest_adc) {
+        key_cal_t cal = { s_settings.rest_adc, s_settings.bottom_adc };
+        key_engine_set_cal(&cal);
+    } else {
+        key_engine_set_cal(0);
+    }
     key_engine_set_gear(s_settings.gear);
     led_show_gear(s_settings.gear);
 }
@@ -79,14 +76,12 @@ void app_request_gear(uint8_t gear)
 
 static void cal_start(uint32_t now_ms)
 {
-    key_engine_force_release();
-    s_state = APP_CAL_REST;
-    s_state_t0 = now_ms;
-    s_cal_acc = 0;
-    s_cal_n = 0;
-    s_cal_bottom_seen = false;
-    led_blink(k_white, 200, 0);
-    console_puts("cal: sampling rest, do not touch key\n");
+    (void)now_ms;
+    s_state = APP_CAL;
+    key_engine_cal_begin();
+    led_stop_blink();
+    led_set_rgb(k_magenta);
+    console_puts("cal: press the magnetic key 3 times\n");
 }
 
 void app_request_calibration(void)
@@ -104,75 +99,33 @@ void app_request_factory_reset(void)
     s_save_pending = false;
 }
 
-static void cal_finish(bool ok, uint32_t now_ms)
+static void cal_finish(uint32_t now_ms)
 {
+    (void)now_ms;
     s_state = APP_RUN;
-    led_stop_blink();
-    if (ok) {
+    uint16_t vmin = key_engine_cal_min();
+    uint16_t vmax = key_engine_cal_max();
+    if (vmax > vmin) {
         s_settings.calibrated = 1;
-        s_settings.rest_adc = s_cal_rest;
-        s_settings.bottom_adc = s_cal_extreme;
-        apply_settings();
-        save_now();
-        led_blink(k_green, 250, 3);
-        console_puts("cal ok rest=");
-        console_put_uint(s_cal_rest);
-        console_puts(" bottom=");
-        console_put_uint(s_cal_extreme);
+        s_settings.rest_adc = vmin;
+        s_settings.bottom_adc = vmax;
+        key_cal_t cal = { vmin, vmax };
+        key_engine_set_cal(&cal);
+        s_save_pending = false;
+        if (!storage_save(&s_settings)) {
+            console_puts("flash save failed\n");
+        }
+        console_puts("cal ok min=");
+        console_put_uint(vmin);
+        console_puts(" max=");
+        console_put_uint(vmax);
         console_puts("\n");
     } else {
-        apply_settings();   /* 恢复原值和档位颜色 */
-        led_blink(k_red, 250, 3);
-        console_puts("cal failed (span too small / timeout)\n");
+        console_puts("cal ignored (no span)\n");
     }
-    (void)now_ms;
-}
-
-static uint16_t abs_diff(uint16_t a, uint16_t b)
-{
-    return (a > b) ? (uint16_t)(a - b) : (uint16_t)(b - a);
-}
-
-static void cal_task(uint16_t adc, uint32_t now_ms)
-{
-    switch (s_state) {
-    case APP_CAL_REST:
-        /* 前 300 ms 不采样，给用户松手时间 */
-        if ((now_ms - s_state_t0) >= 300U) {
-            s_cal_acc += adc;
-            s_cal_n++;
-        }
-        if ((now_ms - s_state_t0) >= CAL_REST_SAMPLE_MS && s_cal_n > 0U) {
-            s_cal_rest = (uint16_t)(s_cal_acc / s_cal_n);
-            s_cal_extreme = s_cal_rest;
-            s_state = APP_CAL_BOTTOM;
-            s_state_t0 = now_ms;
-            led_stop_blink();
-            led_set_rgb(k_cyan);
-            console_puts("cal: rest=");
-            console_put_uint(s_cal_rest);
-            console_puts(" now press key to bottom\n");
-        }
-        break;
-
-    case APP_CAL_BOTTOM:
-        if (abs_diff(adc, s_cal_rest) > abs_diff(s_cal_extreme, s_cal_rest)) {
-            s_cal_extreme = adc;
-        }
-        if (!s_cal_bottom_seen && abs_diff(s_cal_extreme, s_cal_rest) >= CAL_MIN_SPAN_ADC) {
-            s_cal_bottom_seen = true;
-            s_cal_bottom_t0 = now_ms;
-        }
-        if (s_cal_bottom_seen && (now_ms - s_cal_bottom_t0) >= CAL_BOTTOM_HOLD_MS) {
-            cal_finish(true, now_ms);
-        } else if (!s_cal_bottom_seen && (now_ms - s_state_t0) >= CAL_BOTTOM_TIMEOUT_MS) {
-            cal_finish(false, now_ms);
-        }
-        break;
-
-    default:
-        break;
-    }
+    /* 先记下当前档颜色，再黄灯闪三下；闪完 led_task 会回到这个颜色 */
+    led_show_gear(s_settings.gear);
+    led_blink(k_yellow, CAL_DONE_BLINK_MS, 3);
 }
 
 /* 上电按住 S1 达 BTN_BOOT_RESET_MS -> 恢复出厂 */
@@ -217,10 +170,9 @@ int main(void)
         uint32_t now = millis();
         uint16_t adc = hall_adc_read();
 
-        if (s_state == APP_RUN) {
-            key_engine_update(adc, now);
-        } else {
-            cal_task(adc, now);
+        key_engine_update(adc, now);
+        if (s_state == APP_CAL && key_engine_cal_feed(adc)) {
+            cal_finish(now);
         }
 
         btn_event_t evt = button_poll(now);
