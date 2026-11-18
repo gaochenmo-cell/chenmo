@@ -53,7 +53,9 @@ static bool unpack(const uint32_t words[4], settings_t *s, uint32_t *seq)
     s->rest_adc   = (uint16_t)(words[2] >> 16);
     s->bottom_adc = (uint16_t)(words[3] & 0xFFFFU);
     *seq = words[1];
-    if (s->gear < 1U || s->gear > GEAR_COUNT) return false;
+    /* 上一版固件是 7 档。5/6/7 钳到当前最高档，校准值仍然保留。 */
+    if (s->gear < 1U || s->gear > 7U) return false;
+    if (s->gear > GEAR_COUNT) s->gear = (uint8_t)GEAR_COUNT;
     return true;
 }
 

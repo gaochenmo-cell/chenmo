@@ -12,7 +12,8 @@
  *  15          PA2/SWCLK      SWCLK       DEBUG1 pin2
  *  7           PB5            RXD         DEBUG2 pin1（USART1_RX, AF1）
  *  8           PB4            TXD         DEBUG2 pin2（USART1_TX, AF1）
- *  10          PB2            KEY_OUT     R7 510R -> Q1 2N7002K 栅极；高电平 = 按下 = J3.KEY1 拉低
+ *  10          PB2            KEY_OUT     R7 510R -> Q1 2N7002K 栅极。出厂默认：低 = 按下
+ *                                         （Q1 关断，J3.KEY1 被 R5 拉高）；松开时 PB2 高，J3.KEY1 拉低
  *  11          PB1/ADC_IN0    KEY_ADC     U3 智风V1 磁轴霍尔输出（0.4V 静止 ~ 3.0V 触底），R9 1K + C17/C18 1nF
  *  18          PA5            LED6_R      R1 1K   -> LED6 R 阴极（LED6 共阳接 3.3V，低电平点亮）
  *  19          PA6            LED6_G      R2 510R -> LED6 G 阴极

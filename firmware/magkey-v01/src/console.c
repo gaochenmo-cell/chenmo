@@ -135,7 +135,7 @@ static void cmd_status(void)
 static void cmd_gears(void)
 {
     static const char *const names[GEAR_COUNT] = {
-        "red", "orange", "yellow", "green", "blue", "indigo", "purple"
+        "red", "green", "blue", "white"
     };
     for (uint8_t g = 1; g <= GEAR_COUNT; g++) {
         console_puts(g == key_engine_get_gear() ? "*" : " ");
@@ -158,7 +158,7 @@ static void handle_line(const char *line)
     if (*line == '\0') return;
 
     if (str_eq(line, "help")) {
-        console_puts("help ver status gears gear<1-7> cal raw[0|1] led[r g b] reset light\n");
+        console_puts("help ver status gears gear<1-4> cal raw[0|1] led[r g b] reset light\n");
     } else if (str_eq(line, "ver")) {
         console_puts(FW_VERSION_STR "\n");
     } else if (str_eq(line, "status")) {
@@ -173,7 +173,9 @@ static void handle_line(const char *line)
             console_put_uint(a);
             console_puts("\n");
         } else {
-            console_puts("err: gear 1..7\n");
+            console_puts("err: gear 1..");
+            console_put_uint(GEAR_COUNT);
+            console_puts("\n");
         }
     } else if (str_eq(line, "cal")) {
         app_request_calibration();

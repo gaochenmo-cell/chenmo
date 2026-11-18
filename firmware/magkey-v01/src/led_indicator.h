@@ -16,7 +16,7 @@ void led_init(void);
 void led_set_rgb(rgb_t c);
 void led_off(void);
 
-/* 显示某档对应的颜色（1..GEAR_COUNT：赤 橙 黄 绿 蓝 靛 紫） */
+/* 显示某档对应的颜色（1..GEAR_COUNT：红 绿 蓝 白） */
 void  led_show_gear(uint8_t gear);
 rgb_t led_gear_color(uint8_t gear);
 

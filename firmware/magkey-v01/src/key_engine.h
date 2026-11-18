@@ -1,5 +1,5 @@
 /*
- * key_engine.h - 霍尔 ADC -> 行程深度 -> 七档触发判定 -> KEY_OUT
+ * key_engine.h - 霍尔 ADC -> 行程深度 -> 四档触发判定 -> KEY_OUT
  */
 #ifndef KEY_ENGINE_H
 #define KEY_ENGINE_H

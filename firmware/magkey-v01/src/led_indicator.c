@@ -4,15 +4,12 @@
 #include "py32f002b_ll_bus.h"
 #include "py32f002b_ll_tim.h"
 
-/* 七档颜色：赤 橙 黄 绿 蓝 靛 紫（按 LED6 的 1K/510R/330R 限流做了简单配比） */
+/* 四档颜色：红 绿 蓝 白。档位 1 最灵敏。 */
 static const rgb_t k_gear_colors[GEAR_COUNT] = {
-    { 255,   0,   0 },   /* 1 赤 */
-    { 255,  70,   0 },   /* 2 橙 */
-    { 255, 200,   0 },   /* 3 黄 */
-    {   0, 255,   0 },   /* 4 绿 */
-    {   0,   0, 255 },   /* 5 蓝 */
-    {  40,   0, 160 },   /* 6 靛 */
-    { 180,   0, 255 },   /* 7 紫 */
+    { 255,   0,   0 },   /* 1 红 */
+    {   0, 255,   0 },   /* 2 绿 */
+    {   0,   0, 255 },   /* 3 蓝 */
+    { 255, 255, 255 },   /* 4 白 */
 };
 
 /* 占空比（0..LED_PWM_STEPS），由 TIM14 中断读取 */
@@ -30,7 +27,7 @@ static uint32_t s_blink_t0;
 static uint8_t to_duty(uint8_t v)
 {
     uint32_t scaled = ((uint32_t)v * LED_BRIGHTNESS) / 255U;
-    /* 感知亮度近似：平方曲线，让低值颜色（橙、靛）更有区分度 */
+    /* 感知亮度近似：平方曲线，让未满幅的通道不至于过亮 */
     scaled = (scaled * scaled) / 255U;
     return (uint8_t)((scaled * LED_PWM_STEPS + 127U) / 255U);
 }

@@ -5,8 +5,8 @@
  *   help            命令列表
  *   ver             固件版本
  *   status          档位、原始 ADC、深度、按下状态、校准值
- *   gears           七档触发行程与当前 ADC 阈值
- *   gear <1..7>     设置档位并保存
+ *   gears           四档触发行程与当前 ADC 阈值
+ *   gear <1..4>     设置档位并保存
  *   cal             启动校准流程（等同长按 S1）
  *   raw [0|1]       打开/关闭 20 Hz 原始数据流（adc,depth,pressed）
  *   led <r> <g> <b> 临时点亮 LED6 测试颜色（0..255），led 无参数恢复档位色
