@@ -36,35 +36,38 @@ int main(void)
     /* 出厂 KEY_OUT_ACTIVE_HIGH=0：松开时 PB2 为高 */
     assert(g_key_out == 1);
     assert(GEAR_COUNT == 4);
+    assert(key_engine_get_gear() == 2);
 
-    /* 四档阈值随行程单调上升，且落在 0.4 V ~ 3.0 V 之间 */
-    static const uint16_t k_travel[4] = { 30, 107, 183, 260 };
-    static const uint16_t k_thr[4] = { 781, 1511, 2232, 2963 };
+    /* 0.15–2.80 V 四等分，3.3 V 参考下的 ADC，以及换算行程 */
+    static const uint16_t k_mv[4] = { 150, 1033, 1917, 2800 };
+    static const uint16_t k_adc[4] = { 186, 1281, 2378, 3474 };
+    static const uint16_t k_travel[4] = { 0, 113, 227, 340 };
     uint16_t prev = 0;
     for (uint8_t g = 1; g <= GEAR_COUNT; g++) {
         uint16_t thr = key_engine_gear_threshold_adc(g);
+        assert(key_engine_gear_voltage_mv(g) == k_mv[g - 1]);
         assert(key_engine_gear_travel(g) == k_travel[g - 1]);
-        assert(thr == k_thr[g - 1]);
+        assert(thr == k_adc[g - 1]);
         assert(thr > prev);
-        assert(thr > CAL_DEFAULT_REST_ADC && thr < CAL_DEFAULT_BOTTOM_ADC);
         prev = thr;
     }
+    assert(k_adc[0] == CAL_DEFAULT_REST_ADC);
+    assert(k_adc[3] == CAL_DEFAULT_BOTTOM_ADC);
 
-    /* 第 2 档：1.07 mm 触发，从 2.00 mm 回弹 0.20 mm 释放。按下时 PB2 为低。 */
-    key_engine_set_gear(2);
-    int pressed_at = -1, released_at = -1;
-    for (int t = 0; t <= 200; t += 5) {
-        bool p = key_engine_update(adc_of((uint16_t)t), now++);
-        if (p && pressed_at < 0) pressed_at = t;
-    }
-    assert(g_key_out == 0);
-    for (int t = 200; t >= 0; t -= 5) {
-        bool p = key_engine_update(adc_of((uint16_t)t), now++);
-        if (!p && released_at < 0) released_at = t;
-    }
-    assert(pressed_at == 110);
-    assert(released_at == 200 - RT_RELEASE_TRAVEL);
+    /* 第 1 档边界就是静止电压：停在边界不按下，越过 1 个计数才按下，回到边界即松开 */
+    key_engine_set_gear(1);
+    assert(!key_engine_update(k_adc[0], now++));
     assert(g_key_out == 1);
+    assert(key_engine_update((uint16_t)(k_adc[0] + 1), now++));
+    assert(g_key_out == 0);
+    assert(!key_engine_update(k_adc[0], now++));
+    assert(g_key_out == 1);
+
+    /* 第 2 档：ADC 达到 1281 按下。按下时 PB2 为低。 */
+    key_engine_set_gear(2);
+    assert(!key_engine_update((uint16_t)(k_adc[1] - 1), now++));
+    assert(key_engine_update(k_adc[1], now++));
+    assert(g_key_out == 0);
 
     /* 快速触发：3.00 mm 按下后回弹 0.30 mm 释放，再压 0.25 mm 重新触发，全程高于触发点 */
     sweep(0, 300, 5, &now);
@@ -76,22 +79,19 @@ int main(void)
     sweep(295, 0, -5, &now);
     assert(!key_engine_pressed());
 
-    /* 第 1 档边界：0.25 mm 不触发，0.31 mm 触发，回到触发点 - 迟滞才释放 */
-    key_engine_set_gear(1);
-    for (int i = 0; i < 50; i++) key_engine_update(adc_of(25), now++);
-    assert(!key_engine_pressed());
-    key_engine_update(adc_of(31), now++);
-    assert(key_engine_pressed());
+    /* 第 2 档迟滞：刚低于 1281 仍保持按下，明显回到触发点以上才松开 */
+    key_engine_set_gear(2);
+    assert(key_engine_update(1281, now++));
+    assert(key_engine_update(1280, now++));
     assert(g_key_out == 0);
-    key_engine_update(adc_of(19), now++);
-    assert(!key_engine_pressed());
+    assert(!key_engine_update(1100, now++));
     assert(g_key_out == 1);
 
     /* 反极性校准：按下电压降低时，行程仍然按深度判定 */
     key_cal_t inv = { 3700, 500 };
     key_engine_set_cal(&inv);
     key_engine_set_gear(2);
-    assert(key_engine_gear_threshold_adc(4) < inv.rest_adc);
+    assert(key_engine_gear_threshold_adc(2) < inv.rest_adc);
     for (int t = 0; t <= 200; t += 5) {
         uint16_t adc = (uint16_t)(3700 - (uint32_t)t * 3200 / 340);
         key_engine_update(adc, now++);

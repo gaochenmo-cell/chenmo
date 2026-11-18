@@ -8,7 +8,7 @@
 #include "py32f002b_ll_bus.h"
 #endif
 
-static const uint16_t k_gear_travel[GEAR_COUNT] = GEAR_ACTUATION_TRAVEL;
+static const uint16_t k_gear_mv[GEAR_COUNT] = GEAR_VOLTAGE_MV;
 
 static key_cal_t s_cal = { CAL_DEFAULT_REST_ADC, CAL_DEFAULT_BOTTOM_ADC };
 static uint16_t  s_rest_eff;          /* 自动跟踪后的 rest */
@@ -46,7 +46,7 @@ static void recompute(void)
     if (s_span < 16U) {
         s_span = 16U;   /* 防止除零；正常校准值远大于此 */
     }
-    s_act_travel = k_gear_travel[s_gear - 1U];
+    s_act_travel = key_engine_gear_travel(s_gear);
 }
 
 void key_engine_init(void)
@@ -92,20 +92,52 @@ uint8_t key_engine_get_gear(void)
     return s_gear;
 }
 
-uint16_t key_engine_gear_travel(uint8_t gear)
+uint16_t key_engine_gear_voltage_mv(uint8_t gear)
 {
     if (gear < 1U || gear > GEAR_COUNT) return 0;
-    return k_gear_travel[gear - 1U];
+    return k_gear_mv[gear - 1U];
 }
 
+uint16_t key_engine_gear_travel(uint8_t gear)
+{
+    uint32_t span_mv = HALL_V_HIGH_MV - HALL_V_LOW_MV;
+    uint16_t mv = key_engine_gear_voltage_mv(gear);
+    uint32_t dm = (mv > HALL_V_LOW_MV) ? ((uint32_t)mv - HALL_V_LOW_MV) : 0U;
+    return (uint16_t)((dm * SWITCH_TOTAL_TRAVEL + span_mv / 2U) / span_mv);
+}
+
+/* 电压边界在当前 rest/bottom 上的 ADC。未校准时即 3.3 V 参考下的绝对计数。 */
 uint16_t key_engine_gear_threshold_adc(uint8_t gear)
 {
-    uint32_t travel = key_engine_gear_travel(gear);
-    uint32_t delta = (travel * s_span + (SWITCH_TOTAL_TRAVEL / 2U)) / SWITCH_TOTAL_TRAVEL;
+    uint32_t span_mv = HALL_V_HIGH_MV - HALL_V_LOW_MV;
+    uint16_t mv = key_engine_gear_voltage_mv(gear);
+    uint32_t dm = (mv > HALL_V_LOW_MV) ? ((uint32_t)mv - HALL_V_LOW_MV) : 0U;
+    uint32_t delta = (dm * s_span) / span_mv;
     if (s_pressed_high) {
-        return (uint16_t)(s_rest_eff + delta);
+        uint32_t thr = (uint32_t)s_rest_eff + delta;
+        return (uint16_t)(thr > 4095U ? 4095U : thr);
     }
-    return (uint16_t)((delta > s_rest_eff) ? 0U : (s_rest_eff - delta));
+    return (uint16_t)((delta >= s_rest_eff) ? 0U : (s_rest_eff - delta));
+}
+
+/* 第 1 档的边界等于默认静止电压。静止采样落在边界上时不保持按下，
+ * 读数越过边界 1 个计数才触发，回到边界即释放。 */
+static uint16_t trip_adc(void)
+{
+    uint16_t thr = key_engine_gear_threshold_adc(s_gear);
+    if (s_pressed_high) {
+        if (thr <= s_rest_eff && s_rest_eff < 4095U) return (uint16_t)(s_rest_eff + 1U);
+        return thr;
+    }
+    if (thr >= s_rest_eff && s_rest_eff > 0U) return (uint16_t)(s_rest_eff - 1U);
+    return thr;
+}
+
+static bool adc_crossed(uint16_t adc)
+{
+    uint16_t trip = trip_adc();
+    if (s_pressed_high) return adc >= trip;
+    return adc <= trip;
 }
 
 /* ADC -> 行程深度（0.01 mm），超出范围时饱和 */
@@ -162,7 +194,7 @@ bool key_engine_update(uint16_t adc, uint32_t now_ms)
             if (depth >= (uint16_t)(s_rt_min + RT_PRESS_TRAVEL)) press = true;
         } else
 #endif
-        if (depth >= act) {
+        if (adc_crossed(adc)) {
             press = true;
         }
 #if CFG_RAPID_TRIGGER
@@ -181,7 +213,11 @@ bool key_engine_update(uint16_t adc, uint32_t now_ms)
 #if CFG_RAPID_TRIGGER
         if (depth + RT_RELEASE_TRAVEL <= s_peak) release = true;
 #endif
-        if (depth < rest_limit) release = true;
+        if (act == 0U) {
+            if (!adc_crossed(adc)) release = true;
+        } else if (depth < rest_limit) {
+            release = true;
+        }
         if (release) {
             s_pressed = false;
             key_out_write(false);

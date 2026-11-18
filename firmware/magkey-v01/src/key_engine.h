@@ -24,7 +24,8 @@ uint16_t key_engine_effective_rest(void);
 void    key_engine_set_gear(uint8_t gear);
 uint8_t key_engine_get_gear(void);
 
-/* 返回某档的触发行程（0.01 mm）与对应的 ADC 阈值 */
+/* 返回某档的触发电压（mV）、由电压换算的行程（0.01 mm）、以及 ADC 边界 */
+uint16_t key_engine_gear_voltage_mv(uint8_t gear);
 uint16_t key_engine_gear_travel(uint8_t gear);
 uint16_t key_engine_gear_threshold_adc(uint8_t gear);
 

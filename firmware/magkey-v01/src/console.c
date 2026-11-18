@@ -144,7 +144,9 @@ static void cmd_gears(void)
         console_puts(names[g - 1U]);
         console_puts(" act=");
         put_travel(key_engine_gear_travel(g));
-        console_puts("mm thr_adc=");
+        console_puts("mm thr=");
+        console_put_uint(key_engine_gear_voltage_mv(g));
+        console_puts("mV adc=");
         console_put_uint(key_engine_gear_threshold_adc(g));
         console_puts("\n");
     }
