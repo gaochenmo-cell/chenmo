@@ -9,6 +9,9 @@ its shared reply buffer (AppUser + 0x11E):
 Expected per image (given on the command line, defaults below):
 
     PADUEX5_P6_V3.5.bin -> HVer 0x13, FW 3.5 (five-key, key 5 on port 6)
+    PADUEX5_P7_V3.5.bin -> HVer 0x13, FW 3.5 (five-key, key 5 on port 7)
+    PADUEX5_P8_V3.5.bin -> HVer 0x13, FW 3.5 (five-key, key 5 on port 8)
+    PADUEX5_P9_V3.5.bin -> HVer 0x13, FW 3.5 (five-key, key 5 on port 9)
     PADUEX5_V3.2.bin   -> HVer 0x13, FW 3.2
     PADUEX4_V3.2.bin   -> HVer 0x14, FW 3.2
     legacy/PADUEX5_V3.1 -> HVer 0x13, FW 3.1
@@ -47,6 +50,9 @@ SCRATCH = 0x20004000
 
 EXPECT = {
     "PADUEX5_P6_V3.5.bin": (0x13, 3, 5),
+    "PADUEX5_P7_V3.5.bin": (0x13, 3, 5),
+    "PADUEX5_P8_V3.5.bin": (0x13, 3, 5),
+    "PADUEX5_P9_V3.5.bin": (0x13, 3, 5),
     "PADUEX5_V3.2.bin": (0x13, 3, 2),
     "PADUEX4_V3.2.bin": (0x14, 3, 2),
     "PADUEX5_V3.1.bin": (0x13, 3, 1),

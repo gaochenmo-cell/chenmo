@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
 """
 Emulate the REAL sampler (0x08006E48), key scan (0x080069CC) and LED refresh
-(0x08005018) of a 5-key image with Unicorn, with bit-level I2C slave models on
-the port-5 bus (PC11/PC12) and the port-6 bus (PB3/PB4), and check where key 5
-reads its sensors and clocks its LED strip.
+(0x08005018) of a 5-key image with Unicorn, with a bit-level I2C slave model on
+each pad port's SCL/SDA pair, and check where key 5 reads its sensors and clocks
+its LED strip.
 
-  python3 firmware/tests/emu_port6_remap.py firmware/PADUEX5_P6_V3.5.bin   # key 5 on port 6 (LED on PC9)
-  python3 firmware/tests/emu_port6_remap.py firmware/PADUEX5_V3.2.bin      # control: key 5 on port 5 (LED on PC8)
+  python3 firmware/tests/emu_port6_remap.py firmware/PADUEX5_P6_V3.5.bin   # key 5 on port 6
+  python3 firmware/tests/emu_port6_remap.py firmware/PADUEX5_P9_V3.5.bin   # key 5 on port 9 (split bus)
+  python3 firmware/tests/emu_port6_remap.py firmware/PADUEX5_V3.2.bin      # control: key 5 on port 5
 
 Only the internal ADC read (0x080078B4), printf and the two USB report builders
 are stubbed. The I2C bit-banging runs the bytes from the .bin against the slave
 model (START/STOP detection, address ACK, register pointer, 16-bit big-endian
 read, master ACK/NACK), the soft-float conversion runs as is, and the WS2812 bit
 routines are executed while every GPIO set/clear write is recorded.
+
+The Px images probe 8-bit addresses 0x80..0x9E on the first sample and keep the
+first four that ACK. The checks below cover the stock address set, a set that
+shares no address with port 5, and a bus where nothing ACKs (key 5 must read as
+released, and ports 1..4 must keep working).
 """
 from __future__ import annotations
 
@@ -29,7 +35,26 @@ PERIPH = 0x40000000
 STACK_TOP = 0x20006000
 STOP = 0x0800FFF0
 
-GPIOA, GPIOB, GPIOC = 0x40010800, 0x40010C00, 0x40011000
+GPIOA, GPIOB, GPIOC, GPIOF = 0x40010800, 0x40010C00, 0x40011000, 0x40011C00
+GPIO_HOOK_END = GPIOF + 0x400
+CRM_APB2EN = 0x40021018
+# one bus per pad port. Port 5 is the pair the stock sampler drives; 6..9 follow
+# the init order of the remaining open-drain pairs (low pin = SCL).
+PORT_PINS = {
+    5: ((GPIOC, 11), (GPIOC, 12)),
+    6: ((GPIOB, 3), (GPIOB, 4)),
+    7: ((GPIOF, 6), (GPIOF, 7)),
+    8: ((GPIOB, 10), (GPIOB, 11)),
+    9: ((GPIOB, 2), (GPIOA, 10)),
+}
+# key-5 LED strip per image, and the CRM APB2 bit the probe must turn on
+PROFILES = {
+    "V3.2": dict(port=5, led=(GPIOC, 8), clocks=(), probe=False),
+    "P6": dict(port=6, led=(GPIOC, 9), clocks=(3,), probe=True),
+    "P7": dict(port=7, led=(GPIOA, 8), clocks=(7,), probe=True),
+    "P8": dict(port=8, led=(GPIOB, 13), clocks=(3,), probe=True),
+    "P9": dict(port=9, led=(GPIOB, 12), clocks=(3, 2), probe=True),
+}
 
 APPUSER = 0x200019D0
 RAW = APPUSER + 0x26          # u16[36]
@@ -177,17 +202,18 @@ class Board:
         self.uc.mem_write(CALIB, b"\x00")
         self.uc.mem_write(COLOR, struct.pack("<36H", *([1] * 36)))      # every key red
         self.uc.mem_write(0x20001CC4 + 0xD, bytes([0x40]))             # LED brightness byte
-        self.bus5 = I2CSlaveBus("port5/PC11-PC12", (GPIOC, 1 << 11), (GPIOC, 1 << 12),
-                                {a: {REG_BUS_VOLTAGE: I2C_RELEASED} for a in I2C_ADDRS})
-        self.bus6 = I2CSlaveBus("port6/PB3-PB4", (GPIOB, 1 << 3), (GPIOB, 1 << 4),
-                                {a: {REG_BUS_VOLTAGE: I2C_RELEASED} for a in I2C_ADDRS})
-        self.buses = (self.bus5, self.bus6)
+        self.buses_by_port = {}
+        for port, ((sp, sb), (dp, db)) in PORT_PINS.items():
+            self.buses_by_port[port] = I2CSlaveBus(
+                f"port{port}", (sp, 1 << sb), (dp, 1 << db),
+                {a: {REG_BUS_VOLTAGE: I2C_RELEASED} for a in I2C_ADDRS})
+        self.buses = tuple(self.buses_by_port.values())
         self.adc = [ADC_RELEASED] * 16
         self.reports: list[tuple[str, int]] = []
         self.gpio_toggles: dict[tuple[int, int], int] = {}
         self.uc.hook_add(UC_HOOK_CODE, self._code)
-        self.uc.hook_add(UC_HOOK_MEM_WRITE, self._mem_write, begin=GPIOA, end=GPIOC + 0x400)
-        self.uc.hook_add(UC_HOOK_MEM_READ, self._mem_read, begin=GPIOA, end=GPIOC + 0x400)
+        self.uc.hook_add(UC_HOOK_MEM_WRITE, self._mem_write, begin=GPIOA, end=GPIO_HOOK_END)
+        self.uc.hook_add(UC_HOOK_MEM_READ, self._mem_read, begin=GPIOA, end=GPIO_HOOK_END)
 
     # -- stubs ---------------------------------------------------------------------
     def _code(self, uc: Uc, addr: int, size: int, _) -> None:
@@ -229,7 +255,7 @@ class Board:
         self.uc.reg_write(UC_ARM_REG_R0, r0)
         self.uc.reg_write(UC_ARM_REG_SP, STACK_TOP)
         self.uc.reg_write(UC_ARM_REG_LR, STOP | 1)
-        self.uc.emu_start(fn | 1, STOP, count=20_000_000)
+        self.uc.emu_start(fn | 1, STOP, count=50_000_000)
 
     def set_port(self, port: int, pressed: bool) -> None:
         """Press/release all four sensors of pad port 1..6 (ports 1..4 internal ADC, 5/6 I2C)."""
@@ -237,9 +263,9 @@ class Board:
             for ch in range((port - 1) * 4, port * 4):
                 self.adc[ch] = ADC_PRESSED if pressed else ADC_RELEASED
         else:
-            bus = self.bus5 if port == 5 else self.bus6
-            for a in I2C_ADDRS:
-                bus.devices[a][REG_BUS_VOLTAGE] = I2C_PRESSED if pressed else I2C_RELEASED
+            bus = self.buses_by_port[port]
+            for regs in bus.devices.values():
+                regs[REG_BUS_VOLTAGE] = I2C_PRESSED if pressed else I2C_RELEASED
 
     def sample(self) -> list[int]:
         for bus in self.buses:
@@ -259,77 +285,113 @@ class Board:
         return self.gpio_toggles.get((port, pin), 0)
 
 
+def profile_of(name: str) -> dict:
+    upper = name.upper()
+    for key, prof in PROFILES.items():
+        if key != "V3.2" and f"_{key}_" in upper:
+            return prof
+    if "V3.2" in upper:
+        return PROFILES["V3.2"]
+    raise SystemExit(f"no port profile for {name}")
+
+
+def pin_name(port: int, pin: int) -> str:
+    return f"P{'ABCDEF'[(port - GPIOA) // 0x400]}{pin}"
+
+
 def main() -> int:
     img_path = Path(sys.argv[1] if len(sys.argv) > 1 else "firmware/PADUEX5_P6_V3.5.bin")
     img = img_path.read_bytes()
-    port6 = "_p6_" in img_path.name.lower()
-    k5_port = 6 if port6 else 5
-    k5_dead_port = 5 if port6 else 6
-    k5_bus = "bus6" if port6 else "bus5"
-    k5_led_pin = 9 if port6 else 8
-    k5_old_led_pin = 8 if port6 else 9
+    prof = profile_of(img_path.name)
+    k5_port = prof["port"]
+    led_port, led_pin = prof["led"]
     fails = 0
 
     def check(name: str, got, want) -> None:
         nonlocal fails
         ok = got == want
         fails += 0 if ok else 1
-        fmt = (lambda v: hex(v)) if isinstance(got, int) else str
+        fmt = hex if isinstance(got, int) and not isinstance(got, bool) else str
         print(f"[{'PASS' if ok else 'FAIL'}] {name}: got {fmt(got)} want {fmt(want)}")
+
+    def load_raws(board: Board, port: int, raws: tuple[int, ...], addrs=I2C_ADDRS) -> I2CSlaveBus:
+        bus = board.buses_by_port[port]
+        bus.devices = {a: {REG_BUS_VOLTAGE: raw} for a, raw in zip(addrs, raws)}
+        for other in board.buses:
+            if other is bus:
+                continue
+            for regs in other.devices.values():
+                regs[REG_BUS_VOLTAGE] = 0x0400          # 3275 if this bus were the one being read
+        return bus
 
     # 1) sampler: which bus feeds RAW[16..19], and in which order
     b = Board(img)
-    bus = getattr(b, k5_bus)
-    other = b.bus5 if k5_bus == "bus6" else b.bus6
-    for a, raw in zip(I2C_ADDRS, (0x0000, 0x0800, 0x1000, 0x1F00)):   # -> 3915, 2635, 1355, 0
-        bus.devices[a][REG_BUS_VOLTAGE] = raw
-    for a in I2C_ADDRS:
-        other.devices[a][REG_BUS_VOLTAGE] = 0x0400                     # would give 3275 if it were read
+    bus = load_raws(b, k5_port, (0x0000, 0x0800, 0x1000, 0x1F00))
     b.adc = [0xFFF - 10 * ch for ch in range(16)]
     vals = b.sample()
     check("ADC_NEW[0..15] = 0xFFF - adc (ports 1..4 untouched)", vals[:16], [10 * ch for ch in range(16)])
-    check(f"ADC_NEW[16..19] from {bus.name} in 0x80/0x88/0x86/0x84 order", vals[16:20], [3915, 2635, 1355, 0])
-    check(f"{bus.name} saw 4 reads of reg 2", [e for e in bus.log if e.startswith("reg")], ["reg2"] * 4)
-    check(f"{bus.name} addresses", [e for e in bus.log if e.endswith("w")], ["80w", "88w", "86w", "84w"])
-    check(f"{bus.name} transactions complete (4 x S..P)", (bus.log.count("S"), bus.log.count("P")), (8, 4))
-    check(f"{other.name} idle (no START)", other.log, [])
-    check("ADC_NEW[20..35] untouched (ports 7..9 are never sampled)", vals[20:], [0] * 16)
+    check(f"ADC_NEW[16..19] from port {k5_port} in 0x80/0x88/0x86/0x84 order", vals[16:20], [3915, 2635, 1355, 0])
+    check(f"port {k5_port} saw 4 reads of reg 2", [e for e in bus.log if e.startswith("reg")], ["reg2"] * 4)
+    if prof["probe"]:
+        # probe ACKs the four stock addresses and stops; the reads repeat them
+        check("probe stopped at the 4th ACK (no 0x82)", "82w" not in bus.log and "82w!" not in bus.log, True)
+        check("probe plus 4 reads", (bus.log.count("S"), bus.log.count("P")), (12, 8))
+        bus.log.clear()
+        vals = b.sample()
+        check("second sample reuses the probed addresses", vals[16:20], [3915, 2635, 1355, 0])
+        check("second sample does not probe again", (bus.log.count("S"), bus.log.count("P")), (8, 4))
+        en = struct.unpack("<I", b.uc.mem_read(CRM_APB2EN, 4))[0]
+        check("GPIO clock bit set by the probe", en, sum(1 << bit for bit in prof["clocks"]))
+    else:
+        check("port 5 addresses", [e for e in bus.log if e.endswith("w")], ["80w", "88w", "86w", "84w"])
+        check("4 reads, no probe", (bus.log.count("S"), bus.log.count("P")), (8, 4))
+    for port, other in b.buses_by_port.items():
+        if port == k5_port:
+            continue
+        check(f"port {port} idle (no START)", other.log, [])
+    check("ADC_NEW[20..35] stay 0", vals[20:], [0] * 16)
 
-    # 2) scan: key 5 follows the mapped port, the dead port does nothing
+    # 2) scan: key 5 follows the mapped port, every other port does nothing
     b = Board(img)
     check("idle: KeyCode 0", b.scan(), 0)
     b.set_port(k5_port, True)
     check(f"press port {k5_port} -> K5 bit", b.scan(), 0x10)
     check("K5 keyboard report", [k for t, k in b.reports if t == "KBD"], [0x10])
-    check(f"K5 LED strip clocked on PC{k5_led_pin}", b.led_toggles(GPIOC, k5_led_pin) > 0, True)
-    check(f"no LED data on PC{k5_old_led_pin}", b.led_toggles(GPIOC, k5_old_led_pin), 0)
-    check("other strips quiet (PB14 PB15 PC6 PC7)",
+    check(f"K5 LED strip clocked on {pin_name(led_port, led_pin)}", b.led_toggles(led_port, led_pin) > 0, True)
+    if (led_port, led_pin) != (GPIOC, 8):
+        check("no LED data on PC8", b.led_toggles(GPIOC, 8), 0)
+    if (led_port, led_pin) != (GPIOC, 9):
+        check("no LED data on PC9", b.led_toggles(GPIOC, 9), 0)
+    check("K1..K4 strips quiet",
           [b.led_toggles(GPIOB, 14), b.led_toggles(GPIOB, 15), b.led_toggles(GPIOC, 6), b.led_toggles(GPIOC, 7)],
           [0, 0, 0, 0])
     b.set_port(k5_port, False)
     check(f"release port {k5_port} -> KeyCode 0", b.scan(), 0)
     check("release report", [k for t, k in b.reports if t == "KBD"], [0x00])
 
-    b = Board(img)
-    b.set_port(k5_dead_port, True)
-    check(f"press port {k5_dead_port} -> nothing", b.scan(), 0)
-    check("no report", b.reports, [])
-    check("no LED data at all", sum(b.gpio_toggles.get((GPIOC, p), 0) for p in (6, 7, 8, 9))
-          + sum(b.gpio_toggles.get((GPIOB, p), 0) for p in (14, 15)), 0)
+    for dead in (5, 6, 7, 8, 9):
+        if dead == k5_port:
+            continue
+        b = Board(img)
+        b.set_port(dead, True)
+        check(f"press port {dead} -> nothing", b.scan(), 0)
+        check(f"port {dead} press: no report", b.reports, [])
+        check(f"port {dead} press: K5 LED dark", b.led_toggles(led_port, led_pin), 0)
 
     # 3) keys 1..4 unchanged, chords with K5
     b = Board(img)
     for key, (port, pin) in enumerate(((GPIOB, 14), (GPIOB, 15), (GPIOC, 6), (GPIOC, 7))):
         b.set_port(key + 1, True)
         check(f"press port {key + 1} -> K{key + 1}", b.scan(), 1 << key)
-        check(f"K{key + 1} LED on P{'B' if port == GPIOB else 'C'}{pin}", b.led_toggles(port, pin) > 0, True)
+        check(f"K{key + 1} LED on {pin_name(port, pin)}", b.led_toggles(port, pin) > 0, True)
         b.set_port(key + 1, False)
         check(f"release port {key + 1}", b.scan(), 0)
     b.set_port(1, True)
     b.set_port(k5_port, True)
     check(f"chord port 1 + port {k5_port} -> K1|K5", b.scan(), 0x11)
     check("chord report", [k for t, k in b.reports if t == "KBD"], [0x11])
-    check(f"chord LEDs PB14 + PC{k5_led_pin}", (b.led_toggles(GPIOB, 14) > 0, b.led_toggles(GPIOC, k5_led_pin) > 0), (True, True))
+    check("chord LEDs: K1 and K5",
+          (b.led_toggles(GPIOB, 14) > 0, b.led_toggles(led_port, led_pin) > 0), (True, True))
     b.set_port(1, False)
     check("release port 1 -> K5 only", b.scan(), 0x10)
     b.set_port(k5_port, False)
@@ -341,8 +403,29 @@ def main() -> int:
     b.scan()
     check("HID report after K5 press", [k for t, k in b.reports if t == "HID"], [0x10])
 
-    print(f"\n{img_path.name}: {'ALL PASS' if fails == 0 else f'{fails} FAIL'}"
-          f"  (expectations: {'key 5 on port 6, LED6/PC9' if port6 else 'control, key 5 on port 5, LED5/PC8'})")
+    # 5) probe images only: addresses that are not the port-5 set, and a silent bus
+    if prof["probe"]:
+        alt = (0x41, 0x45, 0x47, 0x4A)          # wire bytes 0x82, 0x8A, 0x8E, 0x94
+        b = Board(img)
+        bus = load_raws(b, k5_port, (0x0000, 0x0800, 0x1000, 0x1F00), addrs=alt)
+        check("non-stock addresses still convert in probe order", b.sample()[16:20], [3915, 2635, 1355, 0])
+        check("probe used 0x82/0x8A/0x8E/0x94",
+              [e for e in bus.log if e in ("82w", "8Aw", "8Ew", "94w")],
+              ["82w", "8Aw", "8Ew", "94w"] * 2)
+        b.set_port(k5_port, True)
+        check("press on the non-stock chips -> K5", b.scan(), 0x10)
+
+        b = Board(img)
+        b.buses_by_port[k5_port].devices = {}
+        check("nothing ACKs: key 5 reads released", b.sample()[16:20], [0, 0, 0, 0])
+        check("nothing ACKs: KeyCode 0 (scan returns)", b.scan(), 0)
+        b.set_port(1, True)
+        check("nothing ACKs: port 1 still presses", b.scan(), 0x01)
+        b.set_port(1, False)
+        check("nothing ACKs: port 1 still releases", b.scan(), 0)
+
+    where = f"key 5 on port {k5_port}, LED {pin_name(led_port, led_pin)}"
+    print(f"\n{img_path.name}: {'ALL PASS' if fails == 0 else f'{fails} FAIL'}  ({where})")
     return 1 if fails else 0
 
 

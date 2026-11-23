@@ -24,7 +24,10 @@ Yuanpad 五键（PADUEX5）与四键（PADUEX4）跳舞毯控制板的 Windows �
 |---|---|---|
 | [`firmware/PADUEX5_V3.2.bin`](./firmware/PADUEX5_V3.2.bin) | 五键机 | `V3.2 (PADUEX5)` |
 | [`firmware/PADUEX4_V3.2.bin`](./firmware/PADUEX4_V3.2.bin) | 四键机 | `V3.2 (PADUEX4)` |
-| [`firmware/PADUEX5_P6_V3.5.bin`](./firmware/PADUEX5_P6_V3.5.bin) | 仅限 5 号口损坏的五键机（第 5 键踏板插 6 号口），正常板不要刷 | `V3.5 (PADUEX5)` |
+| [`firmware/PADUEX5_P6_V3.5.bin`](./firmware/PADUEX5_P6_V3.5.bin) | 仅限 5 号口损坏的五键机，第 5 键踏板插 6 号口，正常板不要刷 | `V3.5 (PADUEX5)` |
+| [`firmware/PADUEX5_P7_V3.5.bin`](./firmware/PADUEX5_P7_V3.5.bin) | 同上，第 5 键踏板插 7 号口 | `V3.5 (PADUEX5)` |
+| [`firmware/PADUEX5_P8_V3.5.bin`](./firmware/PADUEX5_P8_V3.5.bin) | 同上，第 5 键踏板插 8 号口 | `V3.5 (PADUEX5)` |
+| [`firmware/PADUEX5_P9_V3.5.bin`](./firmware/PADUEX5_P9_V3.5.bin) | 同上，第 5 键踏板插 9 号口 | `V3.5 (PADUEX5)` |
 
 基于原厂 `5KEY_2P_V2.13`，加入防粘键、键盘模式改键与灵敏度掉电保存（原厂及 V3.0 的灵敏度只写 RAM；V3.1 写了 Flash 但上电又被重置为 200；V3.2 起拔插后保持）；四键版另屏蔽第五键。
 上位机对原厂固件（显示 2.12）、V3.0 和更早的镜像（2.17 / 2.18）仍可识别，并提示升级。

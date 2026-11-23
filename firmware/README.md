@@ -4,9 +4,12 @@
 |---|---|---|---|
 | `PADUEX5_V3.2.bin` | 五键机 | `V3.2`，HVer `13` | 原厂 `5KEY_2P_V2.13.bin` + SendPacket 有界等待（防粘键）+ 键盘模式改键 + 灵敏度掉电保存 |
 | `PADUEX4_V3.2.bin` | 四键机（只插 K1～K4） | `V3.2`，HVer `14` | 同上 + 第五键永不上报 |
-| `PADUEX5_P6_V3.5.bin` | **仅限 5 号口损坏的五键板**，第 5 键踏板插 6 号口 | `V3.5`，HVer `13` | 五键 V3.2 + 第 5 键的四路采样改读 6 号口 I²C 总线（PB3/PB4）、灯带改走 LED6（PC9）；正常板不要刷 |
+| `PADUEX5_P6_V3.5.bin` | **仅限 5 号口损坏的五键板**，第 5 键踏板插 6 号口 | `V3.5`，HVer `13` | 五键 V3.2 + 第 5 键改接该口的 SCL/SDA 与灯脚，上电探测芯片地址；正常板不要刷 |
+| `PADUEX5_P7_V3.5.bin` | 同上，踏板插 7 号口 | `V3.5`，HVer `13` | SCL PF6 / SDA PF7，灯 PA8 |
+| `PADUEX5_P8_V3.5.bin` | 同上，踏板插 8 号口 | `V3.5`，HVer `13` | SCL PB10 / SDA PB11，灯 PB13 |
+| `PADUEX5_P9_V3.5.bin` | 同上，踏板插 9 号口 | `V3.5`，HVer `13` | SCL PB2 / SDA PA10，灯 PB12 |
 
-三个镜像体积都是 37072 字节，OTA / ISP 地址 `0x08004000`，向量表、启动序列、USB 命令、Flash 代码全部原厂。
+这几份镜像体积都是 37072 字节，OTA / ISP 地址 `0x08004000`，向量表、启动序列、USB 命令、Flash 代码全部原厂。四份 V3.5 上报的版本号相同，以文件名和 SHA-256 区分。
 版本号格式沿用原厂 `V2.13` 的写法，从 V3.0 起步；上位机对 V3.x 固件按 HVer 标注 `(PADUEX5)` / `(PADUEX4)`。
 V3.0 及更早的固件（含原厂）在 `SET_SENS` 时只把灵敏度写进 RAM；V3.1 改为三张表都写 Flash，但上电初始化（`0x08006470`）在加载完 Flash 之后仍把灵敏度表填成 200，所以拔插后还是 200；V3.2 去掉该填充循环并把回退默认表改为 200，见 [`patches/paduex5-sens-persist.md`](./patches/paduex5-sens-persist.md)。
 
@@ -16,7 +19,7 @@ V3.0 及更早的固件（含原厂）在 `SET_SENS` 时只把灵敏度写进 RA
 pip install capstone keystone-engine unicorn
 python3 firmware/patches/build_paduex5_v3.2.py        # legacy/PADUEX5_V3.1.bin -> PADUEX5_V3.2.bin
 python3 firmware/patches/build_paduex4_v3.2.py        # PADUEX5_V3.2.bin        -> PADUEX4_V3.2.bin
-python3 firmware/patches/build_paduex5_p6_v3.5.py     # PADUEX5_V3.2.bin        -> PADUEX5_P6_V3.5.bin（第 5 键在 6 号口）
+python3 firmware/patches/build_paduex5_px_v3.5.py     # PADUEX5_V3.2.bin        -> PADUEX5_P6..P9_V3.5.bin（第 5 键改接到 6～9 号口之一）
 
 python3 firmware/tests/emu_set_sens.py       firmware/PADUEX5_V3.2.bin   # 严格 Flash 模型：SET_SENS -> 复位 -> GET_SENS 36 项（legacy/PADUEX5_V3.1 应有 5 项失败：上电后 Sensi == 200）
 python3 firmware/tests/emu_set_sens.py       firmware/legacy/PADUEX5_V3.0.bin  # 对照：Sensi 6 项失败
@@ -26,9 +29,10 @@ python3 firmware/tests/emu_keyscan_paduex4.py firmware/PADUEX4_V3.2.bin  # 键�
 python3 firmware/tests/emu_keyscan_paduex4.py firmware/PADUEX5_V3.2.bin  # 对照：五键镜像 K5 正常上报
 python3 firmware/tests/emu_get_mode.py       firmware/PADUEX5_V3.2.bin   # GET_MODE 回包 47 mode A2 13 03 02
 python3 firmware/tests/emu_get_mode.py       firmware/PADUEX4_V3.2.bin   # GET_MODE 回包 47 mode A2 14 03 02
-python3 firmware/tests/emu_port6_remap.py    firmware/PADUEX5_P6_V3.5.bin # 36 项：位级 I²C 从机模型，踩 6 号口 -> K5 键码、灯在 PC9；踩 5 号口无反应
+python3 firmware/tests/emu_port6_remap.py    firmware/PADUEX5_P6_V3.5.bin # 口 6：地址探测、踩下 -> K5、灯在 PC9；无应答时第 5 键松开
+python3 firmware/tests/emu_port6_remap.py    firmware/PADUEX5_P9_V3.5.bin # 口 9：SCL/SDA 分属两个 GPIO 口
 python3 firmware/tests/emu_port6_remap.py    firmware/PADUEX5_V3.2.bin   # 对照：第 5 键仍在 5 号口、灯在 PC8
-python3 firmware/tests/emu_get_mode.py       firmware/PADUEX5_P6_V3.5.bin # GET_MODE 回包 47 mode A2 13 03 05
+python3 firmware/tests/emu_get_mode.py       firmware/PADUEX5_P6_V3.5.bin # GET_MODE 回包 47 mode A2 13 03 05（P7/P8/P9 相同）
 ```
 
 构建脚本会断言：所有差异都在预期地址内、`0x14C == 0x080084A5`（USB 中断向量）、体积 37072。
@@ -39,7 +43,7 @@ python3 firmware/tests/emu_get_mode.py       firmware/PADUEX5_P6_V3.5.bin # GET_
 - [`patches/paduex5-keymap.md`](./patches/paduex5-keymap.md)：键盘模式改键与版本字节
 - [`patches/paduex4-no-fifth-key.md`](./patches/paduex4-no-fifth-key.md)：四键机屏蔽第五键
 - [`patches/paduex5-sens-persist.md`](./patches/paduex5-sens-persist.md)：灵敏度掉电保存（V3.1 写页 + V3.2 上电不重置）
-- [`patches/paduex5-port6.md`](./patches/paduex5-port6.md)：5 号口损坏时把第 5 键整体搬到 6 号口（含 36 路通道、I²C 总线、灯带引脚与口号的对应关系）
+- [`patches/paduex5-port6.md`](./patches/paduex5-port6.md)：5 号口损坏时把第 5 键改接到 6～9 号口之一，上电探测采集芯片地址
 
 ## 旧版本
 
@@ -58,7 +62,7 @@ python3 firmware/tests/emu_get_mode.py       firmware/PADUEX5_P6_V3.5.bin # GET_
 | 键盘模式改键 | 无 | **有**（上位机「按键映射」页） | **有** |
 | 第五键屏蔽（四键机） | 无 | 无 | **有** |
 
-`PADUEX5_P6_V3.5.bin` 的功能与 `PADUEX5_V3.2` 相同，只是第 5 键的传感器和灯带接在 6 号口；5 号口在这一版上没有功能。
+`PADUEX5_P6～P9_V3.5.bin` 的功能与 `PADUEX5_V3.2` 相同，只是第 5 键的传感器和灯带改接到文件名里的那个口，芯片地址在第一次采样时探测；5 号口在这四份上没有功能。
 
 ## 救砖
 
