@@ -424,7 +424,42 @@ def build_engine(ks: Ks, spec: dict) -> bytes:
             f"    movt r0, #0x0018\n"
             f"    bl {FN_CLOCK:#x}\n"
         )
-    text = (ENGINE
+    text = ENGINE
+    cands = spec.get("cands")
+    if cands:
+        text = text.replace("movs r7, #16", f"movs r7, #{len(cands)}")
+        old_bytes = (
+            ".byte 0x80, 0x88, 0x86, 0x84\n"
+            "    .byte 0x82, 0x8a, 0x8c, 0x8e\n"
+            "    .byte 0x90, 0x92, 0x94, 0x96\n"
+            "    .byte 0x98, 0x9a, 0x9c, 0x9e"
+        )
+        text = text.replace(old_bytes, ".byte " + ", ".join(f"{b:#x}" for b in cands))
+    if spec.get("empty_fill") == 0xFF:
+        text = text.replace(
+            "    adr r1, stock\n"
+            "probe_fill:\n"
+            "    cmp r5, #4\n"
+            "    beq probe_store\n"
+            "    ldrb r2, [r1, r5]\n"
+            "    strb r2, [r0, r5]\n",
+            "probe_fill:\n"
+            "    cmp r5, #4\n"
+            "    beq probe_store\n"
+            "    movs r2, #0xff\n"
+            "    strb r2, [r0, r5]\n",
+        )
+        text = text.replace(
+            "rd_go:\n    mov r4, r0\n",
+            "rd_go:\n"
+            "    cmp r0, #0xff\n"
+            "    bne rd_real\n"
+            "    movw r0, #0xffff\n"
+            "    pop {r4, r5, r6, pc}\n"
+            "rd_real:\n"
+            "    mov r4, r0\n",
+        )
+    text = (text
             .replace("COUNT_LO", lo(RAM_COUNT)).replace("COUNT_HI", hi(RAM_COUNT))
             .replace("ADDR_LO", lo(RAM_ADDRS)).replace("ADDR_HI", hi(RAM_ADDRS))
             .replace("MAGIC_LO", lo(RAM_MAGIC)).replace("MAGIC_HI", hi(RAM_MAGIC))
@@ -485,7 +520,7 @@ def build_image(src: bytes, spec: dict) -> bytearray:
     for slot, site in enumerate(ADDR_SITES):
         buf[off(site):off(site) + 4] = asm(ks, f"bl {GETTER + 6 * slot:#x}", site)
     patch_led(ks, buf, spec)
-    buf[off(FW_MINOR_SITE)] = FW_MINOR
+    buf[off(FW_MINOR_SITE)] = spec.get("minor", FW_MINOR)
 
     assert len(buf) == SIZE
     assert buf[:0x200] == src[:0x200]
@@ -500,6 +535,19 @@ def build_image(src: bytes, spec: dict) -> bytearray:
     for va in (BASE + i for i, (a, b) in enumerate(zip(src, buf)) if a != b):
         assert va in allowed, hex(va)
     return buf
+
+
+BUS5EXT = dict(
+    scl_port=GPIOC, scl=11, sda_port=GPIOC, sda=12, led_port=GPIOC, led=8,
+    # even addresses 0x80..0x9E except the four chips the stock sampler reads
+    cands=[0x82, 0x8A, 0x8C, 0x8E, 0x90, 0x92, 0x94, 0x96, 0x98, 0x9A, 0x9C, 0x9E],
+    empty_fill=0xFF,
+    minor=7,
+)
+
+
+def build_bus5ext(src: bytes) -> bytearray:
+    return build_image(src, BUS5EXT)
 
 
 def main() -> int:

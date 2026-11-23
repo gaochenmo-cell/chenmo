@@ -8,6 +8,8 @@
 | `PADUEX5_P7_V3.5.bin` | 同上，踏板插 7 号口 | `V3.5`，HVer `13` | SCL PF6 / SDA PF7，灯 PA8 |
 | `PADUEX5_P8_V3.5.bin` | 同上，踏板插 8 号口 | `V3.5`，HVer `13` | SCL PB10 / SDA PB11，灯 PB13 |
 | `PADUEX5_P9_V3.5.bin` | 同上，踏板插 9 号口 | `V3.5`，HVer `13` | SCL PB2 / SDA PA10，灯 PB12 |
+| `PADUEX5_DIAG.bin` | 同上，只用来看哪对脚、哪个地址有芯片应答 | `V3.6`，HVer `13` | 上电扫描六对开漏脚的两种极性，结果画在第 1～4 键的 RAW 柱上，不发按键 |
+| `PADUEX5_BUS5EXT.bin` | 同上，踏板插 6～9 号口任意一个 | `V3.7`，HVer `13` | 第 5 键仍在 PC11/PC12，跳过 `0x80/0x88/0x86/0x84`，用其余偶数地址；灯仍在 PC8 |
 
 这几份镜像体积都是 37072 字节，OTA / ISP 地址 `0x08004000`，向量表、启动序列、USB 命令、Flash 代码全部原厂。四份 V3.5 上报的版本号相同，以文件名和 SHA-256 区分。
 版本号格式沿用原厂 `V2.13` 的写法，从 V3.0 起步；上位机对 V3.x 固件按 HVer 标注 `(PADUEX5)` / `(PADUEX4)`。
@@ -20,6 +22,7 @@ pip install capstone keystone-engine unicorn
 python3 firmware/patches/build_paduex5_v3.2.py        # legacy/PADUEX5_V3.1.bin -> PADUEX5_V3.2.bin
 python3 firmware/patches/build_paduex4_v3.2.py        # PADUEX5_V3.2.bin        -> PADUEX4_V3.2.bin
 python3 firmware/patches/build_paduex5_px_v3.5.py     # PADUEX5_V3.2.bin        -> PADUEX5_P6..P9_V3.5.bin（第 5 键改接到 6～9 号口之一）
+python3 firmware/patches/build_paduex5_diag.py        # PADUEX5_V3.2.bin        -> PADUEX5_DIAG.bin、PADUEX5_BUS5EXT.bin
 
 python3 firmware/tests/emu_set_sens.py       firmware/PADUEX5_V3.2.bin   # 严格 Flash 模型：SET_SENS -> 复位 -> GET_SENS 36 项（legacy/PADUEX5_V3.1 应有 5 项失败：上电后 Sensi == 200）
 python3 firmware/tests/emu_set_sens.py       firmware/legacy/PADUEX5_V3.0.bin  # 对照：Sensi 6 项失败
@@ -33,6 +36,9 @@ python3 firmware/tests/emu_port6_remap.py    firmware/PADUEX5_P6_V3.5.bin # 口 
 python3 firmware/tests/emu_port6_remap.py    firmware/PADUEX5_P9_V3.5.bin # 口 9：SCL/SDA 分属两个 GPIO 口
 python3 firmware/tests/emu_port6_remap.py    firmware/PADUEX5_V3.2.bin   # 对照：第 5 键仍在 5 号口、灯在 PC8
 python3 firmware/tests/emu_get_mode.py       firmware/PADUEX5_P6_V3.5.bin # GET_MODE 回包 47 mode A2 13 03 05（P7/P8/P9 相同）
+python3 firmware/tests/emu_diag.py                                        # 诊断版位图、口 5 总线扩展、不发按键
+python3 firmware/tests/emu_get_mode.py       firmware/PADUEX5_DIAG.bin    # 47 mode A2 13 03 06
+python3 firmware/tests/emu_get_mode.py       firmware/PADUEX5_BUS5EXT.bin # 47 mode A2 13 03 07
 ```
 
 构建脚本会断言：所有差异都在预期地址内、`0x14C == 0x080084A5`（USB 中断向量）、体积 37072。
@@ -63,6 +69,7 @@ python3 firmware/tests/emu_get_mode.py       firmware/PADUEX5_P6_V3.5.bin # GET_
 | 第五键屏蔽（四键机） | 无 | 无 | **有** |
 
 `PADUEX5_P6～P9_V3.5.bin` 的功能与 `PADUEX5_V3.2` 相同，只是第 5 键的传感器和灯带改接到文件名里的那个口，芯片地址在第一次采样时探测；5 号口在这四份上没有功能。
+`PADUEX5_DIAG.bin` 不发按键，上电把扫描结果放到第 1～4 键的 RAW 柱上。`PADUEX5_BUS5EXT.bin` 的第 5 键仍在口 5 的总线上，地址换成 `0x80..0x9E` 里除原来四颗以外的偶数。
 
 ## 救砖
 
